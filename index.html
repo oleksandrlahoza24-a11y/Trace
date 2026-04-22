@@ -1,256 +1,45 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>3D Infinity Ocean</title>
-<style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:#000; overflow:hidden; touch-action:none; font-family: sans-serif; }
-  canvas { display:block; width:100vw; height:100vh; }
-  
-  /* Joystick UI */
-  #ui { position: fixed; inset: 0; pointer-events: none; }
-  #stick-base {
-    position: absolute; bottom: 50px; left: 50px;
-    width: 100px; height: 100px; background: rgba(255,255,255,0.1);
-    border: 2px solid rgba(255,255,255,0.2); border-radius: 50%;
-    display: none; pointer-events: auto;
-  }
-  #stick-knob {
-    position: absolute; top: 25px; left: 25px;
-    width: 50px; height: 50px; background: rgba(255,255,255,0.4);
-    border-radius: 50%; transition: transform 0.05s linear;
-  }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>3D Infinite Ocean</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { 
+            width: 100%; height: 100%; 
+            overflow: hidden; background: #000; 
+            touch-action: none; /* Prevents iPad "bounce" scrolling */
+        }
+        canvas { 
+            display: block; width: 100vw; height: 100vh; 
+        }
+        /* HUD for help */
+        #hud {
+            position: fixed; top: 20px; left: 20px;
+            color: rgba(255,255,255,0.4);
+            font-family: sans-serif; font-size: 12px;
+            pointer-events: none; letter-spacing: 1px;
+        }
+    </style>
 </head>
 <body>
-<canvas id="c"></canvas>
-<div id="ui">
-  <div id="stick-base"><div id="stick-knob"></div></div>
-</div>
 
-<script>
-'use strict';
+    <div id="hud">LEFT: WALK | RIGHT: LOOK</div>
+    <canvas id="glCanvas"></canvas>
 
-const canvas = document.getElementById('c');
-const gl = canvas.getContext('webgl', { antialias: true });
+    <script src="water.js"></script>
+    <script src="character.js"></script>
+    <script src="main.js"></script>
 
-// --- Settings & State ---
-const S = 512; // Sim resolution
-const DPR = Math.min(window.devicePixelRatio, 2);
-const cam = { x: 0.5, z: 0.5, yaw: 0, pitch: -0.3, velX: 0, velZ: 0 };
-const joy = { active: false, startX: 0, startY: 0, moveX: 0, moveY: 0 };
-
-function resize() {
-  canvas.width = window.innerWidth * DPR;
-  canvas.height = window.innerHeight * DPR;
-}
-window.addEventListener('resize', resize);
-resize();
-
-// --- 3D Shader (Vertex handles perspective) ---
-const VERT = `
-attribute vec2 aPos;
-varying vec2 vUV;
-varying vec2 vScreen;
-void main() {
-    vUV = aPos * 0.5 + 0.5;
-    vScreen = aPos;
-    gl_Position = vec4(aPos, 0.0, 1.0);
-}`;
-
-// --- The Simulation Fragment (Physics) ---
-const SIM_FRAG = `
-precision highp float;
-varying vec2 vUV;
-uniform sampler2D uState;
-uniform vec2 uTexel;
-uniform vec3 uInteraction; // x, y, strength
-
-void main() {
-    vec4 data = texture2D(uState, vUV);
-    float h = data.r * 2.0 - 1.0;
-    float p = data.g * 2.0 - 1.0;
-
-    float n = texture2D(uState, vUV + vec2(0.0, uTexel.y)).r * 2.0 - 1.0;
-    float s = texture2D(uState, vUV - vec2(0.0, uTexel.y)).r * 2.0 - 1.0;
-    float e = texture2D(uState, vUV + vec2(uTexel.x, 0.0)).r * 2.0 - 1.0;
-    float w = texture2D(uState, vUV - vec2(uTexel.x, 0.0)).r * 2.0 - 1.0;
-
-    float next = (h * 2.0 - p + (n + s + e + w - 4.0 * h) * 0.5) * 0.99;
-    
-    // Interact
-    float d = length(vUV - uInteraction.xy);
-    next -= smoothstep(0.03, 0.0, d) * uInteraction.z;
-
-    gl_FragColor = vec4(next * 0.5 + 0.5, h * 0.5 + 0.5, 0.0, 1.0);
-}`;
-
-// --- The 3D Render Fragment ---
-const RENDER_FRAG = `
-precision highp float;
-varying vec2 vUV;
-varying vec2 vScreen;
-uniform sampler2D uWater;
-uniform float uTime;
-uniform vec3 uCamPos;
-uniform vec2 uCamRot; // yaw, pitch
-uniform vec2 uRes;
-
-void main() {
-    // 1. Raycasting Setup
-    vec2 uv = vScreen * vec2(uRes.x/uRes.y, 1.0);
-    vec3 ray = normalize(vec3(uv, 1.5));
-    
-    // Rotation
-    float y = uCamRot.x, p = uCamRot.y;
-    mat3 rotY = mat3(cos(y), 0, sin(y), 0, 1, 0, -sin(y), 0, cos(y));
-    mat3 rotX = mat3(1, 0, 0, 0, cos(p), -sin(p), 0, sin(p), cos(p));
-    ray = rotY * rotX * ray;
-
-    // 2. Intersect plane
-    float t = -uCamPos.y / ray.y;
-    vec3 col = vec3(0.01, 0.02, 0.05); // Abyss color
-
-    if(t > 0.0) {
-        vec3 worldPos = uCamPos + ray * t;
-        vec2 texUV = fract(worldPos.xz * 0.5 + 0.5); // Wrap ocean
-        
-        float h = texture2D(uWater, texUV).r * 2.0 - 1.0;
-        vec3 normal = normalize(vec3(0.0, 1.0, 0.0)); // Simplified
-        
-        // Water look
-        float fresnel = pow(1.0 - max(dot(normal, -ray), 0.0), 5.0);
-        vec3 sky = mix(vec3(0.1, 0.2, 0.4), vec3(0.7, 0.8, 1.0), ray.y);
-        vec3 ocean = mix(vec3(0.0, 0.1, 0.15), sky, fresnel);
-        
-        col = ocean + h * 0.2;
-        col *= exp(-t * 0.05); // Fog
-    } else {
-        col = mix(vec3(0.1, 0.2, 0.4), vec3(0.7, 0.8, 1.0), ray.y); // Sky
-    }
-
-    gl_FragColor = vec4(pow(col, vec3(1.0/2.2)), 1.0);
-}`;
-
-// --- WebGL Boilerplate ---
-function createShader(gl, type, src) {
-  const s = gl.createShader(type);
-  gl.shaderSource(s, src);
-  gl.compileShader(s);
-  return s;
-}
-
-function createProg(gl, vs, fs) {
-  const p = gl.createProgram();
-  gl.attachShader(p, createShader(gl, gl.VERTEX_SHADER, vs));
-  gl.attachShader(p, createShader(gl, gl.FRAGMENT_SHADER, fs));
-  gl.linkProgram(p);
-  return p;
-}
-
-const simProg = createProg(gl, VERT, SIM_FRAG);
-const renderProg = createProg(gl, VERT, RENDER_FRAG);
-
-// FBOS
-function createFBO() {
-  const tex = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, tex);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, S, S, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  const fbo = gl.createFramebuffer();
-  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
-  return { tex, fbo };
-}
-
-let fboA = createFBO(), fboB = createFBO();
-const quad = gl.createBuffer();
-gl.bindBuffer(gl.ARRAY_BUFFER, quad);
-gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
-
-// --- Joystick Logic ---
-const stickBase = document.getElementById('stick-base');
-const stickKnob = document.getElementById('stick-knob');
-
-window.addEventListener('touchstart', e => {
-  const t = e.touches[0];
-  if (t.clientX < window.innerWidth / 2) {
-    joy.active = true;
-    joy.startX = t.clientX; joy.startY = t.clientY;
-    stickBase.style.display = 'block';
-    stickBase.style.left = (joy.startX - 50) + 'px';
-    stickBase.style.top = (joy.startY - 50) + 'px';
-  }
-});
-
-window.addEventListener('touchmove', e => {
-  const t = Array.from(e.touches).find(v => v.clientX < window.innerWidth / 2);
-  if (joy.active && t) {
-    joy.moveX = (t.clientX - joy.startX);
-    joy.moveY = (t.clientY - joy.startY);
-    const dist = Math.min(Math.hypot(joy.moveX, joy.moveY), 50);
-    const angle = Math.atan2(joy.moveY, joy.moveX);
-    joy.moveX = Math.cos(angle) * dist;
-    joy.moveY = Math.sin(angle) * dist;
-    stickKnob.style.transform = `translate(${joy.moveX}px, ${joy.moveY}px)`;
-  }
-  // Look around with second finger
-  const look = Array.from(e.touches).find(v => v.clientX >= window.innerWidth / 2);
-  if (look) {
-    cam.yaw -= (look.clientX - (window.innerWidth*0.75)) * 0.0001;
-  }
-});
-
-window.addEventListener('touchend', () => {
-  joy.active = false;
-  stickBase.style.display = 'none';
-  joy.moveX = 0; joy.moveY = 0;
-});
-
-// --- Main Loop ---
-function loop(t) {
-  // Movement Physics
-  if (joy.active) {
-    cam.velX += (Math.sin(cam.yaw) * -joy.moveY + Math.cos(cam.yaw) * joy.moveX) * 0.0005;
-    cam.velZ += (Math.cos(cam.yaw) * -joy.moveY - Math.sin(cam.yaw) * joy.moveX) * 0.0005;
-  }
-  cam.x += cam.velX; cam.z += cam.velZ;
-  cam.velX *= 0.9; cam.velZ *= 0.9;
-
-  // Simulation
-  gl.bindFramebuffer(gl.FRAMEBUFFER, fboB.fbo);
-  gl.useProgram(simProg);
-  gl.uniform2f(gl.getUniformLocation(simProg, 'uTexel'), 1/S, 1/S);
-  // Feed walking interaction into water
-  gl.uniform3f(gl.getUniformLocation(simProg, 'uInteraction'), 
-               fract(cam.x * 0.5 + 0.5), fract(cam.z * 0.5 + 0.5), 
-               Math.hypot(cam.velX, cam.velZ) * 5.0);
-  
-  gl.bindTexture(gl.TEXTURE_2D, fboA.tex);
-  gl.bindBuffer(gl.ARRAY_BUFFER, quad);
-  const pos = gl.getAttribLocation(simProg, 'aPos');
-  gl.enableVertexAttribArray(pos);
-  gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
-  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-  [fboA, fboB] = [fboB, fboA];
-
-  // Render
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  gl.viewport(0, 0, canvas.width, canvas.height);
-  gl.useProgram(renderProg);
-  gl.uniform3f(gl.getUniformLocation(renderProg, 'uCamPos'), cam.x, 0.4, cam.z);
-  gl.uniform2f(gl.getUniformLocation(renderProg, 'uCamRot'), cam.yaw, cam.pitch);
-  gl.uniform2f(gl.getUniformLocation(renderProg, 'uRes'), canvas.width, canvas.height);
-  gl.bindTexture(gl.TEXTURE_2D, fboA.tex);
-  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-  requestAnimationFrame(loop);
-}
-requestAnimationFrame(loop);
-
-</script>
+    <script>
+        // Emergency Error Handler
+        window.onerror = function(msg, url, line) {
+            const div = document.createElement('div');
+            div.style.cssText = "position:fixed;top:0;background:red;color:white;padding:10px;font-size:10px;";
+            div.innerHTML = "Error: " + msg + " line: " + line;
+            document.body.appendChild(div);
+        };
+    </script>
 </body>
 </html>
