@@ -136,8 +136,9 @@ uniform float uRadius;
 uniform float uStrength;
 
 #ifdef UINT8_MODE
+  // 16-bit packing for mobile stability
   vec2 enc16(float v) {
-    float t   = clamp(v * 0.5 + 0.5, 0.0, 0.99999);
+    float t = clamp(v * 0.5 + 0.5, 0.0, 0.99999);
     float t255 = t * 255.0;
     return vec2(floor(t255) / 255.0, fract(t255));
   }
@@ -150,46 +151,46 @@ uniform float uStrength;
 #endif
 
 void main() {
-  float curr = CURR(vUV);
-  float prev = PREV(vUV);
+  // Current state retrieval
+  float height = CURR(vUV);
+  float prevHeight = PREV(vUV);
 
-  // 9-tap Laplacian for high-fidelity dispersion
-  // (Provides smoother wave propagation than 4-tap)
-  float n  = CURR(vUV + vec2( 0.0,      uTexel.y));
-  float s  = CURR(vUV - vec2( 0.0,      uTexel.y));
-  float e  = CURR(vUV + vec2( uTexel.x, 0.0     ));
-  float w  = CURR(vUV - vec2( uTexel.x, 0.0     ));
-  float nw = CURR(vUV + vec2(-uTexel.x, uTexel.y));
-  float ne = CURR(vUV + vec2( uTexel.x, uTexel.y));
-  float sw = CURR(vUV + vec2(-uTexel.x,-uTexel.y));
-  float se = CURR(vUV + vec2( uTexel.x,-uTexel.y));
+  // 1. Five-point stencil (Stable Laplacian)
+  // We use a specific weight (0.5) to ensure we don't exceed the CFL stability limit
+  float n = CURR(vUV + vec2(0.0, uTexel.y));
+  float s = CURR(vUV - vec2(0.0, uTexel.y));
+  float e = CURR(vUV + vec2(uTexel.x, 0.0));
+  float w = CURR(vUV - vec2(uTexel.x, 0.0));
 
-  // Weighted neighbors (Direct: 0.5, Diagonal: 0.25)
-  float neighbors = (n + s + e + w) * 0.5 + (nw + ne + sw + se) * 0.25;
+  // 2. Wave Equation Calculation
+  // 'next' is calculated by accelerating the height based on the local curvature
+  float velocity = height - prevHeight;
+  float pressure = (n + s + e + w) * 0.5 - height * 2.0;
   
-  // 2-D wave equation with high-order damping
-  // Damp factor (0.995) controls how long ripples last
-  float next = (neighbors * 0.5 - prev) * 0.995;
+  // 0.99 damping ratio: keeps waves lively but prevents feedback loops
+  float next = height + velocity + pressure * 0.48;
+  next *= 0.992; 
 
-  // --- Dynamic Disturbance ---
-  float dist = length(vUV - uMouse);
-  
-  // Velocity-based ripple (Gaussian-like profile)
-  float ripple = exp(-pow(dist / uRadius, 2.0));
-  next -= ripple * uStrength;
+  // 3. Smooth Boundary Damping (The "Sponge Layer")
+  // Prevents waves from reflecting off the edges and causing "noise"
+  vec2 boundary = smoothstep(0.0, 0.1, vUV) * smoothstep(1.0, 0.9, vUV);
+  next *= boundary.x * boundary.y;
 
-  // --- Boundary Absorption (Sponge Layer) ---
-  // Gradually kills waves near edges to prevent ugly grid-bouncing
-  float margin = 0.05;
-  float softEdge = smoothstep(0.0, margin, vUV.x) * smoothstep(1.0, 1.0 - margin, vUV.x) * smoothstep(0.0, margin, vUV.y) * smoothstep(1.0, 1.0 - margin, vUV.y);
-  next *= mix(0.95, 1.0, softEdge);
+  // 4. Input Disturbance
+  float d = length(vUV - uMouse);
+  if (uStrength > 0.0) {
+    // Gaussian falloff for the touch point
+    float force = exp(-pow(d / uRadius, 2.0));
+    next -= force * uStrength * 0.5;
+  }
 
+  // Final Output
   next = clamp(next, -1.0, 1.0);
 
   #ifdef UINT8_MODE
-    gl_FragColor = vec4(enc16(next), enc16(curr));
+    gl_FragColor = vec4(enc16(next), enc16(height));
   #else
-    gl_FragColor = vec4(next * 0.5 + 0.5, curr * 0.5 + 0.5, 0.0, 1.0);
+    gl_FragColor = vec4(next * 0.5 + 0.5, height * 0.5 + 0.5, 0.0, 1.0);
   #endif
 }`;
 
