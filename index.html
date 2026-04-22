@@ -181,8 +181,6 @@ void main() {
   #endif
 }`;
 
-// ─── Shader: render ─────────────────────────────────────────────────────────
-// ─── Shader: render ─────────────────────────────────────────────────────────
 const RENDER_FRAG = (UINT8 ? '#define UINT8_MODE\n' : '') + `
 precision highp float;
 varying vec2  vUV;
@@ -191,7 +189,6 @@ uniform vec2  uTexel;
 uniform float uTime;
 uniform float uAspect;
 
-// --- Noise Utility ---
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
 float noise(vec2 p) {
     vec2 i = floor(p), f = p - i;
@@ -201,38 +198,21 @@ float noise(vec2 p) {
 }
 float fbm(vec2 p) {
     float v=0.0, a=0.5;
-    for(int i=0;i<5;i++){ v+=noise(p)*a; p*=2.2; a*=0.5; }
+    for(int i=0;i<4;i++){ v+=noise(p)*a; p*=2.2; a*=0.5; }
     return v;
 }
 
-// --- Ultra Sky with Clouds ---
+// Subtle Sky - dimmed down
 vec3 getSky(vec2 dir) {
     float skyT = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
-    vec3 baseSky = mix(vec3(0.4, 0.7, 1.0), vec3(0.05, 0.15, 0.4), skyT);
-    
-    // Clouds
-    float cloud = fbm(dir * 3.0 + uTime * 0.05);
-    baseSky = mix(baseSky, vec3(1.0), smoothstep(0.5, 0.8, cloud) * 0.3);
-    
-    // Sun Sun
-    vec3 sunDir = normalize(vec3(0.4, 0.6, 0.8));
-    float sun = pow(max(dot(vec3(dir, 1.0 - length(dir)), sunDir), 0.0), 512.0);
-    return baseSky + vec3(1.0, 0.9, 0.7) * sun * 2.0;
+    return mix(vec3(0.2, 0.4, 0.6), vec3(0.01, 0.02, 0.05), skyT);
 }
 
-// --- Advanced Seabed ---
+// Simple Seabed - darker and less distracting
 vec3 getSeabed(vec2 uv) {
-    vec2 p = uv * 8.0;
-    float ripples = sin(p.x + fbm(p + uTime * 0.1)) * 0.5 + 0.5;
-    vec3 sand = mix(vec3(0.8, 0.7, 0.5), vec3(0.95, 0.88, 0.75), ripples);
-    
-    // Rocks / Pebbles
-    float rocks = smoothstep(0.6, 0.65, fbm(uv * 12.0));
-    sand = mix(sand, vec3(0.4, 0.38, 0.35), rocks);
-    
-    // Detail grain
-    sand *= 0.9 + 0.1 * hash(uv * 500.0);
-    return sand;
+    float ripples = sin(uv.x * 10.0 + fbm(uv * 3.0)) * 0.5 + 0.5;
+    vec3 sand = mix(vec3(0.4, 0.35, 0.25), vec3(0.5, 0.45, 0.35), ripples);
+    return sand * 0.5; // Darkened for better wave visibility
 }
 
 #ifdef UINT8_MODE
@@ -246,7 +226,7 @@ vec3 getSeabed(vec2 uv) {
 
 void main() {
     vec2 uv = vUV;
-    vec2 tx = uTexel * 1.2;
+    vec2 tx = uTexel * 1.5;
 
     float h = H(uv);
     float hL = H(uv - vec2(tx.x, 0.0));
@@ -254,52 +234,46 @@ void main() {
     float hU = H(uv + vec2(0.0, tx.y));
     float hD = H(uv - vec2(0.0, tx.y));
 
-    // High Precision Normal
-    vec3 normal = normalize(vec3(hL - hR, hD - hU, 0.1));
+    // Stronger Normal for more "depth" in waves
+    vec3 normal = normalize(vec3(hL - hR, hD - hU, 0.08));
     vec3 V = vec3(0.0, 0.0, 1.0);
-    vec3 L = normalize(vec3(0.4, 0.5, 1.0));
+    vec3 L = normalize(vec3(0.5, 0.5, 1.0));
 
-    // Fresnel
-    float fresnel = pow(1.0 - max(dot(normal, V), 0.0), 5.0);
-    fresnel = clamp(fresnel, 0.02, 1.0);
+    // Reduced Fresnel (Sky is less visible)
+    float fresnel = pow(1.0 - max(dot(normal, V), 0.0), 4.0);
+    fresnel = clamp(fresnel * 0.4, 0.01, 0.3); // Hard cap on reflection intensity
 
-    // Refraction & Caustics
-    vec2 refUV = uv + normal.xy * 0.05;
+    // Subtle Refraction
+    vec2 refUV = uv + normal.xy * 0.02; // Reduced warp
     vec3 seabed = getSeabed(refUV);
+    
+    // Sharp Caustics
     float lap = (hL + hR + hU + hD - 4.0 * h);
-    float caustics = pow(max(0.0, -lap * 15.0), 1.6) * 3.0;
+    float caustics = pow(max(0.0, -lap * 20.0), 2.0) * 4.0;
     seabed *= (1.0 + caustics);
 
-    // Deep water scattering
-    vec3 deepCol = vec3(0.0, 0.1, 0.2);
-    vec3 shallowCol = vec3(0.1, 0.5, 0.6);
-    vec3 waterBody = mix(deepCol, shallowCol, clamp(h * 2.0 + 0.5, 0.0, 1.0));
+    // Deep, Clear Water Body
+    vec3 waterCol = mix(vec3(0.0, 0.05, 0.1), vec3(0.0, 0.2, 0.3), clamp(h + 0.5, 0.0, 1.0));
     
-    // Sky Reflection
     vec3 R = reflect(-V, normal);
     vec3 sky = getSky(R.xy);
 
-    // --- Dynamic Foam ---
-    // Foam appears on crests (high h) and areas of high turbulence
-    float turbulence = max(0.0, abs(hL - hR) + abs(hU - hD));
-    float foamMask = smoothstep(0.12, 0.25, h + turbulence * 0.5);
-    float foamNoise = smoothstep(0.4, 0.6, fbm(uv * 30.0 + uTime * 0.5));
-    vec3 foamCol = vec3(0.9, 0.95, 1.0) * foamMask * foamNoise;
+    // Dynamic Foam (White caps)
+    float foam = smoothstep(0.1, 0.3, h + abs(lap) * 2.0);
+    vec3 whiteWater = vec3(0.8, 0.9, 1.0) * foam * fbm(uv * 40.0 + uTime);
 
-    // Composition
-    vec3 color = mix(seabed, sky, fresnel);
-    color = mix(color, waterBody, 0.3); // Subsurface volume
-    color += foamCol * 0.8;             // Add foam
+    // Final Mix: Mostly Water, tiny bit of Seabed and Sky
+    vec3 color = mix(seabed, waterCol, 0.6); 
+    color = mix(color, sky, fresnel);
+    color += whiteWater * 0.5;
 
-    // Specular Sparkle (GGX-lite)
-    float spec = pow(max(dot(reflect(-L, normal), V), 0.0), 120.0);
-    color += vec3(1.0, 0.98, 0.9) * spec * 0.7;
+    // Specular Highlights (The "Sparkle")
+    float spec = pow(max(dot(reflect(-L, normal), V), 0.0), 80.0);
+    color += vec3(1.0) * spec * 0.6;
 
-    // Filmic Tone Mapping
+    // Output
     color = color / (color + vec3(1.0));
-    color = pow(color, vec3(1.0/2.2)); // Gamma correction
-
-    gl_FragColor = vec4(color, 1.0);
+    gl_FragColor = vec4(pow(color, vec3(1.0/1.8)), 1.0);
 }`;
 
 // ─── GL Helpers ─────────────────────────────────────────────────────────────
