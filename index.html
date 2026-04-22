@@ -1,141 +1,113 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Realistic Island - iPad Optimized</title>
-<style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body, html { width:100%; height:100%; overflow:hidden; background:#000; position: fixed; touch-action: none; }
-  canvas { display:block; width:100vw; height:100vh; }
-</style>
-</head>
-<body>
-<canvas id="c"></canvas>
-<script>
-'use strict';
-
-const canvas = document.getElementById('c');
-const gl = canvas.getContext('webgl');
-
-const DPR = Math.min(window.devicePixelRatio || 1, 2);
-let W, H;
-function resize() {
-    W = Math.round(window.innerWidth * DPR);
-    H = Math.round(window.innerHeight * DPR);
-    canvas.width = W; canvas.height = H;
-}
-window.addEventListener('resize', resize);
-resize();
-
-const VERT = `attribute vec2 p; void main() { gl_Position = vec4(p, 0.0, 1.0); }`;
-
-const FRAG = `
+// ─── Shader: render ─────────────────────────────────────────────────────────
+const RENDER_FRAG = (UINT8 ? '#define UINT8_MODE\n' : '') + `
 precision highp float;
+varying vec2  vUV;
+uniform sampler2D uWater;
+uniform vec2  uTexel;
 uniform float uTime;
-uniform vec2 uRes;
+uniform float uAspect;
 
-// Optimized Noise for iPad
-float hash(vec2 p) { return fract(sin(dot(p, vec2(12.7, 31.1))) * 43758.54); }
-float noise(vec2 p) {
-    vec2 i = floor(p), f = fract(p);
-    f = f*f*(3.0-2.0*f);
-    return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y);
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+float vnoise(vec2 p) {
+    vec2 i = floor(p), f = p - i;
+    f = f*f*(3.0 - 2.0*f);
+    return mix(mix(hash(i), hash(i+vec2(1,0)), f.x),
+               mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x), f.y);
 }
-
-// Realistic Water Waves
-float getWaves(vec2 p) {
-    float v = noise(p + uTime * 0.5) * 0.5;
-    v += noise(p * 2.1 - uTime * 0.8) * 0.25;
+float fbm(vec2 p) {
+    float v=0.0, a=0.5;
+    for(int i=0;i<5;i++){ v+=vnoise(p)*a; p*=2.1; a*=0.5; }
     return v;
 }
 
-void main() {
-    vec2 uv = (gl_FragCoord.xy - 0.5 * uRes) / min(uRes.x, uRes.y);
-    vec3 ro = vec3(0.0, 4.0, 8.0); // Camera position
-    vec3 rd = normalize(vec3(uv, -1.5)); // Ray direction
+vec3 getSky(vec2 dir) {
+    float t = clamp(dir.y * 1.4, 0.0, 1.0);
+    vec3 sky = mix(vec3(0.3, 0.6, 0.9), vec3(0.02, 0.1, 0.3), t);
+    vec2 sunD = normalize(vec2(0.3, 0.7));
+    float sd = dot(normalize(dir), sunD);
+    sky += vec3(1.0, 0.9, 0.7) * pow(max(sd, 0.0), 300.0) * 5.0;
+    return sky;
+}
 
-    // 1. Sky Rendering
-    vec3 sunDir = normalize(vec3(0.5, 0.4, 1.0));
-    vec3 sky = mix(vec3(0.4, 0.6, 0.9), vec3(0.1, 0.2, 0.4), max(0.0, rd.y));
-    sky += pow(max(0.0, dot(rd, sunDir)), 120.0) * vec3(1.0, 0.9, 0.7);
+// IMPROVED SEABED: Sand ripples and sediment
+vec3 getSeabed(vec2 uv) {
+    vec2 p = uv * 6.0;
+    float ripples = sin(p.x + fbm(p) * 3.0) * 0.5 + 0.5;
+    ripples *= sin(p.y * 0.5 + fbm(p + 1.5) * 2.0) * 0.5 + 0.5;
     
-    // 2. Island Math
-    float t = -1.0;
-    vec3 col = sky;
+    vec3 sand = mix(vec3(0.76, 0.7, 0.5), vec3(0.9, 0.85, 0.7), ripples);
+    float detail = fbm(uv * 40.0);
+    sand = mix(sand, sand * 0.9, detail * 0.4);
     
-    // Ray-Plane Intersection for Sea Level
-    float planeT = -ro.y / rd.y;
-    if(planeT > 0.0) {
-        vec3 p = ro + rd * planeT;
-        float dist = length(p.xz);
-        
-        // Island Shape
-        float island = smoothstep(5.0, 1.0, dist) * 2.5;
-        island += noise(p.xz * 0.5) * 1.5; // Terrain detail
+    // Ambient occlusion/darker deep spots
+    float darken = smoothstep(0.4, 0.9, fbm(uv * 3.0));
+    sand = mix(sand, sand * 0.6, darken);
+    return sand;
+}
 
-        if(p.y < island) {
-            // WE HIT THE ISLAND / BEACH
-            float beach = smoothstep(4.0, 3.5, dist);
-            vec3 sand = vec3(0.8, 0.7, 0.5);
-            vec3 grass = vec3(0.2, 0.5, 0.1);
-            vec3 terrainCol = mix(sand, grass, beach);
-            
-            // Basic Shading
-            float diff = max(0.2, dot(vec3(0,1,0), sunDir));
-            col = terrainCol * diff;
-        } else {
-            // WE HIT THE WATER
-            vec2 wUV = p.xz;
-            float w = getWaves(wUV);
-            
-            // Water Normals
-            vec3 n = normalize(vec3(getWaves(wUV + vec2(0.01,0)) - w, 0.1, getWaves(wUV + vec2(0,0.01)) - w));
-            
-            // Fresnel & Reflections
-            float fresnel = pow(1.0 - max(0.0, dot(n, -rd)), 4.0);
-            vec3 ref = mix(vec3(0.4, 0.6, 0.9), vec3(1.0), pow(max(0.0, dot(reflect(rd, n), sunDir)), 50.0));
-            
-            // Deep water vs Shallow (Beach transparency)
-            float depth = smoothstep(4.0, 5.0, dist);
-            vec3 waterBase = mix(vec3(0.2, 0.6, 0.7), vec3(0.05, 0.1, 0.3), depth);
-            
-            col = mix(waterBase, ref, fresnel + 0.1);
-            
-            // Add Building Silhouettes
-            if(dist < 2.0 && noise(p.xz * 2.0) > 0.6) {
-                col *= 0.5; // Shadow of buildings
-            }
-        }
+#ifdef UINT8_MODE
+    float H(vec2 uv) {
+        vec4 s = texture2D(uWater, uv);
+        return (s.r + s.g / 255.0) * 2.0 - 1.0;
     }
+#else
+    float H(vec2 uv) { return texture2D(uWater, uv).r * 2.0 - 1.0; }
+#endif
 
-    gl_FragColor = vec4(pow(col, vec3(0.8)), 1.0);
+float GGX(float NdotH, float rough) {
+    float a2 = rough*rough*rough*rough;
+    float d = NdotH*NdotH*(a2-1.0)+1.0;
+    return a2 / (3.14159*d*d + 1e-5);
+}
+
+void main() {
+    vec2 uv = vUV;
+    vec2 tx = uTexel * 1.5;
+
+    float h = H(uv);
+    float hL = H(uv - vec2(tx.x, 0.0));
+    float hR = H(uv + vec2(tx.x, 0.0));
+    float hU = H(uv + vec2(0.0, tx.y));
+    float hD = H(uv - vec2(0.0, tx.y));
+
+    // Calculate Normal
+    vec3 normal = normalize(vec3(hL - hR, hD - hU, 0.15));
+
+    vec3 V = vec3(0.0, 0.0, 1.0);
+    vec3 L = normalize(vec3(0.5, 0.5, 1.0));
+    
+    // FRESNEL
+    float fresnel = pow(1.0 - max(dot(normal, V), 0.0), 5.0);
+    fresnel = mix(0.05, 1.0, fresnel);
+
+    // REFRACTION & SEABED
+    vec2 refOff = normal.xy * 0.04;
+    vec3 seabed = getSeabed(uv + refOff);
+    
+    // CAUSTICS
+    float lap = hL + hR + hU + hD - 4.0 * h;
+    float caustics = pow(max(0.0, -lap * 12.0), 1.5) * 2.5;
+    
+    // Fake moving light rays on seabed
+    float lightRays = pow(vnoise(uv * 4.0 + uTime * 0.1), 3.0) * 0.5;
+    seabed *= (1.0 + caustics + lightRays);
+    
+    // Beer-Lambert Water Tint
+    vec3 waterTint = mix(vec3(0.0, 0.4, 0.5), vec3(0.0, 0.05, 0.1), clamp(1.0 - h*3.0, 0.0, 1.0));
+    seabed = mix(seabed, waterTint, 0.4);
+
+    // REFLECTION
+    vec3 R = reflect(-L, normal);
+    vec3 sky = getSky(R.xy);
+
+    // FINAL COMBINATION
+    vec3 col = mix(seabed, sky, fresnel);
+    
+    // Add specular highlight
+    float spec = pow(max(dot(reflect(-L, normal), V), 0.0), 64.0);
+    col += vec3(1.0, 0.9, 0.8) * spec * 0.5;
+
+    // Tone mapping
+    col = col / (col + vec3(1.0)) * 1.1; 
+    gl_FragColor = vec4(col, 1.0);
 }`;
-
-function createProg(vs, fs) {
-    const p = gl.createProgram();
-    const s1 = gl.createShader(gl.VERTEX_SHADER); gl.shaderSource(s1, vs); gl.compileShader(s1);
-    const s2 = gl.createShader(gl.FRAGMENT_SHADER); gl.shaderSource(s2, fs); gl.compileShader(s2);
-    gl.compileShader(s1); gl.compileShader(s2);
-    gl.attachShader(p, s1); gl.attachShader(p, s2); gl.linkProgram(p);
-    return p;
-}
-
-const prog = createProg(VERT, FRAG);
-const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
-
-function loop(t) {
-    gl.useProgram(prog);
-    gl.viewport(0, 0, W, H);
-    gl.uniform1f(gl.getUniformLocation(prog, "uTime"), t * 0.001);
-    gl.uniform2f(gl.getUniformLocation(prog, "uRes"), W, H);
-    const l = gl.getAttribLocation(prog, "p");
-    gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, 2, gl.FLOAT, false, 0, 0);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    requestAnimationFrame(loop);
-}
-requestAnimationFrame(loop);
-</script>
-</body>
-</html>
