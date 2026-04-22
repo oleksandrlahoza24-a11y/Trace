@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Ultra-Realistic Natural Water</title>
+<title>Realistic Interactive Water</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { width:100%; height:100%; overflow:hidden; background:#00050a; touch-action:none; }
-  canvas { display:block; position:fixed; top:0; left:0; touch-action:none; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#000; touch-action:none; }
+  canvas { display:block; position:fixed; top:0; left:0; touch-action:none; cursor:crosshair; }
 </style>
 </head>
 <body>
@@ -30,20 +30,18 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-// Simulation Resolution
 const S = 512;
 const extFloat = gl.getExtension('OES_texture_float');
 const FTYPE = extFloat ? gl.FLOAT : gl.UNSIGNED_BYTE;
 
 const VERT = `attribute vec2 aPos; varying vec2 vUV; void main() { vUV = aPos*0.5+0.5; gl_Position = vec4(aPos,0.,1.); }`;
 
-// --- SIMULATION SHADER (Physics) ---
 const SIM_FRAG = `
 precision highp float;
 varying vec2 vUV;
 uniform sampler2D uState;
 uniform vec2 uTexel;
-uniform vec4 uMouse; // x, y, active, strength
+uniform vec3 uMouse; // x, y, strength
 
 void main() {
     vec4 state = texture2D(uState, vUV);
@@ -56,27 +54,21 @@ void main() {
     float w = texture2D(uState, vUV - vec2(uTexel.x, 0.0)).r * 2.0 - 1.0;
 
     float next = (n + s + e + w) * 0.5 - prev;
-    next *= 0.992; // Damping
+    next *= 0.995;
 
-    // Interaction
     float d = length(vUV - uMouse.xy);
-    if(uMouse.z > 0.5) {
-        next -= smoothstep(0.04, 0.0, d) * uMouse.w;
-    }
+    next -= smoothstep(0.05, 0.0, d) * uMouse.z;
 
-    gl_FragColor = vec4(next * 0.5 + 0.5, state.r, 0.0, 1.0);
+    gl_FragColor = vec4(clamp(next * 0.5 + 0.5, 0.0, 1.0), state.r, 0.0, 1.0);
 }`;
 
-// --- RENDERING SHADER (Visuals) ---
 const REN_FRAG = `
 precision highp float;
 varying vec2 vUV;
 uniform sampler2D uWater;
 uniform vec2 uTexel;
-uniform float uTime;
 uniform float uAspect;
 
-// Procedural Noise for Floor
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.7, 31.1))) * 43758.5); }
 float noise(vec2 p) {
     vec2 i = floor(p), f = fract(p);
@@ -84,43 +76,29 @@ float noise(vec2 p) {
     return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y);
 }
 
-vec3 getSeabed(vec2 uv) {
-    float n = noise(uv * 10.0) * 0.5 + noise(uv * 20.0) * 0.25;
-    vec3 sand = mix(vec3(0.4, 0.3, 0.15), vec3(0.6, 0.5, 0.3), n);
-    float rocks = smoothstep(0.6, 0.8, noise(uv * 5.0 + 1.2));
-    return mix(sand, vec3(0.2, 0.18, 0.15), rocks * 0.6);
-}
-
 void main() {
     float h = texture2D(uWater, vUV).r * 2.0 - 1.0;
     float hR = texture2D(uWater, vUV + vec2(uTexel.x, 0.0)).r * 2.0 - 1.0;
     float hU = texture2D(uWater, vUV + vec2(0.0, uTexel.y)).r * 2.0 - 1.0;
     
-    vec3 normal = normalize(vec3(h - hR, h - hU, 0.1));
-    
-    // Fresnel & Reflections
+    vec3 normal = normalize(vec3(h - hR, h - hU, 0.15));
     vec3 view = vec3(0.0, 0.0, 1.0);
-    float fresnel = pow(1.0 - dot(normal, view), 4.0);
+    float fresnel = pow(1.0 - dot(normal, view), 3.0);
     
-    // Sky Reflection (Sun)
-    vec3 lightDir = normalize(vec3(0.5, 0.5, 1.0));
-    float spec = pow(max(dot(reflect(-lightDir, normal), view), 0.0), 60.0);
-    vec3 skyCol = mix(vec3(0.1, 0.3, 0.6), vec3(0.8, 0.9, 1.0), fresnel);
+    // Seabed
+    vec2 refrUV = vUV + normal.xy * 0.04;
+    float n = noise(refrUV * 12.0 * vec2(uAspect, 1.0));
+    vec3 sand = mix(vec3(0.5, 0.4, 0.2), vec3(0.7, 0.6, 0.4), n);
     
-    // Refraction & Seabed
-    vec2 refrUV = vUV + normal.xy * 0.05;
-    vec3 seabed = getSeabed(refrUV * vec2(uAspect, 1.0));
+    // Sun & Sky
+    vec3 lightDir = normalize(vec3(0.3, 0.4, 1.0));
+    float spec = pow(max(dot(reflect(-lightDir, normal), view), 0.0), 50.0);
+    vec3 skyCol = mix(vec3(0.05, 0.2, 0.4), vec3(0.7, 0.85, 1.0), fresnel);
     
-    // Caustics (Light focusing on floor)
-    float caustics = pow(max(0.0, 1.0 - abs(h) * 10.0), 2.0) * 0.5;
-    seabed += caustics * vec3(1.0, 0.9, 0.7);
-
-    // Final Color Composition
-    vec3 waterTint = vec3(0.1, 0.4, 0.5);
-    vec3 col = mix(seabed * waterTint * 1.5, skyCol, fresnel);
-    col += spec * 0.8; // Sun glint
+    vec3 col = mix(sand * vec3(0.4, 0.7, 0.8), skyCol, fresnel + 0.1);
+    col += spec * 0.6;
     
-    gl_FragColor = vec4(col, 1.0);
+    gl_FragColor = vec4(pow(col, vec3(0.9)), 1.0);
 }`;
 
 function mkProg(vs, fs) {
@@ -135,7 +113,7 @@ const simProg = mkProg(VERT, SIM_FRAG);
 const renProg = mkProg(VERT, REN_FRAG);
 
 const uSim = { state: gl.getUniformLocation(simProg, 'uState'), texel: gl.getUniformLocation(simProg, 'uTexel'), mouse: gl.getUniformLocation(simProg, 'uMouse') };
-const uRen = { water: gl.getUniformLocation(renProg, 'uWater'), texel: gl.getUniformLocation(renProg, 'uTexel'), aspect: gl.getUniformLocation(renProg, 'uAspect'), time: gl.getUniformLocation(renProg, 'uTime') };
+const uRen = { water: gl.getUniformLocation(renProg, 'uWater'), texel: gl.getUniformLocation(renProg, 'uTexel'), aspect: gl.getUniformLocation(renProg, 'uAspect') };
 
 const buf = gl.createBuffer();
 gl.bindBuffer(gl.ARRAY_BUFFER, buf);
@@ -155,19 +133,18 @@ function mkFBO() {
 
 let fbo1 = mkFBO(), fbo2 = mkFBO();
 
-const ptr = { x: 0, y: 0, active: 0, v: 0 };
-canvas.addEventListener('pointerdown', e => { ptr.active = 1; updatePtr(e); });
-canvas.addEventListener('pointermove', updatePtr);
+const ptr = { x: 0.5, y: 0.5, active: 0 };
+const updatePtr = (e) => {
+    const t = e.touches ? e.touches[0] : e;
+    ptr.x = t.clientX / CW;
+    ptr.y = 1.0 - t.clientY / CH;
+};
+
+canvas.addEventListener('pointerdown', (e) => { ptr.active = 1; updatePtr(e); });
+canvas.addEventListener('pointermove', (e) => { if(ptr.active) updatePtr(e); });
 window.addEventListener('pointerup', () => ptr.active = 0);
 
-function updatePtr(e) {
-    const nx = e.clientX / CW; const ny = 1.0 - e.clientY / CH;
-    ptr.v = Math.hypot(nx - ptr.x, ny - ptr.y) * 5.0;
-    ptr.x = nx; ptr.y = ny;
-}
-
-function frame(t) {
-    // Physics
+function frame() {
     gl.useProgram(simProg);
     gl.viewport(0, 0, S, S);
     const loc = gl.getAttribLocation(simProg, 'aPos');
@@ -177,20 +154,18 @@ function frame(t) {
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fbo1.t);
     gl.uniform1i(uSim.state, 0);
     gl.uniform2f(uSim.texel, 1/S, 1/S);
-    gl.uniform4f(uSim.mouse, ptr.x, ptr.y, ptr.active, Math.min(0.2, ptr.v));
+    gl.uniform3f(uSim.mouse, ptr.x, ptr.y, ptr.active ? 0.15 : 0.0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     
-    // Swap
     let tmp = fbo1; fbo1 = fbo2; fbo2 = tmp;
 
-    // Render
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, W, H);
     gl.useProgram(renProg);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fbo1.t);
     gl.uniform1i(uRen.water, 0);
     gl.uniform2f(uRen.texel, 1/S, 1/S);
     gl.uniform1f(uRen.aspect, CW/CH);
-    gl.uniform1f(uRen.time, t * 0.001);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
     requestAnimationFrame(frame);
