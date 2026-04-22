@@ -3,310 +3,571 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Ultra Real WebGL Fire Solver</title>
+<title>Ultra-Realistic Water</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
   * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { width:100%; height:100%; overflow:hidden; background:#010000; touch-action:none;
-    -webkit-user-select:none; user-select:none; }
-  canvas { display:block; position:fixed; top:0; left:0; touch-action:none; cursor:crosshair; }
-  #ui {
-    position:fixed; bottom:28px; left:50%; transform:translateX(-50%);
-    color:rgba(255, 70, 20, 0.7); font-family:'Share Tech Mono',monospace; font-size:11px;
-    letter-spacing:5px; text-transform:uppercase; pointer-events:none;
-    transition:opacity 2.5s; white-space:nowrap;
-    text-shadow:0 0 18px rgba(255, 30, 0, 0.9);
+  html, body {
+    width:100%; height:100%;
+    overflow:hidden;
+    background:#04111a;
+    touch-action:none;
+    -webkit-user-select:none;
+    user-select:none;
   }
-  #ui.fade { opacity:0; }
-  #badge {
-    position:fixed; top:20px; left:50%; transform:translateX(-50%);
-    color:rgba(255, 70, 20, 0.5); font-family:'Share Tech Mono',monospace;
-    font-size:10px; letter-spacing:7px; pointer-events:none; white-space:nowrap;
-    text-shadow:0 0 12px rgba(255, 30, 0, 0.6);
+  canvas {
+    display:block;
+    position:fixed;
+    top:0; left:0;
+    touch-action:none;
+    cursor:crosshair;
   }
+  #hint {
+    position:fixed;
+    bottom:32px;
+    left:50%;
+    transform:translateX(-50%);
+    color:rgba(160,220,255,0.55);
+    font-family:'Palatino Linotype','Book Antiqua',Palatino,serif;
+    font-size:13px;
+    letter-spacing:4px;
+    text-transform:uppercase;
+    pointer-events:none;
+    transition:opacity 2.5s ease;
+    text-shadow:0 0 20px rgba(80,180,255,0.4);
+    white-space:nowrap;
+  }
+  #hint.fade { opacity:0; }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="badge">FULL NAVIER-STOKES · COMBUSTION SIMULATION</div>
-<div id="ui">drag to interact</div>
+<div id="hint">∿ touch the water ∿</div>
 <script>
 'use strict';
 
 const canvas = document.getElementById('c');
-const ui     = document.getElementById('ui');
-const DPR    = Math.min(window.devicePixelRatio || 1, 2);
-let W = 0, H = 0, CW = 0, CH = 0;
+const hint   = document.getElementById('hint');
+
+// ─── Retina / iPad DPR support ─────────────────────────────────────────────
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+let W = 0, H = 0;   // physical canvas pixels
+let CW = 0, CH = 0; // CSS layout pixels (event coordinates are in these)
 
 function resize() {
-  CW = window.innerWidth; CH = window.innerHeight;
-  W  = Math.round(CW * DPR); H = Math.round(CH * DPR);
-  canvas.width = W; canvas.height = H;
+  CW = window.innerWidth;
+  CH = window.innerHeight;
+  W  = Math.round(CW * DPR);
+  H  = Math.round(CH * DPR);
+  canvas.width        = W;
+  canvas.height       = H;
   canvas.style.width  = CW + 'px';
   canvas.style.height = CH + 'px';
 }
-resize(); window.addEventListener('resize', resize);
+resize();
+window.addEventListener('resize', resize);
 
-const gl = canvas.getContext('webgl', {antialias:false, alpha:false, powerPreference:'high-performance'})
-        || canvas.getContext('experimental-webgl', {antialias:false, alpha:false});
-if(!gl) { document.body.innerHTML = '<p style="color:#f44;font-family:monospace;padding:40px">WebGL unavailable</p>'; throw 0; }
+// ─── WebGL init ─────────────────────────────────────────────────────────────
+const glOpts = { antialias:false, alpha:false, preserveDrawingBuffer:false, powerPreference:'high-performance' };
+const gl = canvas.getContext('webgl', glOpts)
+        || canvas.getContext('experimental-webgl', glOpts);
 
-// Enable float extensions for high-precision simulation and HDR
-const extHalfFloat = gl.getExtension('OES_texture_half_float');
-const extHalfFloatLinear = gl.getExtension('OES_texture_half_float_linear');
-gl.getExtension('EXT_color_buffer_half_float');
-const extFloat = gl.getExtension('OES_texture_float');
-const extFloatLinear = gl.getExtension('OES_texture_float_linear');
+if (!gl) {
+  document.body.style.cssText = 'background:#030c12;display:flex;align-items:center;justify-content:center';
+  document.body.innerHTML = '<p style="color:#7ad;font-family:serif;font-size:18px;text-align:center;line-height:2">WebGL not available<br><small style="opacity:.5">Try Chrome or Safari</small></p>';
+  throw 0;
+}
+
+// Extensions
+const extFloat    = gl.getExtension('OES_texture_float');
+const extHalfF    = gl.getExtension('OES_texture_half_float');
+const extFloatLin = gl.getExtension('OES_texture_float_linear');
+const extHalfLin  = gl.getExtension('OES_texture_half_float_linear');
 gl.getExtension('WEBGL_color_buffer_float');
+gl.getExtension('EXT_color_buffer_half_float');
 
-function canRT(type){
-  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+function canRenderTo(type) {
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 4, 4, 0, gl.RGBA, type, null);
-  const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+  const f = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, f);
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
   const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
-  gl.deleteFramebuffer(f); gl.deleteTexture(t); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.deleteFramebuffer(f); gl.deleteTexture(t);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   return ok;
 }
 
-let FTYPE, ULIN;
-if(extHalfFloat && canRT(extHalfFloat.HALF_FLOAT_OES)) {
-    FTYPE = extHalfFloat.HALF_FLOAT_OES; ULIN = !!extHalfFloatLinear;
-} else if(extFloat && canRT(gl.FLOAT)) {
-    FTYPE = gl.FLOAT; ULIN = !!extFloatLinear;
+// Pick best available float format for FBO rendering
+let FTYPE, USE_LINEAR, UINT8;
+if (extFloat && canRenderTo(gl.FLOAT)) {
+  FTYPE = gl.FLOAT; USE_LINEAR = !!extFloatLin; UINT8 = false;
+} else if (extHalfF && canRenderTo(extHalfF.HALF_FLOAT_OES)) {
+  FTYPE = extHalfF.HALF_FLOAT_OES; USE_LINEAR = !!extHalfLin; UINT8 = false;
 } else {
-    FTYPE = gl.UNSIGNED_BYTE; ULIN = true;
+  // iPad / older devices fall here — uint8 with 16-bit encoding fixes quantisation pixels
+  FTYPE = gl.UNSIGNED_BYTE; USE_LINEAR = true; UINT8 = true;
 }
 
-const S = 512; // Simulation resolution
-const DISSIPATION_SPEED = 0.992; // How fast density dissipates
+const S = 512; // simulation grid (square)
 
-const VERT = `attribute vec2 aPos; varying vec2 vUV;
-void main(){ vUV = aPos*.5+.5; gl_Position = vec4(aPos,0.,1.); }`;
-
-// ─── SHADER SOURCES ─────────────────────────────────────────────────────────
-
-// ADVECTION SHADER: Moves fields along velocity (Eulerian method)
-const ADV_SRC = `precision highp float; varying vec2 vUV;
-uniform sampler2D uS; // Field to advect (e.g., density or velocity)
-uniform sampler2D uV; // Velocity field
-uniform vec2 uTx; uniform float uDt; uniform float uDiss;
+// ─── Shader: vertex (shared) ────────────────────────────────────────────────
+const VERT = `
+attribute vec2 aPos;
+varying   vec2 vUV;
 void main() {
-    vec2 vel = texture2D(uV, vUV).xy;
-    vec2 coord = vUV - uDt * uTx * vel;
-    gl_FragColor = texture2D(uS, coord) * uDiss;
+  vUV = aPos * 0.5 + 0.5;
+  gl_Position = vec4(aPos, 0.0, 1.0);
 }`;
 
-// DIVERGENCE SHADER: Calculates divergence of velocity field (prerequisite for pressure solver)
-const DIV_SRC = `precision highp float; varying vec2 vUV;
-uniform sampler2D uV; uniform vec2 uTx;
+// ─── Shader: simulation ─────────────────────────────────────────────────────
+// FIX: On uint8 devices (iPad), we use 16-bit fixed-point:
+//   curr height → R (hi byte) + G (lo byte)
+//   prev height → B (hi byte) + A (lo byte)
+// This gives ~65000 precision levels vs 256, eliminating pixel-block artefacts.
+const SIM_FRAG = (UINT8 ? '#define UINT8_MODE\n' : '') + `
+precision highp float;
+varying vec2  vUV;
+uniform sampler2D uState;
+uniform vec2  uTexel;
+uniform vec2  uMouse;
+uniform float uRadius;
+uniform float uStrength;
+
+#ifdef UINT8_MODE
+  // Encode float [-1,1] → two bytes stored in vec2([0,1])
+  // hi = integer part of t*255 / 255
+  // lo = fractional part of t*255  (full [0,1) range for sub-byte precision)
+  vec2 enc16(float v) {
+    float t   = clamp(v * 0.5 + 0.5, 0.0, 0.99999);
+    float t255 = t * 255.0;
+    return vec2(floor(t255) / 255.0, fract(t255));
+  }
+  // Decode: (hi + lo/255) * 2 - 1
+  float dec16(vec2 v) { return (v.x + v.y / 255.0) * 2.0 - 1.0; }
+  float CURR(vec2 uv) { return dec16(texture2D(uState, uv).rg); }
+  float PREV(vec2 uv) { return dec16(texture2D(uState, uv).ba); }
+#else
+  float CURR(vec2 uv) { return texture2D(uState, uv).r * 2.0 - 1.0; }
+  float PREV(vec2 uv) { return texture2D(uState, uv).g * 2.0 - 1.0; }
+#endif
+
 void main() {
-    float vL = texture2D(uV, vUV - vec2(uTx.x, 0.0)).x;
-    float vR = texture2D(uV, vUV + vec2(uTx.x, 0.0)).x;
-    float vT = texture2D(uV, vUV + vec2(0.0, uTx.y)).y;
-    float vB = texture2D(uV, vUV - vec2(0.0, uTx.y)).y;
-    float div = 0.5 * ((vR - vL) + (vT - vB));
-    gl_FragColor = vec4(div, 0.0, 0.0, 1.0);
+  float curr = CURR(vUV);
+  float prev = PREV(vUV);
+
+  float n = CURR(vUV + vec2( 0.0,      uTexel.y));
+  float s = CURR(vUV - vec2( 0.0,      uTexel.y));
+  float e = CURR(vUV + vec2( uTexel.x, 0.0     ));
+  float w = CURR(vUV - vec2( uTexel.x, 0.0     ));
+
+  // 2-D wave equation  (α=0.5 → numerically stable max speed)
+  float next = (-prev + (n + s + e + w) * 0.5) * 0.994;
+
+  // Sponge-layer: absorb at borders to kill reflections
+  float bx = min(vUV.x, 1.0 - vUV.x) * 14.0;
+  float by = min(vUV.y, 1.0 - vUV.y) * 14.0;
+  next *= mix(0.78, 1.0, clamp(min(bx, by), 0.0, 1.0));
+
+  // Pointer / drop disturbance
+  float d = length(vUV - uMouse);
+  next -= smoothstep(uRadius, 0.0, d) * uStrength;
+  next  = clamp(next, -1.0, 1.0);
+
+  #ifdef UINT8_MODE
+    gl_FragColor = vec4(enc16(next), enc16(curr));
+  #else
+    gl_FragColor = vec4(next * 0.5 + 0.5, curr * 0.5 + 0.5, 0.0, 1.0);
+  #endif
 }`;
 
-// JACOBI SHADER: Solves pressure Poisson equation iteratively
-const JAC_SRC = `precision highp float; varying vec2 vUV;
-uniform sampler2D uP; // Pressure field
-uniform sampler2D uD; // Divergence field
-uniform vec2 uTx;
-void main() {
-    float pL = texture2D(uP, vUV - vec2(uTx.x, 0.0)).x;
-    float pR = texture2D(uP, vUV + vec2(uTx.x, 0.0)).x;
-    float pT = texture2D(uP, vUV + vec2(0.0, uTx.y)).y;
-    float pB = texture2D(uP, vUV - vec2(0.0, uTx.y)).y;
-    float div = texture2D(uD, vUV).x;
-    float p = (pL + pR + pT + pB - div) * 0.25;
-    gl_FragColor = vec4(p, 0.0, 0.0, 1.0);
-}`;
+// ─── Shader: render ─────────────────────────────────────────────────────────
+const RENDER_FRAG = (UINT8 ? '#define UINT8_MODE\n' : '') + `
+precision highp float;
+varying vec2  vUV;
+uniform sampler2D uWater;
+uniform vec2  uTexel;
+uniform float uTime;
+uniform float uAspect;
 
-// SUBTRACT SHADER: Subtracts pressure gradient from velocity to make it divergence-free
-const SUB_SRC = `precision highp float; varying vec2 vUV;
-uniform sampler2D uV; uniform sampler2D uP; uniform vec2 uTx;
-void main() {
-    float pL = texture2D(uP, vUV - vec2(uTx.x, 0.0)).x;
-    float pR = texture2D(uP, vUV + vec2(uTx.x, 0.0)).x;
-    float pT = texture2D(uP, vUV + vec2(0.0, uTx.y)).y;
-    float pB = texture2D(uP, vUV - vec2(0.0, uTx.y)).y;
-    vec2 vel = texture2D(uV, vUV).xy;
-    vel -= 0.5 * vec2(pR - pL, pT - pB);
-    gl_FragColor = vec4(vel, 0.0, 1.0);
-}`;
-
-// INJECT/BUOYANCY SHADER: Adds physical forces (buoyancy) and combustion fields
-const FORCE_SRC = `precision highp float; varying vec2 vUV;
-uniform sampler2D uS; uniform float uTime; uniform vec2 uM; uniform float uMActive;
-uniform vec2 uMv; uniform float uAspect; uniform vec2 uTx;
-float snoise(vec3 v) { return abs(fract(sin(v.x * 123.456 + v.y * 345.678 + v.z * 567.890) * 45678.9123) * 2.0 - 1.0); }
-void main() {
-    vec4 state = texture2D(uS, vUV);
-    vec2 vel = state.xy; float density = state.z; float heat = state.w;
-    // Thermodynamics: Heat induces upward force
-    vel.y += heat * 0.0035; 
-    
-    // Inject fuel/density at bottom (procedural emitter)
-    float baseEmitter = smoothstep(0.12, 0.0, vUV.y) * smoothstep(0.35, 0.0, abs(vUV.x - 0.5));
-    float ignitionNoise = snoise(vec3(vUV.x * 10.0, uTime * 3.0, 0.0)) * 0.5 + 0.5;
-    if(vUV.y < 0.04) {
-        density += baseEmitter * ignitionNoise * 1.5;
-        heat += baseEmitter * ignitionNoise * 1.5;
-    }
-    
-    // Dissipation/Fuel Burn
-    density *= 0.990; heat *= 0.975; 
-
-    // Mouse Interaction
-    float dist = length((vUV - uM) * vec2(uAspect, 1.0));
-    float mouseStrength = exp(-dist * 35.0) * uMActive;
-    density += mouseStrength * 2.0; heat += mouseStrength * 2.0;
-    vel += uMv * mouseStrength * 20.0;
-    
-    // Vorticity confinement approximation (simple high-frequency noise insertion)
-    float vortexNoise = snoise(vec3(vUV * 100.0, uTime)) * density;
-    vel.x += vortexNoise * 0.005 * (smoothstep(0.0,0.3,vUV.y)-smoothstep(0.6,0.9,vUV.y));
-
-    gl_FragColor = clamp(vec4(vel, density, heat), vec4(-10.0), vec4(10.0));
-}`;
-
-// RENDER SHADER: HDR Blackbody mapping + Post-processing
-const REN_SRC = `precision highp float; varying vec2 vUV;
-uniform sampler2D uW; uniform float uAspect; uniform vec2 uTx;
-// Color mapping based on blackbody radiation approximation
-vec3 blackbody(float t) {
-    vec3 col = vec3(0.0);
-    // Darker areas -> Black/Brown/Red
-    col += mix(vec3(0.0), vec3(0.1, 0.01, 0.0), smoothstep(0.0, 0.1, t));
-    col += mix(vec3(0.0), vec3(0.9, 0.1, 0.0), smoothstep(0.1, 0.25, t));
-    // Medium intensity -> Orange/Yellow
-    col += mix(vec3(0.0), vec3(1.0, 0.6, 0.15), smoothstep(0.25, 0.5, t));
-    col += mix(vec3(0.0), vec3(1.0, 0.9, 0.6), smoothstep(0.5, 0.75, t));
-    // Blinding core -> White
-    col += mix(vec3(0.0), vec3(0.8, 0.9, 1.0), smoothstep(0.75, 1.2, t));
-    return col;
+// ── Noise ─────────────────────────────────────────────────────────────────
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+float vnoise(vec2 p) {
+  vec2 i = floor(p), f = p - i;
+  f = f*f*(3.0 - 2.0*f);
+  return mix(mix(hash(i),         hash(i+vec2(1,0)), f.x),
+             mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x), f.y);
 }
+float fbm(vec2 p) {
+  float v=0.0, a=0.5;
+  for(int i=0;i<5;i++){ v+=vnoise(p)*a; p*=2.1; a*=0.5; }
+  return v;
+}
+
+// ── Sky dome ──────────────────────────────────────────────────────────────
+vec3 getSky(vec2 dir) {
+  float t   = clamp(dir.y * 1.6, 0.0, 1.0);
+  vec3 sky  = mix(vec3(0.48, 0.72, 0.96), vec3(0.05, 0.22, 0.68), t*t);
+  // Sun disc
+  vec2 sunD = normalize(vec2(0.35, 0.72));
+  float sd  = dot(normalize(dir), sunD);
+  sky += vec3(1.00, 0.97, 0.80) * pow(max(sd, 0.0), 200.0) * 4.0;
+  sky += vec3(1.00, 0.78, 0.42) * pow(max(sd, 0.0),   5.0) * 0.45;
+  // Soft clouds
+  float cl = fbm(dir*5.0+3.7) * fbm(dir*3.0+1.2);
+  sky = mix(sky, vec3(0.92, 0.95, 1.00), smoothstep(0.35,0.65,cl)*0.5*(1.0-t));
+  return sky;
+}
+
+// ── Seabed ────────────────────────────────────────────────────────────────
+vec3 getSeabed(vec2 uv) {
+  float dr = uTime * 0.025;
+  float r1 = sin(uv.x*32.0 + fbm(uv*4.0+dr)*5.0)*0.5+0.5;
+  float r2 = sin(uv.y*26.0 + fbm(uv*3.5+1.7+dr)*4.0)*0.5+0.5;
+  float det = fbm(uv*16.0+dr*0.5);
+  vec3 base = mix(vec3(0.73,0.61,0.38), vec3(0.82,0.71,0.48), r1*r2*pow(det,0.5));
+  // Rocks
+  float rf  = smoothstep(0.55,0.75, fbm(uv*3.8+2.3));
+  base = mix(base, vec3(0.47,0.43,0.37)*(0.7+0.3*fbm(uv*9.0+4.1)), rf*0.7);
+  // Seaweed
+  float wd  = smoothstep(0.60,0.82,fbm(uv*8.5+5.8))*smoothstep(0.50,0.68,fbm(uv*5.0+8.3));
+  base = mix(base, vec3(0.15,0.38,0.18), wd*0.60);
+  // Pebbles
+  float pb  = step(0.78, hash(floor(uv*80.0)));
+  base = mix(base, vec3(vnoise(uv*80.0)*0.2+0.5)*0.6, pb*0.3);
+  return base;
+}
+
+// ── Height fetch (handles UINT8 16-bit encoding) ──────────────────────────
+#ifdef UINT8_MODE
+  float H(vec2 uv) {
+    vec4 s = texture2D(uWater, uv);
+    return (s.r + s.g / 255.0) * 2.0 - 1.0;
+  }
+#else
+  float H(vec2 uv) { return texture2D(uWater, uv).r * 2.0 - 1.0; }
+#endif
+
+// ── GGX microfacet specular (replaces Phong — realistic water sparkle) ────
+float GGX(float NdotH, float rough) {
+  float a2 = rough*rough*rough*rough;
+  float d  = NdotH*NdotH*(a2-1.0)+1.0;
+  return a2 / (3.14159*d*d + 1e-5);
+}
+
 void main() {
-    float heat = texture2D(uW, vUV).w;
-    
-    // HDR color mapping (boosting visual scale)
-    vec3 fire = blackbody(heat * 1.4);
+  vec2 uv = vUV;
+  vec2 tx = uTexel * 2.0;
 
-    // Apply bloom contribution
-    heat += texture2D(uW, vUV + vec2(uTx.x*1.5,0.0)).w*0.08;
-    heat += texture2D(uW, vUV - vec2(uTx.x*1.5,0.0)).w*0.08;
-    heat += texture2D(uW, vUV + vec2(0.0,uTx.y*1.5)).w*0.08;
-    heat += texture2D(uW, vUV - vec2(0.0,uTx.y*1.5)).w*0.08;
-    fire = mix(fire, vec3(1.0, 0.5, 0.1), heat * 0.1);
+  // ── Sobel normal from height field (8-tap, smoother than 4-tap) ─────────
+  float hL  = H(uv - vec2(tx.x, 0.0));
+  float hR  = H(uv + vec2(tx.x, 0.0));
+  float hU  = H(uv + vec2(0.0,  tx.y));
+  float hD  = H(uv - vec2(0.0,  tx.y));
+  float hLU = H(uv + vec2(-tx.x,  tx.y));
+  float hRU = H(uv + vec2( tx.x,  tx.y));
+  float hLD = H(uv + vec2(-tx.x, -tx.y));
+  float hRD = H(uv + vec2( tx.x, -tx.y));
 
-    // Subtle background gradient and tone mapping
-    vec3 col = fire + mix(vec3(0.02, 0.01, 0.005), vec3(0.0), vUV.y);
-    col *= clamp(1.0 - length((vUV-0.5)*vec2(uAspect,1.0)*0.7), 0.0, 1.0);
-    col = (col*(2.51*col+0.03))/(col*(2.43*col+0.59)+0.14); // ACES approximation
-    gl_FragColor = vec4(col, 1.0);
+  float ns = 4.8;
+  float dX = (hRD + 2.0*hR + hRU - hLD - 2.0*hL - hLU) * ns / uAspect;
+  float dY = (hLU + 2.0*hU + hRU - hLD - 2.0*hD - hRD) * ns;
+  vec3 normal = normalize(vec3(-dX, -dY, 1.0));
+
+  float h   = H(uv);
+  vec3  V   = vec3(0.0, 0.0, 1.0);
+  vec3  L   = normalize(vec3(0.40, 0.68, 1.0));
+  vec3  Hv  = normalize(V + L);   // halfway vector
+
+  // ── Fresnel (Schlick, water IOR 1.333) ───────────────────────────────────
+  float cosI   = max(dot(normal, V), 0.0);
+  float fresnel = 0.020 + 0.980 * pow(1.0 - cosI, 5.0);
+  fresnel = clamp(fresnel, 0.0, 1.0);
+
+  // ── Refraction ───────────────────────────────────────────────────────────
+  vec2 refOff = vec2(normal.x / uAspect, normal.y) * 0.065;
+  vec2 refUV  = clamp(uv + refOff, 0.001, 0.999);
+  vec3 seabed = getSeabed(refUV + vec2(uTime * 0.003, 0.0));
+
+  // Beer-Lambert water extinction
+  seabed *= exp(-vec3(0.70, 0.12, 0.04) * 2.5);
+
+  // ── Caustics ─────────────────────────────────────────────────────────────
+  // 1) Surface curvature (wave focusing)
+  float lap = hU + hD + hL + hR - 4.0*h;
+  float curvCaus = pow(max(0.0, -lap * 9.0), 1.6) * 2.0;
+  // 2) Animated interference pattern
+  vec2 cUV = refUV * vec2(uAspect*12.0, 12.0);
+  float ca = sin(cUV.x*1.9 + uTime*2.5)*sin(cUV.y*1.8 + uTime*2.1)
+           + sin(cUV.x*1.3 - uTime*1.7 + 1.1)*sin(cUV.y*1.4 - uTime*2.0 + 0.8)
+           + sin((cUV.x+cUV.y)*1.1 + uTime*1.4)*0.5;
+  float animCaus = pow(max(0.0, ca*0.2+0.5), 3.8) * 0.6;
+  seabed *= 1.0 + curvCaus + animCaus;
+
+  // ── Sky reflection ────────────────────────────────────────────────────────
+  vec3 R   = reflect(-L, normal);
+  vec3 sky = getSky(R.xy * 0.5 + 0.5);
+
+  // ── Water body tint ───────────────────────────────────────────────────────
+  vec3 deepCol    = vec3(0.008, 0.07, 0.20);
+  vec3 shallowCol = vec3(0.05,  0.36, 0.62);
+  vec3 waterCol   = mix(deepCol, shallowCol, clamp(0.5 + h*2.0, 0.0, 1.0));
+
+  // ── Compose via Fresnel ───────────────────────────────────────────────────
+  vec3 col = mix(seabed, sky, clamp(fresnel*0.90 + 0.05, 0.0, 1.0));
+  col = mix(col, waterCol, 0.18);
+
+  // ── Sub-surface scattering (light through wave crests) ───────────────────
+  float sss = smoothstep(-0.05, 0.30, h) * max(0.0, dot(normal, L));
+  col += vec3(0.00, 0.50, 0.72) * sss * 0.30;
+
+  // ── GGX specular ─────────────────────────────────────────────────────────
+  float rough  = max(0.012, 0.012 + abs(h)*0.08);  // rougher at crests
+  float NdotH  = max(dot(normal, Hv), 0.0);
+  float NdotL  = max(dot(normal, L),  0.0);
+  float spec   = GGX(NdotH, rough);
+  col += vec3(1.00, 0.97, 0.88) * spec * NdotL * 0.20 * fresnel;
+  // Wide shimmer halo
+  float RdotV  = max(dot(R, V), 0.0);
+  col += vec3(0.82, 0.91, 1.00) * pow(RdotV, 40.0) * 0.22;
+
+  // ── Foam at wave crests ───────────────────────────────────────────────────
+  float crest = smoothstep(0.18, 0.40, h);
+  float foamN = pow(fbm(uv*22.0 + uTime*0.8), 1.4);
+  col = mix(col, vec3(0.96, 0.98, 1.00), crest*foamN*0.85);
+  // Trailing wake foam
+  float wake = smoothstep(0.07, 0.20, abs(h)) * fbm(uv*16.0+uTime*0.4) * 0.15;
+  col += vec3(0.72, 0.86, 1.00) * wake;
+
+  // ── Horizon haze ─────────────────────────────────────────────────────────
+  float fog = pow(clamp(1.0 - vUV.y*1.6, 0.0, 1.0), 4.0) * 0.22;
+  col = mix(col, vec3(0.26, 0.52, 0.80), fog);
+
+  // ── Vignette ─────────────────────────────────────────────────────────────
+  vec2 vd = (vUV*2.0-1.0) * vec2(uAspect, 1.0);
+  col *= clamp(1.0 - dot(vd,vd)*0.055, 0.0, 1.0);
+
+  // ── Filmic tone-map + gamma ───────────────────────────────────────────────
+  col = col*(1.0+col*0.14)/(col+0.9)*1.08;
+  col = pow(max(col, vec3(0.0)), vec3(1.0/2.2));
+
+  gl_FragColor = vec4(col, 1.0);
 }`;
 
-// ─── WebGL Initialization ──────────────────────────────────────────────────
-function mkSh(type, src){
-  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
-  if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+// ─── GL Helpers ─────────────────────────────────────────────────────────────
+function mkShader(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+    throw new Error('Shader compile: ' + gl.getShaderInfoLog(s));
   return s;
 }
-function mkProg(fsrc){
-  const p = gl.createProgram(); gl.attachShader(p, mkSh(gl.VERTEX_SHADER, VERT)); gl.attachShader(p, mkSh(gl.FRAGMENT_SHADER, fsrc));
-  gl.linkProgram(p); if(!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-  const u = {}, n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
-  for(let i=0;i<n;i++){ const x=gl.getActiveUniform(p,i); u[x.name]=gl.getUniformLocation(p,x.name); } return {p, u};
-}
 
-let advP, divP, jacP, subP, srcP, renP;
-try {
-  advP = mkProg(ADV_SRC); divP = mkProg(DIV_SRC); jacP = mkProg(JAC_SRC); subP = mkProg(SUB_SRC); srcP = mkProg(FORCE_SRC); renP = mkProg(REN_SRC);
-} catch(e) { document.body.innerHTML = `<pre style="color:#f44;padding:20px">${e.message}</pre>`; throw e; }
-
-const qb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, qb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
-function bindQ(prog){ gl.bindBuffer(gl.ARRAY_BUFFER, qb); const loc = gl.getAttribLocation(prog.p, 'aPos'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0); }
-
-function mkFBO(resX = S, resY = S){
-  const n = resX * resY * 4; const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
-  const data = (FTYPE === gl.FLOAT ? new Float32Array(n) : null);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, resX, resY, 0, gl.RGBA, FTYPE, data);
-  const filt = ULIN ? gl.LINEAR : gl.NEAREST;
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filt); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filt);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  const fbo = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fbo); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  return {tex, fbo};
-}
-// Double buffers for iterative solving
-let wFBO = mkFBO(), wFBOBack = mkFBO(); // R=VelX, G=VelY, B=Density, A=Heat
-let pFBO = mkFBO(), pFBOBack = mkFBO(); // R=Pressure
-let dFBO = mkFBO(); // R=Divergence
-
-// ─── Input Handling ───────────────────────────────────────────────────────
-const ptr = {x:-1, y:-1, vx:0, vy:0, active:0};
-function dismiss(){ ui.classList.add('fade'); setTimeout(()=>ui.style.display='none',3000); }
-function toUV(cx,cy){ return {x:cx/CW, y:1.-cy/CH}; }
-function onDown(e){ const t=e.touches?e.touches[0]:e, uv=toUV(t.clientX,t.clientY); ptr.x=uv.x; ptr.y=uv.y; ptr.active=1; dismiss(); }
-function onMove(e){ if(!ptr.active)return; const t=e.touches?e.touches[0]:e, uv=toUV(t.clientX,t.clientY); ptr.vx=uv.x-ptr.x; ptr.vy=uv.y-ptr.y; ptr.x=uv.x; ptr.y=uv.y; }
-canvas.addEventListener('mousedown', onDown); canvas.addEventListener('mousemove', onMove); window.addEventListener('mouseup', ()=>ptr.active=0);
-canvas.addEventListener('touchstart', e=>{e.preventDefault();onDown(e);},{passive:false}); canvas.addEventListener('touchmove', e=>{e.preventDefault();onMove(e);},{passive:false}); canvas.addEventListener('touchend', ()=>ptr.active=0,{passive:false});
-
-// ─── Physics Loop ─────────────────────────────────────────────────────────
-function pass(prog, dst, srcU, backP, jacD){
-  gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fbo); gl.useProgram(prog.p); bindQ(prog);
-  gl.viewport(0, 0, S, S); const u = prog.u;
-  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, srcU); gl.uniform1i(u.uV, 0); // Primary texture unit
-  if(u.uS){ gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, backP); gl.uniform1i(u.uS, 1); } // Backpressure for Jacobi
-  if(u.uD){ gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, jacD); gl.uniform1i(u.uD, 2); } // Divergence texture for Jacobi
-  if(u.uTx) gl.uniform2f(u.uTx, 1/S, 1/S); if(u.uAspect) gl.uniform1f(u.uAspect, W/H); if(u.uTime) gl.uniform1f(u.uTime, time);
-  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-}
-
-function advectPass(src, vel, dst, diss = 1.0){
-  gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fbo); gl.useProgram(advP.p); bindQ(advP);
-  gl.viewport(0, 0, S, S); const u = advP.u;
-  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.tex); gl.uniform1i(u.uS, 0); // Source (to advect)
-  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, vel.tex); gl.uniform1i(u.uV, 1); // Velocity
-  gl.uniform1f(u.uDiss, diss); gl.uniform1f(u.uDt, 0.016); gl.uniform2f(u.uTx, 1/S, 1/S);
-  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-}
-
-// Full Navier-Stokes solver sequence
-function stepPhysics(){
-  // 1. Advection (Self-Advection: velocity advects itself and density field)
-  advectPass(wFBO, wFBO, wFBOBack); 
-  // 2. Combustion Emitter & Thermodynamics
-  pass(srcP, wFBO, wFBOBack.tex); 
-  
-  // 3. Pressure Solve (Jacobi iteration)
-  // Calculate divergence
-  pass(divP, dFBO, wFBO.tex); 
-  // Iteratively solve pressure (multiple passes create tighter vortexes)
-  for(let i=0; i<18; i++){ 
-    pass(jacP, pFBO, dFBO.tex, pFBOBack.tex); // Source divergence into U2 for Jac solver
-    const tmp = pFBO; pFBO = pFBOBack; pFBOBack = tmp; // Swap pFBO
+function mkProg(fsrc) {
+  const p = gl.createProgram();
+  gl.attachShader(p, mkShader(gl.VERTEX_SHADER,   VERT));
+  gl.attachShader(p, mkShader(gl.FRAGMENT_SHADER, fsrc));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS))
+    throw new Error('Program link: ' + gl.getProgramInfoLog(p));
+  const u = {};
+  const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) {
+    const info = gl.getActiveUniform(p, i);
+    u[info.name] = gl.getUniformLocation(p, info.name);
   }
-  // 4. Subtract pressure gradient to make velocity incompressable
-  pass(subP, wFBOBack, wFBO.tex, pFBO.tex); // Use pFBOBack for subtraction (last written pressure)
-  const tmp = wFBO; wFBO = wFBOBack; wFBOBack = tmp; // Swap wFBO
-  
-  ptr.vx*=0.3; ptr.vy*=0.3;
+  return { p, u };
 }
 
-let time = 0;
-function frame(now){
-  requestAnimationFrame(frame); time=now*0.001;
-  
-  stepPhysics(); // Run solver
+let simProg, renderProg;
+try {
+  simProg    = mkProg(SIM_FRAG);
+  renderProg = mkProg(RENDER_FRAG);
+} catch (e) {
+  console.error(e);
+  document.body.innerHTML = `<pre style="color:#f88;padding:20px;font-size:11px;white-space:pre-wrap">${e.message}</pre>`;
+  throw e;
+}
 
-  // Render to screen
-  gl.viewport(0, 0, W, H); gl.useProgram(renP.p); bindQ(renP);
-  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, wFBO.tex);
-  gl.uniform1i(renP.u.uW, 0); gl.uniform1f(renP.u.uAspect, W/H); gl.uniform2f(renP.u.uTx, 1/S, 1/S);
+// Fullscreen quad
+const qbuf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, qbuf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+
+function bindQuad(prog) {
+  gl.bindBuffer(gl.ARRAY_BUFFER, qbuf);
+  const loc = gl.getAttribLocation(prog.p, 'aPos');
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+}
+
+// ─── FBOs ───────────────────────────────────────────────────────────────────
+function mkInitData() {
+  const n = S * S * 4;
+  if (!UINT8) {
+    // float or half-float: 0.5 encodes to resting height 0
+    if (FTYPE === gl.FLOAT)              return new Float32Array(n).fill(0.5);
+    if (FTYPE === extHalfF.HALF_FLOAT_OES) return new Uint16Array(n).fill(0x3800); // 0.5 in fp16
+  }
+  // UINT8 mode: enc16(0) → t=0.5 → t255=127.5 → hi=127/255, lo=0.5
+  // Byte values: hi=127 (≈127/255), lo=128 (round(0.5*255))
+  // Layout per texel: [curr_hi, curr_lo, prev_hi, prev_lo]
+  const d = new Uint8Array(n);
+  for (let i = 0; i < n; i += 4) { d[i]=127; d[i+1]=128; d[i+2]=127; d[i+3]=128; }
+  return d;
+}
+
+function mkFBO() {
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, S, S, 0, gl.RGBA, FTYPE, mkInitData());
+  const f = USE_LINEAR ? gl.LINEAR : gl.NEAREST;
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, f);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, f);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const fbo = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { tex, fbo };
+}
+
+let fboA = mkFBO();
+let fboB = mkFBO();
+
+// ─── Input ──────────────────────────────────────────────────────────────────
+const ptr = { x:0.5, y:0.5, active:false, prevX:0.5, prevY:0.5 };
+let hintDismissed = false;
+
+// FIX: divide by CSS pixels (CW/CH), NOT canvas physical pixels (W/H)
+// Touch/mouse events always give clientX/Y in CSS coordinate space
+function toUV(cx, cy) {
+  return { x: cx / CW, y: 1.0 - cy / CH };
+}
+
+function dismissHint() {
+  if (hintDismissed) return;
+  hintDismissed = true;
+  hint.classList.add('fade');
+  setTimeout(() => { hint.style.display = 'none'; }, 3000);
+}
+
+function onDown(e) {
+  const t = e.touches ? e.touches[0] : e;
+  const uv = toUV(t.clientX, t.clientY);
+  ptr.prevX = uv.x; ptr.prevY = uv.y;
+  ptr.x = uv.x; ptr.y = uv.y; ptr.active = true;
+  dismissHint();
+}
+
+function onMove(e) {
+  if (!ptr.active) return;
+  const t = e.touches ? e.touches[0] : e;
+  ptr.prevX = ptr.x; ptr.prevY = ptr.y;
+  const uv = toUV(t.clientX, t.clientY);
+  ptr.x = uv.x; ptr.y = uv.y;
+}
+
+function onUp() { ptr.active = false; }
+
+// Mouse
+canvas.addEventListener('mousedown', onDown);
+canvas.addEventListener('mousemove', onMove);
+window.addEventListener('mouseup',   onUp);
+
+// FIX: passive:false on ALL touch events so we can preventDefault
+// This stops iPad Safari hijacking the gesture as scroll/zoom
+canvas.addEventListener('touchstart',  e => { e.preventDefault(); onDown(e); }, { passive:false });
+canvas.addEventListener('touchmove',   e => { e.preventDefault(); onMove(e); }, { passive:false });
+canvas.addEventListener('touchend',    e => { e.preventDefault(); onUp();    }, { passive:false });
+canvas.addEventListener('touchcancel', e => { e.preventDefault(); onUp();    }, { passive:false });
+
+// ─── Ambient rain drops ─────────────────────────────────────────────────────
+const drops = [];
+let lastDrop = 0;
+
+function maybeSpawnDrop(now) {
+  const gap = ptr.active ? 5000 : (500 + Math.random() * 800);
+  if (now - lastDrop < gap) return;
+  lastDrop = now;
+  drops.push({
+    x:   0.08 + Math.random() * 0.84,
+    y:   0.08 + Math.random() * 0.84,
+    str: 0.10 + Math.random() * 0.22,
+    born: now,
+    ttl:  40  + Math.random() * 40
+  });
+}
+
+// ─── Simulation step ────────────────────────────────────────────────────────
+function simulate(src, dst, mx, my, active, str) {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fbo);
+  gl.viewport(0, 0, S, S);
+  gl.useProgram(simProg.p);
+  bindQuad(simProg);
+  const u = simProg.u;
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, src.tex);
+  gl.uniform1i(u.uState,    0);
+  gl.uniform2f(u.uTexel,    1.0/S, 1.0/S);
+  gl.uniform2f(u.uMouse,    mx, my);
+  gl.uniform1f(u.uRadius,   0.046);
+  gl.uniform1f(u.uStrength, active ? str : 0.0);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 }
+
+// ─── Render ─────────────────────────────────────────────────────────────────
+let time = 0;
+
+function render(src) {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, W, H);
+  gl.useProgram(renderProg.p);
+  bindQuad(renderProg);
+  const u = renderProg.u;
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, src.tex);
+  gl.uniform1i(u.uWater,  0);
+  gl.uniform2f(u.uTexel,  1.0/S, 1.0/S);
+  gl.uniform1f(u.uTime,   time);
+  gl.uniform1f(u.uAspect, W / H);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+// ─── Main loop ──────────────────────────────────────────────────────────────
+function frame(now) {
+  requestAnimationFrame(frame);
+  time = now * 0.001;
+
+  maybeSpawnDrop(now);
+
+  let mx = ptr.x, my = ptr.y, mactive = ptr.active, mstr = 0.18;
+
+  // Use ambient drop if no finger/pointer
+  if (!mactive && drops.length > 0) {
+    const d = drops[0];
+    if (now - d.born < d.ttl) {
+      mx = d.x; my = d.y; mactive = true; mstr = d.str;
+    } else { drops.shift(); }
+  }
+
+  // Drag speed → wave strength
+  if (ptr.active) {
+    const spd = Math.hypot(ptr.x - ptr.prevX, ptr.y - ptr.prevY);
+    mstr = Math.min(0.12 + spd * 20.0, 0.60);
+  }
+
+  // 4 substeps per frame for accuracy & wave speed
+  for (let i = 0; i < 4; i++) {
+    simulate(fboA, fboB, mx, my, mactive && i < 2, mstr);
+    const tmp = fboA; fboA = fboB; fboB = tmp;
+  }
+
+  render(fboA);
+}
+
 requestAnimationFrame(frame);
 </script>
 </body>
