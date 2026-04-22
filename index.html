@@ -125,7 +125,6 @@ void main() {
 //   curr height → R (hi byte) + G (lo byte)
 //   prev height → B (hi byte) + A (lo byte)
 // This gives ~65000 precision levels vs 256, eliminating pixel-block artefacts.
-// ─── Shader: simulation (Enhanced Physics) ──────────────────────────────────
 const SIM_FRAG = (UINT8 ? '#define UINT8_MODE\n' : '') + `
 precision highp float;
 varying vec2  vUV;
@@ -136,11 +135,15 @@ uniform float uRadius;
 uniform float uStrength;
 
 #ifdef UINT8_MODE
+  // Encode float [-1,1] → two bytes stored in vec2([0,1])
+  // hi = integer part of t*255 / 255
+  // lo = fractional part of t*255  (full [0,1) range for sub-byte precision)
   vec2 enc16(float v) {
-    float t = clamp(v * 0.5 + 0.5, 0.0, 0.99999);
+    float t   = clamp(v * 0.5 + 0.5, 0.0, 0.99999);
     float t255 = t * 255.0;
     return vec2(floor(t255) / 255.0, fract(t255));
   }
+  // Decode: (hi + lo/255) * 2 - 1
   float dec16(vec2 v) { return (v.x + v.y / 255.0) * 2.0 - 1.0; }
   float CURR(vec2 uv) { return dec16(texture2D(uState, uv).rg); }
   float PREV(vec2 uv) { return dec16(texture2D(uState, uv).ba); }
@@ -150,59 +153,35 @@ uniform float uStrength;
 #endif
 
 void main() {
-    float h = CURR(vUV);
-    float p = PREV(vUV);
+  float curr = CURR(vUV);
+  float prev = PREV(vUV);
 
-    // 1. STABILIZED 9-POINT LAPLACIAN
-    // We sample a 3x3 grid to calculate the surface curvature.
-    // This allows ripples to be perfectly circular instead of diamond-shaped.
-    vec2 tx = uTexel;
-    float n  = CURR(vUV + vec2( 0.0,  tx.y));
-    float s  = CURR(vUV - vec2( 0.0,  tx.y));
-    float e  = CURR(vUV + vec2( tx.x, 0.0));
-    float w  = CURR(vUV - vec2(-tx.x, 0.0));
-    float nw = CURR(vUV + vec2(-tx.x, tx.y));
-    float ne = CURR(vUV + vec2( tx.x, tx.y));
-    float sw = CURR(vUV + vec2(-tx.x,-tx.y));
-    float se = CURR(vUV + vec2( tx.x,-tx.y));
+  float n = CURR(vUV + vec2( 0.0,      uTexel.y));
+  float s = CURR(vUV - vec2( 0.0,      uTexel.y));
+  float e = CURR(vUV + vec2( uTexel.x, 0.0     ));
+  float w = CURR(vUV - vec2( uTexel.x, 0.0     ));
 
-    // Weighted average of neighbors (4 cardinals at 0.5, 4 diagonals at 0.25)
-    float laplacian = (n + s + e + w) * 0.5 + (nw + ne + sw + se) * 0.25 - h * 3.0;
+  // 2-D wave equation  (α=0.5 → numerically stable max speed)
+  float next = (-prev + (n + s + e + w) * 0.5) * 0.994;
 
-    // 2. DISPERSIVE WAVE DYNAMICS
-    // We use a damping factor (0.994) to simulate viscosity.
-    // The 0.46 multiplier ensures we stay below the stability limit (CFL condition).
-    float velocity = (h - p) * 0.994;
-    float next = h + velocity + laplacian * 0.46;
+  // Sponge-layer: absorb at borders to kill reflections
+  float bx = min(vUV.x, 1.0 - vUV.x) * 14.0;
+  float by = min(vUV.y, 1.0 - vUV.y) * 14.0;
+  next *= mix(0.78, 1.0, clamp(min(bx, by), 0.0, 1.0));
 
-    // 3. INTERNAL TENSION (High-pass filter)
-    // This prevents "blobs" from forming by slightly pulling 
-    // the water back to a neutral state (0.0).
-    next -= next * 0.002;
+  // Pointer / drop disturbance
+  float d = length(vUV - uMouse);
+  next -= smoothstep(uRadius, 0.0, d) * uStrength;
+  next  = clamp(next, -1.0, 1.0);
 
-    // 4. DYNAMIC INTERACTION
-    float d = length(vUV - uMouse);
-    if (uStrength > 0.0) {
-        // Soft Gaussian splash profile
-        float splash = exp(-pow(d / uRadius, 2.0));
-        next -= splash * uStrength;
-    }
-
-    // 5. EDGE ABSORPTION (Sponge Layer)
-    // Kills kinetic energy at the borders to prevent "infinite bouncing"
-    float margin = 0.06;
-    vec2 edge = smoothstep(0.0, margin, vUV) * smoothstep(1.0, 1.0 - margin, vUV);
-    next *= edge.x * edge.y;
-
-    next = clamp(next, -1.0, 1.0);
-
-    #ifdef UINT8_MODE
-        gl_FragColor = vec4(enc16(next), enc16(h));
-    #else
-        gl_FragColor = vec4(next * 0.5 + 0.5, h * 0.5 + 0.5, 0.0, 1.0);
-    #endif
+  #ifdef UINT8_MODE
+    gl_FragColor = vec4(enc16(next), enc16(curr));
+  #else
+    gl_FragColor = vec4(next * 0.5 + 0.5, curr * 0.5 + 0.5, 0.0, 1.0);
+  #endif
 }`;
 
+// ─── Shader: render ─────────────────────────────────────────────────────────
 const RENDER_FRAG = (UINT8 ? '#define UINT8_MODE\n' : '') + `
 precision highp float;
 varying vec2  vUV;
@@ -211,7 +190,7 @@ uniform vec2  uTexel;
 uniform float uTime;
 uniform float uAspect;
 
-// --- Fast Noise ---
+// --- High Fidelity Utilities ---
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
 float noise(vec2 p) {
     vec2 i = floor(p), f = p - i;
@@ -219,8 +198,35 @@ float noise(vec2 p) {
     return mix(mix(hash(i), hash(i+vec2(1,0)), f.x),
                mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x), f.y);
 }
+float fbm(vec2 p) {
+    float v=0.0, a=0.5;
+    for(int i=0;i<4;i++){ v+=noise(p)*a; p*=2.2; a*=0.5; }
+    return v;
+}
 
-// --- Physics-Based Optical Volume ---
+// --- Cinematic Atmosphere ---
+vec3 getSky(vec2 dir) {
+    float skyT = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
+    vec3 horizon = vec3(0.1, 0.25, 0.4);
+    vec3 zenith = vec3(0.02, 0.05, 0.1);
+    return mix(zenith, horizon, skyT);
+}
+
+// --- Luxury Seabed: Sand Ripples & Organic Silt ---
+vec3 getSeabed(vec2 uv) {
+    vec2 p = uv * 5.0;
+    float ripples = sin(p.x + fbm(p) * 2.0) * 0.5 + 0.5;
+    vec3 sand = mix(vec3(0.3, 0.26, 0.18), vec3(0.45, 0.4, 0.3), ripples);
+    
+    // Add organic noise (silt/rocks)
+    float silt = smoothstep(0.4, 0.7, fbm(uv * 15.0));
+    sand = mix(sand, sand * 0.7, silt);
+    
+    // Micro-texture grain
+    sand *= 0.9 + 0.1 * hash(uv * 800.0);
+    return sand;
+}
+
 #ifdef UINT8_MODE
     float H(vec2 uv) {
         vec4 s = texture2D(uWater, uv);
@@ -232,63 +238,71 @@ float noise(vec2 p) {
 
 void main() {
     vec2 uv = vUV;
-    
-    // 1. Multi-Sample Normal (Smoother Physics)
+    vec2 tx = uTexel * 1.4;
+
     float h = H(uv);
-    vec2 off = uTexel * 1.5;
-    float hL = H(uv - vec2(off.x, 0.0));
-    float hR = H(uv + vec2(off.x, 0.0));
-    float hU = H(uv + vec2(0.0, off.y));
-    float hD = H(uv - vec2(0.0, off.y));
+    float hL = H(uv - vec2(tx.x, 0.0));
+    float hR = H(uv + vec2(tx.x, 0.0));
+    float hU = H(uv + vec2(0.0, tx.y));
+    float hD = H(uv - vec2(0.0, tx.y));
+
+    // 1. ADVANCED NORMAL MAPPING
+    // We blend a sharp normal for reflections with a soft normal for refraction
+    vec3 nSharp = normalize(vec3(hL - hR, hD - hU, 0.08));
+    vec3 nSoft  = normalize(vec3(hL - hR, hD - hU, 0.25));
     
-    vec3 normal = normalize(vec3(hL - hR, hD - hU, 0.12));
     vec3 V = vec3(0.0, 0.0, 1.0);
-    vec3 L = normalize(vec3(0.5, 0.7, 1.0));
+    vec3 L = normalize(vec3(0.5, 0.6, 1.0)); // Main Sun Direction
     
-    // 2. Parallax Refraction (Seabed Depth)
-    float depth = 0.06;
-    vec2 refUV = uv + normal.xy * depth;
+    // 2. PARALLAX SEABED & CAUSTICS
+    // The seabed uv shifts based on the surface slope to create a 3D depth illusion
+    float waterDepth = 0.15;
+    vec2 seabedUV = uv + nSoft.xy * waterDepth;
+    vec3 seabed = getSeabed(seabedUV);
     
-    // 3. Organic Seabed with "Silt"
-    float ripples = sin(refUV.x * 15.0 + noise(refUV * 5.0)) * 0.5 + 0.5;
-    vec3 seabed = mix(vec3(0.25, 0.2, 0.1), vec3(0.35, 0.3, 0.2), ripples);
-    seabed *= 0.7 + 0.3 * noise(refUV * 100.0); // Grain
-    
-    // 4. Caustic Focusing
+    // Calculate Caustics (Light focusing on floor)
     float lap = (hL + hR + hU + hD - 4.0 * h);
-    float caustics = pow(max(0.0, -lap * 30.0), 1.8) * 6.0;
-    seabed += caustics * vec3(0.7, 0.85, 1.0) * 0.3;
+    float caustics = pow(max(0.0, -lap * 28.0), 1.6) * 4.5;
+    seabed += caustics * vec3(0.8, 0.95, 1.0) * 0.4;
 
-    // 5. Beer-Lambert Absorption (Oceanic Teal)
-    float travelDist = 1.0 + abs(h);
-    vec3 absorb = exp(-vec3(0.6, 0.2, 0.1) * travelDist * 2.0);
-    seabed *= absorb;
+    // 3. OPTICAL ABSORPTION (Beer-Lambert Law)
+    // Darker, bluer water in the troughs; clearer water on the crests
+    float opticalPath = 1.0 + abs(h) * 2.0;
+    vec3 absorption = exp(-vec3(0.5, 0.25, 0.1) * opticalPath);
+    seabed *= absorption;
 
-    // 6. Fresnel (The "Gloss" Layer)
-    float fresnel = pow(1.0 - max(dot(normal, V), 0.0), 5.0);
-    fresnel = mix(0.01, 0.25, fresnel);
-
-    // 7. Reflection (Dark Sky)
-    vec3 R = reflect(-V, normal);
-    vec3 sky = mix(vec3(0.02, 0.04, 0.08), vec3(0.1, 0.2, 0.3), R.y * 0.5 + 0.5);
-
-    // 8. Subsurface Scattering (Light through crests)
-    float sss = smoothstep(0.0, 0.3, h) * max(0.0, dot(normal, L));
-    vec3 scatteringCol = vec3(0.0, 0.4, 0.5) * sss * 0.4;
-
-    // 9. Composition
-    vec3 color = mix(seabed, sky, fresnel);
-    color += scatteringCol;
+    // 4. FRESNEL & REFLECTIONS
+    float fresnel = pow(1.0 - max(dot(nSharp, V), 0.0), 5.0);
+    fresnel = mix(0.02, 0.35, fresnel); // Subtle reflection range
     
-    // 10. Specular (The Sun Glint)
-    float spec = pow(max(dot(reflect(-L, normal), V), 0.0), 120.0);
-    color += vec3(1.0, 0.95, 0.8) * spec * 0.8;
+    vec3 R = reflect(-V, nSharp);
+    vec3 sky = getSky(R.xy);
 
-    // Filmic Tonemapping
+    // 5. SUBSURFACE SCATTERING (The "Glow")
+    // Light passing through the back of a wave crest illuminates the water body
+    float sss = smoothstep(0.0, 0.4, h) * max(0.0, dot(nSoft, L));
+    vec3 subsurfaceCol = vec3(0.0, 0.5, 0.6) * sss * 0.5;
+
+    // 6. SPECULAR SPARKLES
+    vec3 halfV = normalize(L + V);
+    float spec = pow(max(dot(nSharp, halfV), 0.0), 150.0) * 1.2;
+    // Multi-tone spec for "diamond" shimmer
+    vec3 specular = vec3(1.0, 0.98, 0.9) * spec + pow(spec, 3.0);
+
+    // 7. FINAL COMPOSITION
+    vec3 color = mix(seabed, sky, fresnel);
+    color += subsurfaceCol;
+    color += specular;
+
+    // --- High-End Polish ---
+    // Vignette
+    color *= 1.0 - length(uv - 0.5) * 0.4;
+    
+    // Filmic Tone Mapping (ACES-lite)
     color = color / (color + vec3(1.0));
     gl_FragColor = vec4(pow(color, vec3(1.0/2.2)), 1.0);
 }`;
- 
+
 // ─── GL Helpers ─────────────────────────────────────────────────────────────
 function mkShader(type, src) {
   const s = gl.createShader(type);
