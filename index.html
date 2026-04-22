@@ -135,16 +135,16 @@ uniform float uRadius;
 uniform float uStrength;
 
 #ifdef UINT8_MODE
-  // Encode float [-1,1] → two bytes stored in vec2([0,1])
-  // hi = integer part of t*255 / 255
-  // lo = fractional part of t*255  (full [0,1) range for sub-byte precision)
+  // High-precision 16-bit packing into RG and BA channels
   vec2 enc16(float v) {
-    float t   = clamp(v * 0.5 + 0.5, 0.0, 0.99999);
-    float t255 = t * 255.0;
-    return vec2(floor(t255) / 255.0, fract(t255));
+    v = clamp(v * 0.5 + 0.5, 0.0, 1.0);
+    float v1 = floor(v * 255.0);
+    float v2 = fract(v * 255.0);
+    return vec2(v1 / 255.0, v2);
   }
-  // Decode: (hi + lo/255) * 2 - 1
-  float dec16(vec2 v) { return (v.x + v.y / 255.0) * 2.0 - 1.0; }
+  float dec16(vec2 v) {
+    return (v.x + v.y / 255.0) * 2.0 - 1.0;
+  }
   float CURR(vec2 uv) { return dec16(texture2D(uState, uv).rg); }
   float PREV(vec2 uv) { return dec16(texture2D(uState, uv).ba); }
 #else
@@ -153,26 +153,44 @@ uniform float uStrength;
 #endif
 
 void main() {
+  // ── 9-TAP ISOTROPIC STENCIL ─────────────────────────────────────────────
+  // Standard 4-tap creates diamond waves. 9-tap creates circular waves.
+  float n  = CURR(vUV + vec2(0.0, uTexel.y));
+  float s  = CURR(vUV - vec2(0.0, uTexel.y));
+  float e  = CURR(vUV + vec2(uTexel.x, 0.0));
+  float w  = CURR(vUV - vec2(uTexel.x, 0.0));
+  
+  float nw = CURR(vUV + vec2(-uTexel.x,  uTexel.y));
+  float ne = CURR(vUV + vec2( uTexel.x,  uTexel.y));
+  float sw = CURR(vUV + vec2(-uTexel.x, -uTexel.y));
+  float se = CURR(vUV + vec2( uTexel.x, -uTexel.y));
+
   float curr = CURR(vUV);
   float prev = PREV(vUV);
 
-  float n = CURR(vUV + vec2( 0.0,      uTexel.y));
-  float s = CURR(vUV - vec2( 0.0,      uTexel.y));
-  float e = CURR(vUV + vec2( uTexel.x, 0.0     ));
-  float w = CURR(vUV - vec2( uTexel.x, 0.0     ));
+  // ── WAVE EQUATION ───────────────────────────────────────────────────────
+  // Weights: 0.5 for direct neighbors, 0.25 for diagonals. 
+  // This is mathematically "isotropic," meaning speed is the same in all directions.
+  float neighbors = (n + s + e + w) * 0.5 + (nw + ne + sw + se) * 0.25;
+  float next = (neighbors * 0.5 - prev) * 0.996; // 0.996 = Global Damping
 
-  // 2-D wave equation  (α=0.5 → numerically stable max speed)
-  float next = (-prev + (n + s + e + w) * 0.5) * 0.994;
+  // ── ANTI-PIXELATION / HIGH-FREQ FILTER ──────────────────────────────────
+  // Low-pass filter to prevent "sparkle" noise on massive canvases
+  next = mix(next, (n+s+e+w)*0.25, 0.01);
 
-  // Sponge-layer: absorb at borders to kill reflections
-  float bx = min(vUV.x, 1.0 - vUV.x) * 14.0;
-  float by = min(vUV.y, 1.0 - vUV.y) * 14.0;
-  next *= mix(0.78, 1.0, clamp(min(bx, by), 0.0, 1.0));
+  // ── SPONGE LAYER (Adaptive Border Damping) ──────────────────────────────
+  // Softens reflections at the edges of the "massive" canvas
+  vec2 border = smoothstep(0.0, 0.15, min(vUV, 1.0 - vUV));
+  next *= border.x * border.y;
 
-  // Pointer / drop disturbance
-  float d = length(vUV - uMouse);
-  next -= smoothstep(uRadius, 0.0, d) * uStrength;
-  next  = clamp(next, -1.0, 1.0);
+  // ── ORGANIC INTERACTION ─────────────────────────────────────────────────
+  // Gaussian splat for smooth, non-pixelated mouse ripples
+  float dist = length((vUV - uMouse) / vec2(1.0, uTexel.x/uTexel.y));
+  float splat = exp(-pow(dist / uRadius, 2.0));
+  next -= splat * uStrength * 0.2;
+
+  // Stability clamp
+  next = clamp(next, -1.0, 1.0);
 
   #ifdef UINT8_MODE
     gl_FragColor = vec4(enc16(next), enc16(curr));
