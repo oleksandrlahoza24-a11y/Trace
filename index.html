@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Raymarched Realistic Island</title>
+<title>Realistic Island - iPad Optimized</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body, html { width:100%; height:100%; overflow:hidden; background:#010; position: fixed; touch-action: none; -webkit-user-select:none; user-select:none; }
-  canvas { display:block; width:100vw; height:100vh; cursor: crosshair; }
+  body, html { width:100%; height:100%; overflow:hidden; background:#000; position: fixed; touch-action: none; }
+  canvas { display:block; width:100vw; height:100vh; }
 </style>
 </head>
 <body>
@@ -16,249 +16,122 @@
 'use strict';
 
 const canvas = document.getElementById('c');
-// Antialias enabled for high-fidelity edges
-const gl = canvas.getContext('webgl', { antialias: true, alpha: false, depth: false });
+const gl = canvas.getContext('webgl');
 
 const DPR = Math.min(window.devicePixelRatio || 1, 2);
-let CW, CH, W, H;
+let W, H;
 function resize() {
-    CW = window.innerWidth; CH = window.innerHeight;
-    W = Math.round(CW * DPR); H = Math.round(CH * DPR);
+    W = Math.round(window.innerWidth * DPR);
+    H = Math.round(window.innerHeight * DPR);
     canvas.width = W; canvas.height = H;
-    gl.viewport(0, 0, W, H);
 }
 window.addEventListener('resize', resize);
 resize();
 
-// Shared Vertex Shader (Fullscreen Quad)
-const VERT = `attribute vec2 aPos; void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
+const VERT = `attribute vec2 p; void main() { gl_Position = vec4(p, 0.0, 1.0); }`;
 
-// --- Raymarching Island Shader ---
 const FRAG = `
 precision highp float;
 uniform float uTime;
 uniform vec2 uRes;
-uniform vec2 uMouse;
 
-// ── Noise and Randomness ───────────────────────────────────
-float hash(float n) { return fract(sin(n) * 43758.5453123); }
-float hash(vec2 p) { return fract(sin(dot(p, vec2(12.7, 31.1))) * 43758.5453123); }
+// Optimized Noise for iPad
+float hash(vec2 p) { return fract(sin(dot(p, vec2(12.7, 31.1))) * 43758.54); }
 float noise(vec2 p) {
-    vec2 i = floor(p); vec2 f = fract(p);
+    vec2 i = floor(p), f = fract(p);
     f = f*f*(3.0-2.0*f);
-    float n = i.x + i.y*57.0;
-    return mix(mix(hash(n+0.0), hash(n+1.0), f.x),
-               mix(hash(n+57.0), hash(n+58.0), f.x), f.y);
+    return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y);
 }
-float fbm(vec2 p) {
-    float v = 0.0; float a = 0.5;
-    for(int i=0; i<5; i++) { v += noise(p)*a; p*=2.02; a*=0.5; }
+
+// Realistic Water Waves
+float getWaves(vec2 p) {
+    float v = noise(p + uTime * 0.5) * 0.5;
+    v += noise(p * 2.1 - uTime * 0.8) * 0.25;
     return v;
 }
 
-// ── Gerstner Wave Physics (Volumetric Water) ───────────────────
-vec3 gerstnerWave(vec2 uv, vec2 dir, float steepness, float wavelength, float speed, float time) {
-    float k = 6.28318 / wavelength;
-    float f = k * (dot(dir, uv) - speed * time);
-    float a = steepness / k;
-    return vec3(dir.x * (a * cos(f)), a * sin(f), dir.y * (a * cos(f)));
-}
-
-vec3 getWaves(vec2 uv, float time) {
-    vec3 wave = vec3(0.0);
-    // LayeredGerstner Waves for rolling swells and sharper peaks
-    wave += gerstnerWave(uv, normalize(vec2(1.0, 0.2)), 0.15, 6.0, 1.2, time);
-    wave += gerstnerWave(uv, normalize(vec2(0.7, -0.7)), 0.10, 3.5, 2.0, time * 1.3);
-    wave += gerstnerWave(uv, normalize(vec2(-0.2, 0.9)), 0.05, 1.8, 2.8, time * 1.7);
-    wave += gerstnerWave(uv, normalize(vec2(-0.8, -0.1)), 0.03, 1.0, 3.5, time * 2.1);
-    return wave;
-}
-
-// ── Atmospheric Scattering Sky ─────────────────────────────
-vec3 getSky(vec3 rd, vec3 L) {
-    float sd = max(dot(rd, L), 0.0);
-    vec3 skyCol = mix(vec3(0.1, 0.3, 0.7), vec3(0.6, 0.8, 1.0), max(0.0, rd.y));
-    skyCol += vec3(1.0, 0.9, 0.7) * pow(sd, 100.0) * 1.5; // Sun
-    // Procedural Clouds
-    float cloud = fbm(rd.xz * 10.0 / (abs(rd.y)+0.01) + uTime*0.02);
-    skyCol = mix(skyCol, vec3(0.95), smoothstep(0.4, 0.8, cloud) * 0.5 * smoothstep(0.0, 0.2, rd.y));
-    return skyCol;
-}
-
-// ── Caustics Refraction ─────────────────────────────────────
-float caustics(vec2 uv, float time) {
-    vec2 p = uv * 3.0;
-    float v = 0.0;
-    v += sin(p.x + time) * 0.5 + 0.5;
-    v += sin(p.y + time) * 0.5 + 0.5;
-    v += sin(p.x + p.y + time) * 0.5 + 0.5;
-    return pow(v/3.0, 4.0) * 4.0;
-}
-
-// ── Signed Distance Fields (Geometry) ─────────────────────────
-float sdBox(vec3 p, vec3 b) { vec3 q = abs(p) - b; return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0); }
-float sdCylinder(vec3 p, float h, float r) { vec2 d = abs(vec2(length(p.xz),p.y)) - vec2(r,h); return min(max(d.x,d.y),0.0) + length(max(d,0.0)); }
-
-float scene(vec3 p, out float mat) {
-    // 1. Island Terrain (Cliff and Beach)
-    float islandHeight = smoothstep(5.0, 0.0, length(p.xz)) * 2.5;
-    islandHeight += fbm(p.xz * 0.3) * 1.5; // cliffs
-    float terrain = p.y - islandHeight;
-    float beachLine = smoothstep(3.5, 4.2, length(p.xz));
-    mat = mix(1.0, 0.0, beachLine); // mat 1.0=Rock, mat 0.0=Sand
-
-    // 2. Village Buildings (Procedural detail)
-    vec2 gID = floor(p.xz * 1.5);
-    float hG = hash(gID);
-    if(hG > 0.4 && terrain < 0.2 && length(p.xz) < 2.5) { // Only spawn on island
-        vec2 gUV = fract(p.xz * 1.5) - 0.5;
-        vec3 bPos = vec3(gUV.x, p.y - islandHeight, gUV.y);
-        float bH = 0.3 + hash(gID*7.1)*0.6;
-        float build = sdBox(bPos - vec3(0.0, bH/2.0, 0.0), vec3(0.2, bH/2.0, 0.2));
-        if(build < terrain) { terrain = build; mat = 2.0; } // mat 2.0=Building
-    }
-    
-    // 3. Palm Trees
-    if(hG < 0.15 && terrain < 0.2 && length(p.xz) < 3.2) {
-        vec2 tUV = fract(p.xz * 1.2) - 0.5;
-        vec3 tPos = vec3(tUV.x, p.y - islandHeight, tUV.y);
-        float trunk = sdCylinder(tPos - vec3(0.0, 0.8, 0.0), 0.8, 0.03 + tPos.y*0.02);
-        if(trunk < terrain) { terrain = trunk; mat = 3.0; } // mat 3.0=Trunk
-    }
-    
-    return terrain;
-}
-
-vec3 getNormal(vec3 p) {
-    float m;
-    vec2 e = vec2(0.01, 0.0);
-    return normalize(vec3(scene(p+e.xyy, m) - scene(p-e.xyy, m), scene(p+e.yxy, m) - scene(p-e.yxy, m), scene(p+e.yyx, Mat) - scene(p-e.yyx, m)));
-}
-
-// ── RAYMARCHING ENGINE ───────────────────────────────────────
 void main() {
-    vec2 uv = (gl_FragCoord.xy * 2.0 - uRes) / min(uRes.x, uRes.y);
-    float time = uTime;
+    vec2 uv = (gl_FragCoord.xy - 0.5 * uRes) / min(uRes.x, uRes.y);
+    vec3 ro = vec3(0.0, 4.0, 8.0); // Camera position
+    vec3 rd = normalize(vec3(uv, -1.5)); // Ray direction
 
-    // Camera
-    vec3 ro = vec3(0.0, 3.5, 8.0); // Origin
-    vec3 ta = vec3(0.0, 0.5, 0.0); // Target
-    vec3 cz = normalize(ta - ro);
-    vec3 cx = normalize(cross(cz, vec3(0,1,0)));
-    vec3 cy = normalize(cross(cx, cz));
-    vec3 rd = normalize(uv.x * cx + uv.y * cy + cz * 2.0); // Ray Direction
+    // 1. Sky Rendering
+    vec3 sunDir = normalize(vec3(0.5, 0.4, 1.0));
+    vec3 sky = mix(vec3(0.4, 0.6, 0.9), vec3(0.1, 0.2, 0.4), max(0.0, rd.y));
+    sky += pow(max(0.0, dot(rd, sunDir)), 120.0) * vec3(1.0, 0.9, 0.7);
+    
+    // 2. Island Math
+    float t = -1.0;
+    vec3 col = sky;
+    
+    // Ray-Plane Intersection for Sea Level
+    float planeT = -ro.y / rd.y;
+    if(planeT > 0.0) {
+        vec3 p = ro + rd * planeT;
+        float dist = length(p.xz);
+        
+        // Island Shape
+        float island = smoothstep(5.0, 1.0, dist) * 2.5;
+        island += noise(p.xz * 0.5) * 1.5; // Terrain detail
 
-    // Lighting (Sun)
-    vec3 sunDir = normalize(vec3(0.4, 0.5, 1.0));
-    vec3 col = vec3(0.0);
-
-    // 1. Trace Water Plane First (Gerstner Waves)
-    float waterT = -ro.y / rd.y;
-    vec3 waterHit = ro + rd * waterT;
-    if(waterHit.y < 0.1 && waterT > 0.0) { // Ray hit water
-        vec2 wUV = waterHit.xz;
-        vec3 waveDisp = getWaves(wUV, time);
-        waterHit += waveDisp; // Offset hit by physical wave height
-        
-        // Water normal (using neighboring Gerstner samples)
-        vec2 e = vec2(0.01, 0.0);
-        vec3 wN = normalize(vec3(getWaves(wUV+e,time).y - getWaves(wUV-e,time).y, 0.08, getWaves(wUV+e.yx,time).y - getWaves(wUV-e.yx,time).y));
-        
-        // Fresnel Effect
-        float fresnel = pow(1.0 - max(dot(wN, -rd), 0.0), 5.0);
-        
-        // Reflection (Sky)
-        vec3 refSky = getSky(reflect(rd, wN), sunDir);
-        
-        // Refraction (Beer-Lambert Absorption + Caustics)
-        float depth = waterHit.y - (fbm(wUV*0.3)*1.5); // Depth to island ground
-        vec3 deepBlue = vec3(0.01, 0.1, 0.3);
-        vec3 shallowBlue = vec3(0.2, 0.7, 0.9);
-        vec3 absorption = mix(shallowBlue, deepBlue, smoothstep(0.0, 3.0, depth));
-        
-        // Underwater floor details (sand + caustics)
-        vec3 sandCol = vec3(0.7, 0.6, 0.45);
-        sandCol *= 1.0 + caustics(wUV * 0.5 + wN.xz * 0.1, time) * exp(-depth * 0.5);
-        
-        col = mix(sandCol * absorption, refSky, fresnel + 0.1);
-        
-        // Sun Specular (GGX)
-        col += blackbody(max(dot(reflect(-sunDir, wN), -rd), 0.0));
-
-    } else { // Ray missed water, check Sky
-        col = getSky(rd, sunDir);
-    }
-
-    // 2. Trace Island Geometry (Raymarching SDFs)
-    float t = 0.0; float mat = 0.0;
-    for(int i=0; i<80; i++) {
-        vec3 p = ro + rd * t;
-        float d = scene(p, mat);
-        if(d < 0.001 || t > 20.0) break;
-        t += d;
-    }
-
-    if(t < 20.0) { // Ray hit Island
-        vec3 p = ro + rd * t;
-        vec3 n = getNormal(p);
-        float diff = max(dot(n, sunDir), 0.0);
-        float amb = 0.1;
-        vec3 matCol;
-
-        // Ultra Detailed Textures based on mat ID
-        if(mat < 0.5) { // Sand (Beach)
-            matCol = vec3(0.7, 0.6, 0.4) * (0.9 + 0.1*noise(p.xz*100.0));
-        } else if(mat < 1.5) { // Cliff Rock
-            matCol = vec3(0.4) * (0.8 + 0.2*fbm(p.xz*20.0));
-        } else if(mat < 2.5) { // Buildings
-            vec2 bUV = fract(p.xz * 3.0);
-            float win = step(0.4, bUV.x) * step(0.6, bUV.y);
-            matCol = mix(vec3(0.9, 0.8, 0.7), vec3(0.1), win * step(p.y - scene(p,mat), 0.8)); // windows
-        } else { // Palms (Trunk)
-            matCol = vec3(0.3, 0.2, 0.1) * (0.9 + 0.1*sin(p.y*30.0));
+        if(p.y < island) {
+            // WE HIT THE ISLAND / BEACH
+            float beach = smoothstep(4.0, 3.5, dist);
+            vec3 sand = vec3(0.8, 0.7, 0.5);
+            vec3 grass = vec3(0.2, 0.5, 0.1);
+            vec3 terrainCol = mix(sand, grass, beach);
+            
+            // Basic Shading
+            float diff = max(0.2, dot(vec3(0,1,0), sunDir));
+            col = terrainCol * diff;
+        } else {
+            // WE HIT THE WATER
+            vec2 wUV = p.xz;
+            float w = getWaves(wUV);
+            
+            // Water Normals
+            vec3 n = normalize(vec3(getWaves(wUV + vec2(0.01,0)) - w, 0.1, getWaves(wUV + vec2(0,0.01)) - w));
+            
+            // Fresnel & Reflections
+            float fresnel = pow(1.0 - max(0.0, dot(n, -rd)), 4.0);
+            vec3 ref = mix(vec3(0.4, 0.6, 0.9), vec3(1.0), pow(max(0.0, dot(reflect(rd, n), sunDir)), 50.0));
+            
+            // Deep water vs Shallow (Beach transparency)
+            float depth = smoothstep(4.0, 5.0, dist);
+            vec3 waterBase = mix(vec3(0.2, 0.6, 0.7), vec3(0.05, 0.1, 0.3), depth);
+            
+            col = mix(waterBase, ref, fresnel + 0.1);
+            
+            // Add Building Silhouettes
+            if(dist < 2.0 && noise(p.xz * 2.0) > 0.6) {
+                col *= 0.5; // Shadow of buildings
+            }
         }
-        
-        // Composite Island Color with light
-        vec3 islandFinal = matCol * (diff + amb);
-        
-        // Apply horizon fog (blend island into sky)
-        float fog = smoothstep(5.0, 20.0, t);
-        col = mix(islandFinal, getSky(rd, sunDir), fog);
     }
 
-    // Final Post-processing (ACES Tonemapping and Gamma correction)
-    col = col/(col+0.9)*1.08;
-    col = pow(max(col, vec3(0.0)), vec3(1.0/2.2));
-
-    gl_FragColor = vec4(col, 1.0);
+    gl_FragColor = vec4(pow(col, vec3(0.8)), 1.0);
 }`;
 
-// --- ENGINE SETUP ──────────────────────────────────────────
 function createProg(vs, fs) {
     const p = gl.createProgram();
     const s1 = gl.createShader(gl.VERTEX_SHADER); gl.shaderSource(s1, vs); gl.compileShader(s1);
     const s2 = gl.createShader(gl.FRAGMENT_SHADER); gl.shaderSource(s2, fs); gl.compileShader(s2);
+    gl.compileShader(s1); gl.compileShader(s2);
     gl.attachShader(p, s1); gl.attachShader(p, s2); gl.linkProgram(p);
     return p;
 }
 
 const prog = createProg(VERT, FRAG);
-const uRes = gl.getUniformLocation(prog, "uRes");
-const uTime = gl.getUniformLocation(prog, "uTime");
-
 const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
 gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
 
 function loop(t) {
     gl.useProgram(prog);
     gl.viewport(0, 0, W, H);
-    gl.uniform2f(uRes, W, H);
-    gl.uniform1f(uTime, t * 0.001);
-
-    const loc = gl.getAttribLocation(prog, "aPos");
-    gl.enableVertexAttribArray(loc);
-    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-
+    gl.uniform1f(gl.getUniformLocation(prog, "uTime"), t * 0.001);
+    gl.uniform2f(gl.getUniformLocation(prog, "uRes"), W, H);
+    const l = gl.getAttribLocation(prog, "p");
+    gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, 2, gl.FLOAT, false, 0, 0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     requestAnimationFrame(loop);
 }
