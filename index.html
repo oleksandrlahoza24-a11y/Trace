@@ -2,17 +2,34 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
-    <title>Fixed WebGL Island</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Stable WebGL Island</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #000; }
-        #joystick-zone { position: absolute; bottom: 40px; left: 40px; width: 120px; height: 120px; z-index: 20; }
-        #ui { position: absolute; top: 20px; left: 20px; color: #0f0; font-family: monospace; pointer-events: none; }
+        /* CRITICAL: touch-action: none prevents the iPad from trying to zoom or select text */
+        body { margin: 0; overflow: hidden; background-color: #000; touch-action: none; -webkit-user-select: none; }
+        #joystick-zone { 
+            position: absolute; 
+            bottom: 50px; 
+            left: 50px; 
+            width: 150px; 
+            height: 150px; 
+            z-index: 100;
+            touch-action: none; 
+        }
+        #ui { 
+            position: absolute; 
+            top: 20px; 
+            left: 20px; 
+            color: #ffffff; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            pointer-events: none; 
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
     </style>
 </head>
 <body>
 
-    <div id="ui">SYSTEM: ONLINE | WALK TO EXPLORE</div>
+    <div id="ui">IPAD ENGINE: ACTIVE <br> Walk to explore the island</div>
     <div id="joystick-zone"></div>
 
     <script type="importmap">
@@ -31,7 +48,7 @@
         import { Water } from 'three/addons/objects/Water.js';
         import { Sky } from 'three/addons/objects/Sky.js';
 
-        let scene, camera, renderer, water, terrain, player;
+        let scene, camera, renderer, water, player;
         let moveForward = 0, moveRight = 0;
         const clock = new THREE.Clock();
 
@@ -40,44 +57,36 @@
 
         function init() {
             scene = new THREE.Scene();
-            // Increased FAR plane to 50,000 to prevent black-out clipping
-            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 1, 50000);
+            
+            // Camera Far plane set to 20,000 to ensure the horizon doesn't cut out
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 1, 20000);
             
             player = new THREE.Group();
-            player.position.set(200, 50, 200); // Spawn further out and higher
+            player.position.set(100, 20, 100); 
             player.add(camera);
             scene.add(player);
 
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Cap pixel ratio for iPad performance
             renderer.setSize(window.innerWidth, window.innerHeight);
-            // Switched tone mapping to be more stable on mobile
-            renderer.toneMapping = THREE.LinearToneMapping; 
             document.body.appendChild(renderer.domElement);
 
-            // Lighting (Prevents total darkness)
-            const ambient = new THREE.AmbientLight(0xffffff, 0.8);
-            scene.add(ambient);
+            // Lighting
+            const light = new THREE.DirectionalLight(0xffffff, 1.5);
+            light.position.set(100, 100, 100);
+            scene.add(light);
+            scene.add(new THREE.AmbientLight(0x404040, 1.0));
 
-            // Sky
+            // Skybox
             const sky = new Sky();
-            sky.scale.setScalar(450000);
+            sky.scale.setScalar(10000);
             scene.add(sky);
-
             const sun = new THREE.Vector3();
-            const skyUniforms = sky.material.uniforms;
-            skyUniforms['turbidity'].value = 10;
-            skyUniforms['rayleigh'].value = 3;
-            skyUniforms['mieCoefficient'].value = 0.005;
-            skyUniforms['mieDirectionalG'].value = 0.7;
+            sun.setFromSphericalCoords(1, THREE.MathUtils.degToRad(85), THREE.MathUtils.degToRad(180));
+            sky.material.uniforms['sunPosition'].value.copy(sun);
 
-            const phi = THREE.MathUtils.degToRad(85);
-            const theta = THREE.MathUtils.degToRad(180);
-            sun.setFromSphericalCoords(1, phi, theta);
-            skyUniforms['sunPosition'].value.copy(sun);
-
-            // Water
-            const waterGeo = new THREE.PlaneGeometry(20000, 20000);
+            // Water Shader
+            const waterGeo = new THREE.PlaneGeometry(10000, 10000);
             water = new Water(waterGeo, {
                 textureWidth: 512,
                 textureHeight: 512,
@@ -86,75 +95,81 @@
                 }),
                 sunDirection: sun,
                 sunColor: 0xffffff,
-                waterColor: 0x004e5f,
-                distortionScale: 4.0,
+                waterColor: 0x001e0f,
+                distortionScale: 3.7,
             });
             water.rotation.x = -Math.PI / 2;
             scene.add(water);
 
-            // Terrain Generation
-            const terrainGeo = new THREE.PlaneGeometry(3000, 3000, 100, 100);
+            // Island Mesh
+            const terrainGeo = new THREE.PlaneGeometry(2500, 2500, 64, 64);
             const pos = terrainGeo.attributes.position;
             for (let i = 0; i < pos.count; i++) {
                 let x = pos.getX(i);
                 let y = pos.getY(i);
                 let d = Math.sqrt(x*x + y*y);
-                // Island shape: Tall in middle, flat at edges
-                let h = Math.max(-10, 200 * Math.exp(-d/500) - 30);
-                h += Math.sin(x/50) * Math.cos(y/50) * 10; // Small bumps
+                let h = Math.max(-5, 180 * Math.exp(-d/400) - 25);
                 pos.setZ(i, h);
             }
             terrainGeo.computeVertexNormals();
-            
-            const terrainMat = new THREE.MeshStandardMaterial({ 
-                color: 0x446633, 
-                flatShading: true 
-            });
-            terrain = new THREE.Mesh(terrainGeo, terrainMat);
+            const terrain = new THREE.Mesh(terrainGeo, new THREE.MeshStandardMaterial({ color: 0x345e34, flatShading: true }));
             terrain.rotation.x = -Math.PI / 2;
             scene.add(terrain);
 
-            // Joystick
+            // Joystick with iPad Fixes
             const joy = nipplejs.create({
                 zone: document.getElementById('joystick-zone'),
                 mode: 'static',
-                position: { left: '60px', bottom: '60px' },
-                color: 'lime'
+                position: { left: '75px', bottom: '75px' },
+                color: 'white'
             });
 
-            joy.on('move', (e, data) => {
-                moveForward = data.vector.y;
-                moveRight = data.vector.x;
-                if (data.angle) player.rotation.y = -data.angle.rad + Math.PI/2;
+            joy.on('move', (evt, data) => {
+                // Safeguard: If data or vector is missing, don't update movement
+                if (!data || !data.vector) return;
+                
+                moveForward = data.vector.y || 0;
+                moveRight = data.vector.x || 0;
+                
+                // Only rotate if angle data is valid to prevent "jumping" to 0
+                if (data.angle && data.angle.rad) {
+                    player.rotation.y = -data.angle.rad + Math.PI/2;
+                }
             });
-            joy.on('end', () => { moveForward = 0; moveRight = 0; });
 
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
+            joy.on('end', () => {
+                moveForward = 0;
+                moveRight = 0;
             });
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function onWindowResize() {
+            // Ensure width/height are never 0 to prevent black screen
+            const width = window.innerWidth || 1;
+            const height = window.innerHeight || 1;
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
         }
 
         function getTerrainHeight(x, z) {
-            // Match the height formula used in the terrain generation
             let d = Math.sqrt(x*x + z*z);
-            let h = Math.max(-10, 200 * Math.exp(-d/500) - 30);
-            h += Math.sin(x/50) * Math.cos(z/50) * 10;
-            return h;
+            return Math.max(-5, 180 * Math.exp(-d/400) - 25);
         }
 
         function animate() {
             requestAnimationFrame(animate);
             
-            // Movement
-            const speed = 4.0;
-            player.translateZ(-moveForward * speed);
-            player.translateX(moveRight * speed);
+            // Apply Movement
+            const moveSpeed = 3.5;
+            player.translateZ(-moveForward * moveSpeed);
+            player.translateX(moveRight * moveSpeed);
 
-            // GROUND SNAPPING: This keeps you from falling through the floor
-            const currentH = getTerrainHeight(player.position.x, player.position.z);
-            player.position.y = currentH + 15; // Stay 15 units above ground
+            // Lock to ground
+            const groundY = getTerrainHeight(player.position.x, player.position.z);
+            player.position.y = groundY + 12;
 
             water.material.uniforms['time'].value += 1.0 / 60.0;
             renderer.render(scene, camera);
