@@ -1,23 +1,50 @@
-<style>
-    /* This stops the iPad from trying to "save" or "zoom" the joystick */
-    body, html { 
-        margin: 0; 
-        padding: 0; 
-        width: 100%; 
-        height: 100%; 
-        overflow: hidden; 
-        touch-action: none; /* Prevents all browser gestures */
-        -webkit-user-select: none; /* Prevents text selection popups */
-        user-select: none;
-    }
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Island Engine Pro</title>
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; touch-action: none; -webkit-user-select: none; }
+        /* Vignette effect for a cinematic look */
+        #overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, transparent 60%, rgba(0,0,0,0.4) 100%);
+            pointer-events: none; z-index: 5;
+        }
+        #joystick-zone { position: absolute; bottom: 60px; left: 60px; width: 120px; height: 120px; z-index: 10; }
+        #stats { position: absolute; top: 20px; right: 20px; color: #0f0; font-family: monospace; font-size: 12px; text-align: right; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <div id="overlay"></div>
+    <div id="stats">LATITUDE: 44.2<br>LONGITUDE: 12.8<br>ENGINE: WEBGL_v2</div>
+    <div id="joystick-zone"></div>
 
-    #joystick-zone { 
-        position: absolute; 
-        bottom: 60px; 
-        left: 60px; 
-        width: 120px; 
-        height: 120px; 
-        z-index: 999;
-        touch-action: none; /* Specifically lock the joystick area */
-    }
-</style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
+
+    <script type="module">
+        import { GraphicsEngine } from './graphics.js';
+        import { CharacterController } from './character.js';
+
+        const graphics = new GraphicsEngine();
+        const character = new CharacterController(graphics.scene, graphics.camera);
+
+        function frame() {
+            requestAnimationFrame(frame);
+            const delta = graphics.clock.getDelta();
+            character.update(graphics.getTerrainHeight.bind(graphics), delta);
+            graphics.render();
+        }
+        frame();
+    </script>
+</body>
+</html>
