@@ -135,15 +135,11 @@ uniform float uRadius;
 uniform float uStrength;
 
 #ifdef UINT8_MODE
-  // Encode float [-1,1] → two bytes stored in vec2([0,1])
-  // hi = integer part of t*255 / 255
-  // lo = fractional part of t*255  (full [0,1) range for sub-byte precision)
   vec2 enc16(float v) {
     float t   = clamp(v * 0.5 + 0.5, 0.0, 0.99999);
     float t255 = t * 255.0;
     return vec2(floor(t255) / 255.0, fract(t255));
   }
-  // Decode: (hi + lo/255) * 2 - 1
   float dec16(vec2 v) { return (v.x + v.y / 255.0) * 2.0 - 1.0; }
   float CURR(vec2 uv) { return dec16(texture2D(uState, uv).rg); }
   float PREV(vec2 uv) { return dec16(texture2D(uState, uv).ba); }
@@ -153,26 +149,41 @@ uniform float uStrength;
 #endif
 
 void main() {
+  // Center samples
   float curr = CURR(vUV);
   float prev = PREV(vUV);
 
-  float n = CURR(vUV + vec2( 0.0,      uTexel.y));
-  float s = CURR(vUV - vec2( 0.0,      uTexel.y));
-  float e = CURR(vUV + vec2( uTexel.x, 0.0     ));
-  float w = CURR(vUV - vec2( uTexel.x, 0.0     ));
+  // 4-Point Neighbor sampling
+  float n = CURR(vUV + vec2(0.0, uTexel.y));
+  float s = CURR(vUV - vec2(0.0, uTexel.y));
+  float e = CURR(vUV + vec2(uTexel.x, 0.0));
+  float w = CURR(vUV - vec2(uTexel.x, 0.0));
 
-  // 2-D wave equation  (α=0.5 → numerically stable max speed)
-  float next = (-prev + (n + s + e + w) * 0.5) * 0.994;
+  // Enhanced Wave Equation with Momentum
+  // Using a slightly higher weight for neighbors to increase propagation speed
+  float next = (n + s + e + w) * 0.5 - prev;
 
-  // Sponge-layer: absorb at borders to kill reflections
-  float bx = min(vUV.x, 1.0 - vUV.x) * 14.0;
-  float by = min(vUV.y, 1.0 - vUV.y) * 14.0;
-  next *= mix(0.78, 1.0, clamp(min(bx, by), 0.0, 1.0));
+  // Non-linear damping: High-frequency jitters are smoothed out more aggressively 
+  // than large, slow swells.
+  float diff = abs(next - curr);
+  float damping = mix(0.996, 0.985, clamp(diff * 5.0, 0.0, 1.0));
+  next *= damping;
 
-  // Pointer / drop disturbance
+  // Soft-Sponge Layer: Eliminates ugly boundary reflections
+  vec2 distToEdge = min(vUV, 1.0 - vUV);
+  float edgeDist = min(distToEdge.x, distToEdge.y);
+  next *= smoothstep(0.0, 0.08, edgeDist);
+
+  // Interaction Logic: Disturbance from mouse/touch
   float d = length(vUV - uMouse);
-  next -= smoothstep(uRadius, 0.0, d) * uStrength;
-  next  = clamp(next, -1.0, 1.0);
+  if (uStrength > 0.0) {
+    // Soft Gaussian-like drop shape
+    float force = exp(-pow(d / uRadius, 2.0)) * uStrength;
+    next -= force;
+  }
+
+  // Clamp to prevent numerical explosion
+  next = clamp(next, -1.0, 1.0);
 
   #ifdef UINT8_MODE
     gl_FragColor = vec4(enc16(next), enc16(curr));
