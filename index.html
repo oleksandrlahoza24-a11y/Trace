@@ -1,49 +1,554 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Island Engine Pro</title>
-    <style>
-    /* Add 'pointer-events: none' to overlay and 'touch-action: none' everywhere */
-    * { touch-action: none; -webkit-user-select: none; } 
-    body, html { margin: 0; overflow: hidden; background: #000; width: 100%; height: 100%; }
-    #overlay { pointer-events: none; z-index: 5; position: absolute; width: 100%; height: 100%; }
-    #joystick-zone { 
-        position: absolute; bottom: 60px; left: 60px; width: 120px; height: 120px; 
-        z-index: 100; pointer-events: auto; /* Only the joystick allows touch */
-    }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Ultra-Realistic Water</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body {
+    width:100%; height:100%;
+    overflow:hidden;
+    background:#04111a;
+    touch-action:none;
+    -webkit-user-select:none;
+    user-select:none;
+  }
+  canvas {
+    display:block;
+    position:fixed;
+    top:0; left:0;
+    touch-action:none;
+    cursor:crosshair;
+  }
+  #hint {
+    position:fixed;
+    bottom:32px;
+    left:50%;
+    transform:translateX(-50%);
+    color:rgba(160,220,255,0.55);
+    font-family:'Palatino Linotype','Book Antiqua',Palatino,serif;
+    font-size:13px;
+    letter-spacing:4px;
+    text-transform:uppercase;
+    pointer-events:none;
+    transition:opacity 2.5s ease;
+    text-shadow:0 0 20px rgba(80,180,255,0.4);
+    white-space:nowrap;
+  }
+  #hint.fade { opacity:0; }
 </style>
 </head>
 <body>
-    <div id="overlay"></div>
-    <div id="stats">LATITUDE: 44.2<br>LONGITUDE: 12.8<br>ENGINE: WEBGL_v2</div>
-    <div id="joystick-zone"></div>
+<canvas id="c"></canvas>
+<div id="hint">∿ touch the water ∿</div>
+<script>
+'use strict';
 
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
+const canvas = document.getElementById('c');
+const hint   = document.getElementById('hint');
+
+// ─── Retina / iPad DPR support ─────────────────────────────────────────────
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+let W = 0, H = 0;   // physical canvas pixels
+let CW = 0, CH = 0; // CSS layout pixels (event coordinates are in these)
+
+function resize() {
+  CW = window.innerWidth;
+  CH = window.innerHeight;
+  W  = Math.round(CW * DPR);
+  H  = Math.round(CH * DPR);
+  canvas.width        = W;
+  canvas.height       = H;
+  canvas.style.width  = CW + 'px';
+  canvas.style.height = CH + 'px';
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ─── WebGL init ─────────────────────────────────────────────────────────────
+const glOpts = { antialias:false, alpha:false, preserveDrawingBuffer:false, powerPreference:'high-performance' };
+const gl = canvas.getContext('webgl', glOpts)
+        || canvas.getContext('experimental-webgl', glOpts);
+
+if (!gl) {
+  document.body.style.cssText = 'background:#030c12;display:flex;align-items:center;justify-content:center';
+  document.body.innerHTML = '<p style="color:#7ad;font-family:serif;font-size:18px;text-align:center;line-height:2">WebGL not available<br><small style="opacity:.5">Try Chrome or Safari</small></p>';
+  throw 0;
+}
+
+// Extensions
+const extFloat    = gl.getExtension('OES_texture_float');
+const extHalfF    = gl.getExtension('OES_texture_half_float');
+const extFloatLin = gl.getExtension('OES_texture_float_linear');
+const extHalfLin  = gl.getExtension('OES_texture_half_float_linear');
+gl.getExtension('WEBGL_color_buffer_float');
+gl.getExtension('EXT_color_buffer_half_float');
+
+function canRenderTo(type) {
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 4, 4, 0, gl.RGBA, type, null);
+  const f = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+  const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+  gl.deleteFramebuffer(f); gl.deleteTexture(t);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return ok;
+}
+
+// Pick best available float format for FBO rendering
+let FTYPE, USE_LINEAR, UINT8;
+if (extFloat && canRenderTo(gl.FLOAT)) {
+  FTYPE = gl.FLOAT; USE_LINEAR = !!extFloatLin; UINT8 = false;
+} else if (extHalfF && canRenderTo(extHalfF.HALF_FLOAT_OES)) {
+  FTYPE = extHalfF.HALF_FLOAT_OES; USE_LINEAR = !!extHalfLin; UINT8 = false;
+} else {
+  // iPad / older devices fall here — uint8 with 16-bit encoding fixes quantisation pixels
+  FTYPE = gl.UNSIGNED_BYTE; USE_LINEAR = true; UINT8 = true;
+}
+
+const S = 512; // simulation grid (square)
+
+// ─── Shader: vertex (shared) ────────────────────────────────────────────────
+const VERT = `
+attribute vec2 aPos;
+varying   vec2 vUV;
+void main() {
+  vUV = aPos * 0.5 + 0.5;
+  gl_Position = vec4(aPos, 0.0, 1.0);
+}`;
+
+// ─── Shader: simulation ─────────────────────────────────────────────────────
+// FIX: On uint8 devices (iPad), we use 16-bit fixed-point:
+//   curr height → R (hi byte) + G (lo byte)
+//   prev height → B (hi byte) + A (lo byte)
+// This gives ~65000 precision levels vs 256, eliminating pixel-block artefacts.
+const SIM_FRAG = (UINT8 ? '#define UINT8_MODE\n' : '') + `
+precision highp float;
+varying vec2  vUV;
+uniform sampler2D uState;
+uniform vec2  uTexel;
+uniform vec2  uMouse;
+uniform float uRadius;
+uniform float uStrength;
+
+#ifdef UINT8_MODE
+  // Encode float [-1,1] → two bytes stored in vec2([0,1])
+  // hi = integer part of t*255 / 255
+  // lo = fractional part of t*255  (full [0,1) range for sub-byte precision)
+  vec2 enc16(float v) {
+    float t   = clamp(v * 0.5 + 0.5, 0.0, 0.99999);
+    float t255 = t * 255.0;
+    return vec2(floor(t255) / 255.0, fract(t255));
+  }
+  // Decode: (hi + lo/255) * 2 - 1
+  float dec16(vec2 v) { return (v.x + v.y / 255.0) * 2.0 - 1.0; }
+  float CURR(vec2 uv) { return dec16(texture2D(uState, uv).rg); }
+  float PREV(vec2 uv) { return dec16(texture2D(uState, uv).ba); }
+#else
+  float CURR(vec2 uv) { return texture2D(uState, uv).r * 2.0 - 1.0; }
+  float PREV(vec2 uv) { return texture2D(uState, uv).g * 2.0 - 1.0; }
+#endif
+
+void main() {
+  float curr = CURR(vUV);
+  float prev = PREV(vUV);
+
+  float n = CURR(vUV + vec2( 0.0,      uTexel.y));
+  float s = CURR(vUV - vec2( 0.0,      uTexel.y));
+  float e = CURR(vUV + vec2( uTexel.x, 0.0     ));
+  float w = CURR(vUV - vec2( uTexel.x, 0.0     ));
+
+  // 2-D wave equation  (α=0.5 → numerically stable max speed)
+  float next = (-prev + (n + s + e + w) * 0.5) * 0.994;
+
+  // Sponge-layer: absorb at borders to kill reflections
+  float bx = min(vUV.x, 1.0 - vUV.x) * 14.0;
+  float by = min(vUV.y, 1.0 - vUV.y) * 14.0;
+  next *= mix(0.78, 1.0, clamp(min(bx, by), 0.0, 1.0));
+
+  // Pointer / drop disturbance
+  float d = length(vUV - uMouse);
+  next -= smoothstep(uRadius, 0.0, d) * uStrength;
+  next  = clamp(next, -1.0, 1.0);
+
+  #ifdef UINT8_MODE
+    gl_FragColor = vec4(enc16(next), enc16(curr));
+  #else
+    gl_FragColor = vec4(next * 0.5 + 0.5, curr * 0.5 + 0.5, 0.0, 1.0);
+  #endif
+}`;
+
+// ─── Shader: render ─────────────────────────────────────────────────────────
+const RENDER_FRAG = (UINT8 ? '#define UINT8_MODE\n' : '') + `
+precision highp float;
+varying vec2  vUV;
+uniform sampler2D uWater;
+uniform vec2  uTexel;
+uniform float uTime;
+uniform float uAspect;
+
+#define PI 3.14159265359
+#define EPS 1e-4
+
+// ── ADVANCED NOISE LIBRARY ────────────────────────────────────────────────
+float hash21(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+vec2 hash22(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * vec3(.1031, .1030, .0973));
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.xx + p3.yz) * p3.zy);
+}
+
+// Worley Noise for organic foam/caustics
+float worley(vec2 p) {
+    vec2 n = floor(p);
+    vec2 f = fract(p);
+    float d = 1.0;
+    for(int y=-1; y<=1; y++) {
+        for(int x=-1; x<=1; x++) {
+            vec2 g = vec2(float(x), float(y));
+            vec2 o = hash22(n + g);
+            vec2 r = g + o - f;
+            d = min(d, dot(r,r));
         }
-    </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
+    }
+    return sqrt(d);
+}
 
-    <script type="module">
-        import { GraphicsEngine } from './graphics.js';
-        import { CharacterController } from './character.js';
+float fbm(vec2 p) {
+    float v=0.0, a=0.5;
+    mat2 m = mat2(1.6, 1.2, -1.2, 1.6);
+    for(int i=0; i<6; i++) {
+        v += a * worley(p);
+        p = m * p + uTime * 0.1;
+        a *= 0.5;
+    }
+    return v;
+}
 
-        const graphics = new GraphicsEngine();
-        const character = new CharacterController(graphics.scene, graphics.camera);
+// ── PHYSICS UTILS ─────────────────────────────────────────────────────────
+#ifdef UINT8_MODE
+    float H(vec2 uv) {
+        vec4 s = texture2D(uWater, uv);
+        return (s.r + s.g / 255.0) * 2.0 - 1.0;
+    }
+#else
+    float H(vec2 uv) { return texture2D(uWater, uv).r * 2.0 - 1.0; }
+#endif
 
-        function frame() {
-            requestAnimationFrame(frame);
-            const delta = graphics.clock.getDelta();
-            character.update(graphics.getTerrainHeight.bind(graphics), delta);
-            graphics.render();
-        }
-        frame();
-    </script>
+// Cook-Torrance Specular Components
+float D_GGX(float NoH, float roughness) {
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float d = (NoH * a2 - NoH) * NoH + 1.0;
+    return a2 / (PI * d * d);
+}
+
+float G_SchlickGGX(float NoV, float roughness) {
+    float k = (roughness * roughness) / 2.0;
+    return NoV / (NoV * (1.0 - k) + k);
+}
+
+// ── WORLD ELEMENTS ────────────────────────────────────────────────────────
+vec3 getSky(vec3 rd) {
+    vec3 sky = mix(vec3(0.3, 0.6, 1.0), vec3(0.02, 0.05, 0.2), rd.y * 0.5 + 0.5);
+    vec3 sunDir = normalize(vec3(0.5, 0.3, -0.8));
+    float sun = pow(max(dot(rd, sunDir), 0.0), 512.0);
+    return sky + vec3(1.0, 0.8, 0.4) * sun * 5.0;
+}
+
+vec3 getSeabed(vec2 uv) {
+    float n = fbm(uv * 4.0);
+    vec3 sand = mix(vec3(0.8, 0.7, 0.5), vec3(0.5, 0.4, 0.3), n);
+    float ripples = sin(uv.x * 20.0 + n * 5.0) * 0.1;
+    return sand + ripples;
+}
+
+void main() {
+    vec2 uv = vUV;
+    vec2 tx = uTexel;
+    
+    // Normal calculation (High Precision Sobel)
+    float hL = H(uv - vec2(tx.x, 0.0)), hR = H(uv + vec2(tx.x, 0.0));
+    float hD = H(uv - vec2(0.0, tx.y)), hU = H(uv + vec2(0.0, tx.y));
+    vec3 normal = normalize(vec3(hL - hR, hD - hU, 0.2));
+
+    // PBR Vectors
+    vec3 V = normalize(vec3(0.0, 0.0, 1.0));
+    vec3 L = normalize(vec3(0.5, 0.5, 1.0));
+    vec3 Hvec = normalize(V + L);
+    float NoV = max(dot(normal, V), EPS);
+    float NoL = max(dot(normal, L), EPS);
+    float NoH = max(dot(normal, Hvec), EPS);
+    float VoH = max(dot(V, Hvec), EPS);
+
+    // Fresnel (Water IOR 1.33)
+    float F0 = 0.02;
+    float F = F0 + (1.0 - F0) * pow(1.0 - NoV, 5.0);
+
+    // ── REFRACTION & CAUSTICS ──────────────────────────────────────────────
+    // Chromatic Aberration Refraction
+    float r = texture2D(uWater, uv + normal.xy * 0.03).r;
+    float g = texture2D(uWater, uv + normal.xy * 0.035).r;
+    float b = texture2D(uWater, uv + normal.xy * 0.04).r;
+    
+    vec2 refUV = uv + normal.xy * 0.05;
+    vec3 seabed = getSeabed(refUV);
+    
+    // Light Shafts / Caustics
+    float caustics = pow(worley(refUV * 15.0 - normal.xy * 5.0 + uTime), 2.0);
+    seabed += caustics * 0.4 * vec3(0.8, 1.0, 0.9);
+    
+    // Beer-Lambert absorption
+    float depth = 1.0 - H(uv);
+    vec3 absorb = exp(-vec3(0.9, 0.3, 0.1) * depth * 3.0);
+    seabed *= absorb;
+
+    // ── REFLECTION ─────────────────────────────────────────────────────────
+    vec3 R = reflect(-V, normal);
+    vec3 sky = getSky(R);
+
+    // ── SPECULAR (Cook-Torrance) ───────────────────────────────────────────
+    float D = D_GGX(NoH, 0.1);
+    float G = G_SchlickGGX(NoV, 0.1) * G_SchlickGGX(NoL, 0.1);
+    vec3 specular = (D * G * F) / (4.0 * NoV * NoL + EPS) * vec3(1.0);
+
+    // ── FOAM ───────────────────────────────────────────────────────────────
+    float waveHeight = H(uv);
+    float foamMask = smoothstep(0.3, 0.7, waveHeight + fbm(uv * 10.0) * 0.5);
+    vec3 foamCol = vec3(0.9, 0.95, 1.0) * worley(uv * 40.0 + uTime);
+    
+    // ── FINAL COMPOSITION ──────────────────────────────────────────────────
+    vec3 waterColor = mix(vec3(0.0, 0.1, 0.2), vec3(0.1, 0.4, 0.5), waveHeight * 0.5 + 0.5);
+    vec3 final = mix(seabed, sky, F);
+    final = mix(final, waterColor, 0.3);
+    final += specular * 0.5;
+    final = mix(final, foamCol, foamMask * 0.6);
+
+    // Tone Mapping & Gamma
+    final = final / (final + vec3(1.0));
+    final = pow(final, vec3(1.0/2.2));
+
+    gl_FragColor = vec4(final, 1.0);
+}`;
+
+// ─── GL Helpers ─────────────────────────────────────────────────────────────
+function mkShader(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+    throw new Error('Shader compile: ' + gl.getShaderInfoLog(s));
+  return s;
+}
+
+function mkProg(fsrc) {
+  const p = gl.createProgram();
+  gl.attachShader(p, mkShader(gl.VERTEX_SHADER,   VERT));
+  gl.attachShader(p, mkShader(gl.FRAGMENT_SHADER, fsrc));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS))
+    throw new Error('Program link: ' + gl.getProgramInfoLog(p));
+  const u = {};
+  const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) {
+    const info = gl.getActiveUniform(p, i);
+    u[info.name] = gl.getUniformLocation(p, info.name);
+  }
+  return { p, u };
+}
+
+let simProg, renderProg;
+try {
+  simProg    = mkProg(SIM_FRAG);
+  renderProg = mkProg(RENDER_FRAG);
+} catch (e) {
+  console.error(e);
+  document.body.innerHTML = `<pre style="color:#f88;padding:20px;font-size:11px;white-space:pre-wrap">${e.message}</pre>`;
+  throw e;
+}
+
+// Fullscreen quad
+const qbuf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, qbuf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+
+function bindQuad(prog) {
+  gl.bindBuffer(gl.ARRAY_BUFFER, qbuf);
+  const loc = gl.getAttribLocation(prog.p, 'aPos');
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+}
+
+// ─── FBOs ───────────────────────────────────────────────────────────────────
+function mkInitData() {
+  const n = S * S * 4;
+  if (!UINT8) {
+    // float or half-float: 0.5 encodes to resting height 0
+    if (FTYPE === gl.FLOAT)              return new Float32Array(n).fill(0.5);
+    if (FTYPE === extHalfF.HALF_FLOAT_OES) return new Uint16Array(n).fill(0x3800); // 0.5 in fp16
+  }
+  // UINT8 mode: enc16(0) → t=0.5 → t255=127.5 → hi=127/255, lo=0.5
+  // Byte values: hi=127 (≈127/255), lo=128 (round(0.5*255))
+  // Layout per texel: [curr_hi, curr_lo, prev_hi, prev_lo]
+  const d = new Uint8Array(n);
+  for (let i = 0; i < n; i += 4) { d[i]=127; d[i+1]=128; d[i+2]=127; d[i+3]=128; }
+  return d;
+}
+
+function mkFBO() {
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, S, S, 0, gl.RGBA, FTYPE, mkInitData());
+  const f = USE_LINEAR ? gl.LINEAR : gl.NEAREST;
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, f);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, f);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const fbo = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { tex, fbo };
+}
+
+let fboA = mkFBO();
+let fboB = mkFBO();
+
+// ─── Input ──────────────────────────────────────────────────────────────────
+const ptr = { x:0.5, y:0.5, active:false, prevX:0.5, prevY:0.5 };
+let hintDismissed = false;
+
+// FIX: divide by CSS pixels (CW/CH), NOT canvas physical pixels (W/H)
+// Touch/mouse events always give clientX/Y in CSS coordinate space
+function toUV(cx, cy) {
+  return { x: cx / CW, y: 1.0 - cy / CH };
+}
+
+function dismissHint() {
+  if (hintDismissed) return;
+  hintDismissed = true;
+  hint.classList.add('fade');
+  setTimeout(() => { hint.style.display = 'none'; }, 3000);
+}
+
+function onDown(e) {
+  const t = e.touches ? e.touches[0] : e;
+  const uv = toUV(t.clientX, t.clientY);
+  ptr.prevX = uv.x; ptr.prevY = uv.y;
+  ptr.x = uv.x; ptr.y = uv.y; ptr.active = true;
+  dismissHint();
+}
+
+function onMove(e) {
+  if (!ptr.active) return;
+  const t = e.touches ? e.touches[0] : e;
+  ptr.prevX = ptr.x; ptr.prevY = ptr.y;
+  const uv = toUV(t.clientX, t.clientY);
+  ptr.x = uv.x; ptr.y = uv.y;
+}
+
+function onUp() { ptr.active = false; }
+
+// Mouse
+canvas.addEventListener('mousedown', onDown);
+canvas.addEventListener('mousemove', onMove);
+window.addEventListener('mouseup',   onUp);
+
+// FIX: passive:false on ALL touch events so we can preventDefault
+// This stops iPad Safari hijacking the gesture as scroll/zoom
+canvas.addEventListener('touchstart',  e => { e.preventDefault(); onDown(e); }, { passive:false });
+canvas.addEventListener('touchmove',   e => { e.preventDefault(); onMove(e); }, { passive:false });
+canvas.addEventListener('touchend',    e => { e.preventDefault(); onUp();    }, { passive:false });
+canvas.addEventListener('touchcancel', e => { e.preventDefault(); onUp();    }, { passive:false });
+
+// ─── Ambient rain drops ─────────────────────────────────────────────────────
+const drops = [];
+let lastDrop = 0;
+
+function maybeSpawnDrop(now) {
+  const gap = ptr.active ? 5000 : (500 + Math.random() * 800);
+  if (now - lastDrop < gap) return;
+  lastDrop = now;
+  drops.push({
+    x:   0.08 + Math.random() * 0.84,
+    y:   0.08 + Math.random() * 0.84,
+    str: 0.10 + Math.random() * 0.22,
+    born: now,
+    ttl:  40  + Math.random() * 40
+  });
+}
+
+// ─── Simulation step ────────────────────────────────────────────────────────
+function simulate(src, dst, mx, my, active, str) {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fbo);
+  gl.viewport(0, 0, S, S);
+  gl.useProgram(simProg.p);
+  bindQuad(simProg);
+  const u = simProg.u;
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, src.tex);
+  gl.uniform1i(u.uState,    0);
+  gl.uniform2f(u.uTexel,    1.0/S, 1.0/S);
+  gl.uniform2f(u.uMouse,    mx, my);
+  gl.uniform1f(u.uRadius,   0.046);
+  gl.uniform1f(u.uStrength, active ? str : 0.0);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+// ─── Render ─────────────────────────────────────────────────────────────────
+let time = 0;
+
+function render(src) {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, W, H);
+  gl.useProgram(renderProg.p);
+  bindQuad(renderProg);
+  const u = renderProg.u;
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, src.tex);
+  gl.uniform1i(u.uWater,  0);
+  gl.uniform2f(u.uTexel,  1.0/S, 1.0/S);
+  gl.uniform1f(u.uTime,   time);
+  gl.uniform1f(u.uAspect, W / H);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+// ─── Main loop ──────────────────────────────────────────────────────────────
+function frame(now) {
+  requestAnimationFrame(frame);
+  time = now * 0.001;
+
+  maybeSpawnDrop(now);
+
+  let mx = ptr.x, my = ptr.y, mactive = ptr.active, mstr = 0.18;
+
+  // Use ambient drop if no finger/pointer
+  if (!mactive && drops.length > 0) {
+    const d = drops[0];
+    if (now - d.born < d.ttl) {
+      mx = d.x; my = d.y; mactive = true; mstr = d.str;
+    } else { drops.shift(); }
+  }
+
+  // Drag speed → wave strength
+  if (ptr.active) {
+    const spd = Math.hypot(ptr.x - ptr.prevX, ptr.y - ptr.prevY);
+    mstr = Math.min(0.12 + spd * 20.0, 0.60);
+  }
+
+  // 4 substeps per frame for accuracy & wave speed
+  for (let i = 0; i < 4; i++) {
+    simulate(fboA, fboB, mx, my, mactive && i < 2, mstr);
+    const tmp = fboA; fboA = fboB; fboB = tmp;
+  }
+
+  render(fboA);
+}
+
+requestAnimationFrame(frame);
+</script>
 </body>
 </html>
