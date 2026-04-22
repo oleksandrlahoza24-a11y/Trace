@@ -3,204 +3,266 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Optimized Realistic Water</title>
+<title>Raymarched Realistic Island</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body, html { width:100%; height:100%; overflow:hidden; background:#001; position: fixed; touch-action: none; }
-  canvas { display:block; width:100vw; height:100vh; }
-  #ui { position: fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; }
-  .ctrl { position: absolute; pointer-events:auto; }
-  
-  #wheel-zone {
-    bottom: 40px; left: 40px; width: 180px; height: 180px;
-    background: rgba(20,25,30,0.8); border: 2px solid rgba(255,255,255,0.1);
-    border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    backdrop-filter: blur(10px);
-  }
-  #wheel { width: 140px; height: 140px; border: 10px solid #333; border-radius: 50%; position: relative; }
-  #wheel::after { content:''; position:absolute; top:-12px; left:50%; transform:translateX(-50%); width:12px; height:22px; background:#ff4400; border-radius:2px; }
-
-  #throttle-zone { 
-    bottom: 40px; right: 40px; width: 60px; height: 180px; 
-    background: rgba(20,25,30,0.8); border: 2px solid rgba(255,255,255,0.1); 
-    border-radius: 30px; overflow: hidden; 
-  }
-  #throttle-bar { position:absolute; bottom:0; width:100%; background: #00d4ff; transition: height 0.1s; }
+  body, html { width:100%; height:100%; overflow:hidden; background:#010; position: fixed; touch-action: none; -webkit-user-select:none; user-select:none; }
+  canvas { display:block; width:100vw; height:100vh; cursor: crosshair; }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="ui">
-    <div id="wheel-zone" class="ctrl"><div id="wheel"></div></div>
-    <div id="throttle-zone" class="ctrl"><div id="throttle-bar" style="height:0%"></div></div>
-</div>
-
 <script>
 'use strict';
 
 const canvas = document.getElementById('c');
-const gl = canvas.getContext('webgl', { antialias: false, alpha: false });
+// Antialias enabled for high-fidelity edges
+const gl = canvas.getContext('webgl', { antialias: true, alpha: false, depth: false });
 
 const DPR = Math.min(window.devicePixelRatio || 1, 2);
-let W, H, CW, CH;
+let CW, CH, W, H;
 function resize() {
     CW = window.innerWidth; CH = window.innerHeight;
     W = Math.round(CW * DPR); H = Math.round(CH * DPR);
     canvas.width = W; canvas.height = H;
+    gl.viewport(0, 0, W, H);
 }
 window.addEventListener('resize', resize);
 resize();
 
-const S = 512;
-const ext = gl.getExtension('OES_texture_half_float') || gl.getExtension('OES_texture_float');
-const FTYPE = ext ? (ext.HALF_FLOAT_OES || gl.FLOAT) : gl.UNSIGNED_BYTE;
+// Shared Vertex Shader (Fullscreen Quad)
+const VERT = `attribute vec2 aPos; void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
 
-const VERT = `attribute vec2 aPos; varying vec2 vUV; void main() { vUV = aPos*0.5+0.5; gl_Position = vec4(aPos,0.,1.); }`;
-
-const SIM_FRAG = `
+// --- Raymarching Island Shader ---
+const FRAG = `
 precision highp float;
-varying vec2 vUV;
-uniform sampler2D uState;
-uniform vec2 uTexel;
-uniform vec4 uBoat; 
-void main() {
-    vec4 data = texture2D(uState, vUV);
-    float h = data.r * 2.0 - 1.0;
-    float hp = data.g * 2.0 - 1.0;
-    float foam = data.b;
-    float n = texture2D(uState, vUV + vec2(0., uTexel.y)).r * 2. - 1.;
-    float s = texture2D(uState, vUV - vec2(0., uTexel.y)).r * 2. - 1.;
-    float e = texture2D(uState, vUV + vec2(uTexel.x, 0.)).r * 2. - 1.;
-    float w = texture2D(uState, vUV - vec2(uTexel.x, 0.)).r * 2. - 1.;
-    float nextH = (n + s + e + w) * 0.5 - hp;
-    nextH *= 0.994;
-    float wake = smoothstep(0.06, 0.0, length(vUV - uBoat.xy)) * uBoat.w * 12.0;
-    gl_FragColor = vec4((nextH + wake) * 0.5 + 0.5, data.r, clamp(foam * 0.97 + wake * 1.2, 0.0, 1.0), 1.0);
-}`;
-
-const REN_FRAG = `
-precision highp float;
-varying vec2 vUV;
-uniform sampler2D uWater;
-uniform vec4 uBoat;
-uniform float uAspect;
 uniform float uTime;
+uniform vec2 uRes;
+uniform vec2 uMouse;
 
+// ── Noise and Randomness ───────────────────────────────────
+float hash(float n) { return fract(sin(n) * 43758.5453123); }
+float hash(vec2 p) { return fract(sin(dot(p, vec2(12.7, 31.1))) * 43758.5453123); }
+float noise(vec2 p) {
+    vec2 i = floor(p); vec2 f = fract(p);
+    f = f*f*(3.0-2.0*f);
+    float n = i.x + i.y*57.0;
+    return mix(mix(hash(n+0.0), hash(n+1.0), f.x),
+               mix(hash(n+57.0), hash(n+58.0), f.x), f.y);
+}
+float fbm(vec2 p) {
+    float v = 0.0; float a = 0.5;
+    for(int i=0; i<5; i++) { v += noise(p)*a; p*=2.02; a*=0.5; }
+    return v;
+}
+
+// ── Gerstner Wave Physics (Volumetric Water) ───────────────────
+vec3 gerstnerWave(vec2 uv, vec2 dir, float steepness, float wavelength, float speed, float time) {
+    float k = 6.28318 / wavelength;
+    float f = k * (dot(dir, uv) - speed * time);
+    float a = steepness / k;
+    return vec3(dir.x * (a * cos(f)), a * sin(f), dir.y * (a * cos(f)));
+}
+
+vec3 getWaves(vec2 uv, float time) {
+    vec3 wave = vec3(0.0);
+    // LayeredGerstner Waves for rolling swells and sharper peaks
+    wave += gerstnerWave(uv, normalize(vec2(1.0, 0.2)), 0.15, 6.0, 1.2, time);
+    wave += gerstnerWave(uv, normalize(vec2(0.7, -0.7)), 0.10, 3.5, 2.0, time * 1.3);
+    wave += gerstnerWave(uv, normalize(vec2(-0.2, 0.9)), 0.05, 1.8, 2.8, time * 1.7);
+    wave += gerstnerWave(uv, normalize(vec2(-0.8, -0.1)), 0.03, 1.0, 3.5, time * 2.1);
+    return wave;
+}
+
+// ── Atmospheric Scattering Sky ─────────────────────────────
+vec3 getSky(vec3 rd, vec3 L) {
+    float sd = max(dot(rd, L), 0.0);
+    vec3 skyCol = mix(vec3(0.1, 0.3, 0.7), vec3(0.6, 0.8, 1.0), max(0.0, rd.y));
+    skyCol += vec3(1.0, 0.9, 0.7) * pow(sd, 100.0) * 1.5; // Sun
+    // Procedural Clouds
+    float cloud = fbm(rd.xz * 10.0 / (abs(rd.y)+0.01) + uTime*0.02);
+    skyCol = mix(skyCol, vec3(0.95), smoothstep(0.4, 0.8, cloud) * 0.5 * smoothstep(0.0, 0.2, rd.y));
+    return skyCol;
+}
+
+// ── Caustics Refraction ─────────────────────────────────────
+float caustics(vec2 uv, float time) {
+    vec2 p = uv * 3.0;
+    float v = 0.0;
+    v += sin(p.x + time) * 0.5 + 0.5;
+    v += sin(p.y + time) * 0.5 + 0.5;
+    v += sin(p.x + p.y + time) * 0.5 + 0.5;
+    return pow(v/3.0, 4.0) * 4.0;
+}
+
+// ── Signed Distance Fields (Geometry) ─────────────────────────
+float sdBox(vec3 p, vec3 b) { vec3 q = abs(p) - b; return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0); }
+float sdCylinder(vec3 p, float h, float r) { vec2 d = abs(vec2(length(p.xz),p.y)) - vec2(r,h); return min(max(d.x,d.y),0.0) + length(max(d,0.0)); }
+
+float scene(vec3 p, out float mat) {
+    // 1. Island Terrain (Cliff and Beach)
+    float islandHeight = smoothstep(5.0, 0.0, length(p.xz)) * 2.5;
+    islandHeight += fbm(p.xz * 0.3) * 1.5; // cliffs
+    float terrain = p.y - islandHeight;
+    float beachLine = smoothstep(3.5, 4.2, length(p.xz));
+    mat = mix(1.0, 0.0, beachLine); // mat 1.0=Rock, mat 0.0=Sand
+
+    // 2. Village Buildings (Procedural detail)
+    vec2 gID = floor(p.xz * 1.5);
+    float hG = hash(gID);
+    if(hG > 0.4 && terrain < 0.2 && length(p.xz) < 2.5) { // Only spawn on island
+        vec2 gUV = fract(p.xz * 1.5) - 0.5;
+        vec3 bPos = vec3(gUV.x, p.y - islandHeight, gUV.y);
+        float bH = 0.3 + hash(gID*7.1)*0.6;
+        float build = sdBox(bPos - vec3(0.0, bH/2.0, 0.0), vec3(0.2, bH/2.0, 0.2));
+        if(build < terrain) { terrain = build; mat = 2.0; } // mat 2.0=Building
+    }
+    
+    // 3. Palm Trees
+    if(hG < 0.15 && terrain < 0.2 && length(p.xz) < 3.2) {
+        vec2 tUV = fract(p.xz * 1.2) - 0.5;
+        vec3 tPos = vec3(tUV.x, p.y - islandHeight, tUV.y);
+        float trunk = sdCylinder(tPos - vec3(0.0, 0.8, 0.0), 0.8, 0.03 + tPos.y*0.02);
+        if(trunk < terrain) { terrain = trunk; mat = 3.0; } // mat 3.0=Trunk
+    }
+    
+    return terrain;
+}
+
+vec3 getNormal(vec3 p) {
+    float m;
+    vec2 e = vec2(0.01, 0.0);
+    return normalize(vec3(scene(p+e.xyy, m) - scene(p-e.xyy, m), scene(p+e.yxy, m) - scene(p-e.yxy, m), scene(p+e.yyx, Mat) - scene(p-e.yyx, m)));
+}
+
+// ── RAYMARCHING ENGINE ───────────────────────────────────────
 void main() {
-    vec2 tx = vec2(1.0/512.0);
-    vec4 data = texture2D(uWater, vUV);
-    float h = data.r * 2.0 - 1.0;
-    
-    // Smooth Normals
-    float hL = texture2D(uWater, vUV - vec2(tx.x, 0.0)).r * 2.0 - 1.0;
-    float hR = texture2D(uWater, vUV + vec2(tx.x, 0.0)).r * 2.0 - 1.0;
-    float hU = texture2D(uWater, vUV + vec2(0.0, tx.y)).r * 2.0 - 1.0;
-    float hD = texture2D(uWater, vUV - vec2(0.0, tx.y)).r * 2.0 - 1.0;
-    vec3 n = normalize(vec3(hL - hR, hD - hU, 0.1));
+    vec2 uv = (gl_FragCoord.xy * 2.0 - uRes) / min(uRes.x, uRes.y);
+    float time = uTime;
 
-    // Ground & Refraction
-    vec2 refUV = vUV + n.xy * 0.05;
-    vec3 sand = vec3(0.7, 0.6, 0.4) * (0.9 + 0.1 * sin(refUV.x * 50.0) * cos(refUV.y * 50.0));
-    
-    // Boat Shadow
-    float shadow = 1.0 - smoothstep(0.0, 0.06, length(refUV - uBoat.xy - vec2(0.02)));
-    sand *= (1.0 - shadow * 0.4);
+    // Camera
+    vec3 ro = vec3(0.0, 3.5, 8.0); // Origin
+    vec3 ta = vec3(0.0, 0.5, 0.0); // Target
+    vec3 cz = normalize(ta - ro);
+    vec3 cx = normalize(cross(cz, vec3(0,1,0)));
+    vec3 cy = normalize(cross(cx, cz));
+    vec3 rd = normalize(uv.x * cx + uv.y * cy + cz * 2.0); // Ray Direction
 
-    // Fresnel Reflections
-    float fresnel = pow(1.0 - n.z, 3.5);
-    vec3 sky = mix(vec3(0.1, 0.4, 0.8), vec3(0.8, 0.9, 1.0), max(0.0, n.y * 0.5 + 0.5));
-    
-    // Final Composition
-    vec3 waterBase = mix(sand * vec3(0.2, 0.5, 0.6), sky, fresnel + 0.1);
-    waterBase += data.b * 0.5; // Foam
+    // Lighting (Sun)
+    vec3 sunDir = normalize(vec3(0.4, 0.5, 1.0));
+    vec3 col = vec3(0.0);
 
-    // Boat Hull
-    vec2 bP = vUV - uBoat.xy;
-    float ca = cos(-uBoat.z), sa = sin(-uBoat.z);
-    vec2 rUV = vec2(bP.x * ca - bP.y * sa, bP.x * sa + bP.y * ca);
-    rUV.x *= uAspect;
-    float hull = max(abs(rUV.x) - 0.015, abs(rUV.y) - 0.04 + abs(rUV.x));
-    
-    vec3 color = (hull < 0.0) ? vec3(0.1, 0.1, 0.15) : waterBase;
-    gl_FragColor = vec4(pow(color, vec3(0.9)), 1.0);
+    // 1. Trace Water Plane First (Gerstner Waves)
+    float waterT = -ro.y / rd.y;
+    vec3 waterHit = ro + rd * waterT;
+    if(waterHit.y < 0.1 && waterT > 0.0) { // Ray hit water
+        vec2 wUV = waterHit.xz;
+        vec3 waveDisp = getWaves(wUV, time);
+        waterHit += waveDisp; // Offset hit by physical wave height
+        
+        // Water normal (using neighboring Gerstner samples)
+        vec2 e = vec2(0.01, 0.0);
+        vec3 wN = normalize(vec3(getWaves(wUV+e,time).y - getWaves(wUV-e,time).y, 0.08, getWaves(wUV+e.yx,time).y - getWaves(wUV-e.yx,time).y));
+        
+        // Fresnel Effect
+        float fresnel = pow(1.0 - max(dot(wN, -rd), 0.0), 5.0);
+        
+        // Reflection (Sky)
+        vec3 refSky = getSky(reflect(rd, wN), sunDir);
+        
+        // Refraction (Beer-Lambert Absorption + Caustics)
+        float depth = waterHit.y - (fbm(wUV*0.3)*1.5); // Depth to island ground
+        vec3 deepBlue = vec3(0.01, 0.1, 0.3);
+        vec3 shallowBlue = vec3(0.2, 0.7, 0.9);
+        vec3 absorption = mix(shallowBlue, deepBlue, smoothstep(0.0, 3.0, depth));
+        
+        // Underwater floor details (sand + caustics)
+        vec3 sandCol = vec3(0.7, 0.6, 0.45);
+        sandCol *= 1.0 + caustics(wUV * 0.5 + wN.xz * 0.1, time) * exp(-depth * 0.5);
+        
+        col = mix(sandCol * absorption, refSky, fresnel + 0.1);
+        
+        // Sun Specular (GGX)
+        col += blackbody(max(dot(reflect(-sunDir, wN), -rd), 0.0));
+
+    } else { // Ray missed water, check Sky
+        col = getSky(rd, sunDir);
+    }
+
+    // 2. Trace Island Geometry (Raymarching SDFs)
+    float t = 0.0; float mat = 0.0;
+    for(int i=0; i<80; i++) {
+        vec3 p = ro + rd * t;
+        float d = scene(p, mat);
+        if(d < 0.001 || t > 20.0) break;
+        t += d;
+    }
+
+    if(t < 20.0) { // Ray hit Island
+        vec3 p = ro + rd * t;
+        vec3 n = getNormal(p);
+        float diff = max(dot(n, sunDir), 0.0);
+        float amb = 0.1;
+        vec3 matCol;
+
+        // Ultra Detailed Textures based on mat ID
+        if(mat < 0.5) { // Sand (Beach)
+            matCol = vec3(0.7, 0.6, 0.4) * (0.9 + 0.1*noise(p.xz*100.0));
+        } else if(mat < 1.5) { // Cliff Rock
+            matCol = vec3(0.4) * (0.8 + 0.2*fbm(p.xz*20.0));
+        } else if(mat < 2.5) { // Buildings
+            vec2 bUV = fract(p.xz * 3.0);
+            float win = step(0.4, bUV.x) * step(0.6, bUV.y);
+            matCol = mix(vec3(0.9, 0.8, 0.7), vec3(0.1), win * step(p.y - scene(p,mat), 0.8)); // windows
+        } else { // Palms (Trunk)
+            matCol = vec3(0.3, 0.2, 0.1) * (0.9 + 0.1*sin(p.y*30.0));
+        }
+        
+        // Composite Island Color with light
+        vec3 islandFinal = matCol * (diff + amb);
+        
+        // Apply horizon fog (blend island into sky)
+        float fog = smoothstep(5.0, 20.0, t);
+        col = mix(islandFinal, getSky(rd, sunDir), fog);
+    }
+
+    // Final Post-processing (ACES Tonemapping and Gamma correction)
+    col = col/(col+0.9)*1.08;
+    col = pow(max(col, vec3(0.0)), vec3(1.0/2.2));
+
+    gl_FragColor = vec4(col, 1.0);
 }`;
 
+// --- ENGINE SETUP ──────────────────────────────────────────
 function createProg(vs, fs) {
     const p = gl.createProgram();
     const s1 = gl.createShader(gl.VERTEX_SHADER); gl.shaderSource(s1, vs); gl.compileShader(s1);
-    gl.attachShader(p, s1); 
     const s2 = gl.createShader(gl.FRAGMENT_SHADER); gl.shaderSource(s2, fs); gl.compileShader(s2);
-    gl.attachShader(p, s2); gl.linkProgram(p);
+    gl.attachShader(p, s1); gl.attachShader(p, s2); gl.linkProgram(p);
     return p;
 }
 
-const simP = createProg(VERT, SIM_FRAG);
-const renP = createProg(VERT, REN_FRAG);
+const prog = createProg(VERT, FRAG);
+const uRes = gl.getUniformLocation(prog, "uRes");
+const uTime = gl.getUniformLocation(prog, "uTime");
 
-function createFBO() {
-    const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, S, S, 0, gl.RGBA, FTYPE, null);
-    gl.texParameteri(gl.TEXTURE_2D, 10240, 9729); gl.texParameteri(gl.TEXTURE_2D, 10241, 9729);
-    gl.texParameteri(gl.TEXTURE_2D, 10242, 33071); gl.texParameteri(gl.TEXTURE_2D, 10243, 33071);
-    const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
-    return { t, f };
-}
-
-let fbo1 = createFBO(), fbo2 = createFBO();
 const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
 gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
 
-let boat = { x: 0.5, y: 0.5, angle: 1.57, tAngle: 1.57, speed: 0, power: 0 };
-const wheel = document.getElementById('wheel');
-const tBar = document.getElementById('throttle-bar');
-
-window.addEventListener('touchmove', (e) => {
-    e.preventDefault();
-    for(let t of e.touches) {
-        if(t.clientX < CW * 0.5) {
-            const r = document.getElementById('wheel-zone').getBoundingClientRect();
-            boat.tAngle = Math.atan2((r.top + 90) - t.clientY, t.clientX - (r.left + 90));
-            wheel.style.transform = `rotate(${-boat.tAngle + 1.57}rad)`;
-        } else {
-            let p = 1.0 - (t.clientY - (CH - 220)) / 180;
-            boat.power = Math.max(0, Math.min(1, p));
-            tBar.style.height = (boat.power * 100) + "%";
-        }
-    }
-}, {passive: false});
-
 function loop(t) {
-    let d = boat.tAngle - boat.angle;
-    while(d < -Math.PI) d += Math.PI*2;
-    while(d > Math.PI) d -= Math.PI*2;
-    boat.angle += d * 0.1;
-    boat.speed = boat.speed * 0.98 + (boat.power * 0.005) * 0.02;
-    boat.x = (boat.x + Math.cos(boat.angle) * boat.speed + 1.0) % 1.0;
-    boat.y = (boat.y - Math.sin(boat.angle) * boat.speed + 1.0) % 1.0;
-
-    gl.useProgram(simP);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo2.f);
-    gl.viewport(0,0,S,S);
-    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fbo1.t);
-    const l = gl.getAttribLocation(simP, "aPos");
-    gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, 2, gl.FLOAT, false, 0, 0);
-    gl.uniform2f(gl.getUniformLocation(simP, "uTexel"), 1/S, 1/S);
-    gl.uniform4f(gl.getUniformLocation(simP, "uBoat"), boat.x, boat.y, boat.angle, boat.speed);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-    let tmp = fbo1; fbo1 = fbo2; fbo2 = tmp;
-
-    gl.useProgram(renP);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.useProgram(prog);
     gl.viewport(0, 0, W, H);
-    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fbo1.t);
-    gl.uniform4f(gl.getUniformLocation(renP, "uBoat"), boat.x, boat.y, boat.angle, boat.speed);
-    gl.uniform1f(gl.getUniformLocation(renP, "uAspect"), CW/CH);
+    gl.uniform2f(uRes, W, H);
+    gl.uniform1f(uTime, t * 0.001);
+
+    const loc = gl.getAttribLocation(prog, "aPos");
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     requestAnimationFrame(loop);
 }
-loop(0);
+requestAnimationFrame(loop);
 </script>
 </body>
 </html>
