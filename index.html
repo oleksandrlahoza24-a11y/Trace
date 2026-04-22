@@ -125,6 +125,7 @@ void main() {
 //   curr height → R (hi byte) + G (lo byte)
 //   prev height → B (hi byte) + A (lo byte)
 // This gives ~65000 precision levels vs 256, eliminating pixel-block artefacts.
+// ─── Shader: simulation (Enhanced Physics) ──────────────────────────────────
 const SIM_FRAG = (UINT8 ? '#define UINT8_MODE\n' : '') + `
 precision highp float;
 varying vec2  vUV;
@@ -149,40 +150,40 @@ uniform float uStrength;
 #endif
 
 void main() {
-  // Center samples
   float curr = CURR(vUV);
   float prev = PREV(vUV);
 
-  // 4-Point Neighbor sampling
-  float n = CURR(vUV + vec2(0.0, uTexel.y));
-  float s = CURR(vUV - vec2(0.0, uTexel.y));
-  float e = CURR(vUV + vec2(uTexel.x, 0.0));
-  float w = CURR(vUV - vec2(uTexel.x, 0.0));
+  // 9-tap Laplacian for high-fidelity dispersion
+  // (Provides smoother wave propagation than 4-tap)
+  float n  = CURR(vUV + vec2( 0.0,      uTexel.y));
+  float s  = CURR(vUV - vec2( 0.0,      uTexel.y));
+  float e  = CURR(vUV + vec2( uTexel.x, 0.0     ));
+  float w  = CURR(vUV - vec2( uTexel.x, 0.0     ));
+  float nw = CURR(vUV + vec2(-uTexel.x, uTexel.y));
+  float ne = CURR(vUV + vec2( uTexel.x, uTexel.y));
+  float sw = CURR(vUV + vec2(-uTexel.x,-uTexel.y));
+  float se = CURR(vUV + vec2( uTexel.x,-uTexel.y));
 
-  // Enhanced Wave Equation with Momentum
-  // Using a slightly higher weight for neighbors to increase propagation speed
-  float next = (n + s + e + w) * 0.5 - prev;
+  // Weighted neighbors (Direct: 0.5, Diagonal: 0.25)
+  float neighbors = (n + s + e + w) * 0.5 + (nw + ne + sw + se) * 0.25;
+  
+  // 2-D wave equation with high-order damping
+  // Damp factor (0.995) controls how long ripples last
+  float next = (neighbors * 0.5 - prev) * 0.995;
 
-  // Non-linear damping: High-frequency jitters are smoothed out more aggressively 
-  // than large, slow swells.
-  float diff = abs(next - curr);
-  float damping = mix(0.996, 0.985, clamp(diff * 5.0, 0.0, 1.0));
-  next *= damping;
+  // --- Dynamic Disturbance ---
+  float dist = length(vUV - uMouse);
+  
+  // Velocity-based ripple (Gaussian-like profile)
+  float ripple = exp(-pow(dist / uRadius, 2.0));
+  next -= ripple * uStrength;
 
-  // Soft-Sponge Layer: Eliminates ugly boundary reflections
-  vec2 distToEdge = min(vUV, 1.0 - vUV);
-  float edgeDist = min(distToEdge.x, distToEdge.y);
-  next *= smoothstep(0.0, 0.08, edgeDist);
+  // --- Boundary Absorption (Sponge Layer) ---
+  // Gradually kills waves near edges to prevent ugly grid-bouncing
+  float margin = 0.05;
+  float softEdge = smoothstep(0.0, margin, vUV.x) * smoothstep(1.0, 1.0 - margin, vUV.x) * smoothstep(0.0, margin, vUV.y) * smoothstep(1.0, 1.0 - margin, vUV.y);
+  next *= mix(0.95, 1.0, softEdge);
 
-  // Interaction Logic: Disturbance from mouse/touch
-  float d = length(vUV - uMouse);
-  if (uStrength > 0.0) {
-    // Soft Gaussian-like drop shape
-    float force = exp(-pow(d / uRadius, 2.0)) * uStrength;
-    next -= force;
-  }
-
-  // Clamp to prevent numerical explosion
   next = clamp(next, -1.0, 1.0);
 
   #ifdef UINT8_MODE
