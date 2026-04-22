@@ -3,60 +3,51 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Fixed Physics Water & Boat</title>
+<title>Ultimate iPad Water Simulation</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body, html { 
     width:100%; height:100%; overflow:hidden; 
-    background:#010a10; position: fixed; touch-action: none;
-    -webkit-user-select: none; user-select: none;
+    background:#000; position: fixed; touch-action: none;
   }
-  canvas { display:block; width:100vw; height:100vh; touch-action: none; }
+  canvas { display:block; width:100vw; height:100vh; }
   
-  #ui-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+  #ui { position: fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; }
+  .control-group { position: absolute; pointer-events:auto; display:flex; flex-direction:column; gap:15px; }
   
   #wheel-container {
-    position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
-    width: 200px; height: 200px; pointer-events: auto;
-    background: rgba(20,30,40,0.85); border: 4px solid rgba(255,255,255,0.2);
-    border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    backdrop-filter: blur(15px); box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    bottom: 60px; left: 50%; transform: translateX(-50%);
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, #222 0%, #000 100%);
+    border: 5px solid #444; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 15px 50px rgba(0,0,0,0.8);
   }
+  #wheel { width: 180px; height: 180px; border: 15px solid #333; border-radius: 50%; position: relative; }
+  #wheel::after { content:''; position:absolute; top:-20px; left:50%; transform:translateX(-50%); width:25px; height:35px; background:#ffcf00; border-radius:4px; }
 
-  #wheel {
-    width: 160px; height: 160px; border: 12px solid #444;
-    border-radius: 50%; position: relative; transition: transform 0.05s ease-out;
-  }
-  
-  #wheel::after {
-    content: ''; position: absolute; top: -15px; left: 50%;
-    transform: translateX(-50%); width: 20px; height: 30px;
-    background: #ff3e3e; border-radius: 4px;
-  }
+  #throttle-container { bottom: 60px; right: 40px; width: 80px; height: 220px; background: rgba(0,0,0,0.5); border-radius: 40px; border: 2px solid #333; overflow: hidden; }
+  #throttle-fill { position:absolute; bottom:0; width:100%; background: linear-gradient(to top, #00ff88, #00ccff); transition: height 0.1s; }
 
-  #btn-spawn {
-    position: absolute; top: 50px; right: 30px;
-    padding: 15px 30px; background: #007aff; color: white;
-    border: none; border-radius: 30px; pointer-events: auto;
-    font-weight: bold; box-shadow: 0 5px 15px rgba(0,122,255,0.4);
-  }
+  #btn-reset { top: 50px; right: 30px; padding: 15px 25px; background: #fff; color: #000; border-radius: 30px; font-weight: 800; border: none; box-shadow: 0 5px 20px rgba(0,0,0,0.5); }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="ui-layer">
-  <button id="btn-spawn">RESET BOAT</button>
-  <div id="wheel-container"><div id="wheel"></div></div>
+<div id="ui">
+  <button id="btn-reset" class="control-group">RESET BOAT</button>
+  <div id="wheel-container" class="control-group"><div id="wheel"></div></div>
+  <div id="throttle-container" class="control-group"><div id="throttle-fill" style="height:0%"></div></div>
 </div>
 
 <script>
 'use strict';
 
 const canvas = document.getElementById('c');
-const gl = canvas.getContext('webgl', { antialias: false, alpha: false, preserveDrawingBuffer: false });
+const gl = canvas.getContext('webgl', { antialias: true, alpha: false });
 
 const DPR = Math.min(window.devicePixelRatio || 1, 2);
-let CW, CH, W, H;
+let W, H, CW, CH;
 function resize() {
     CW = window.innerWidth; CH = window.innerHeight;
     W = Math.round(CW * DPR); H = Math.round(CH * DPR);
@@ -69,9 +60,9 @@ const S = 512;
 const ext = gl.getExtension('OES_texture_half_float') || gl.getExtension('OES_texture_float');
 const FTYPE = ext ? (ext.HALF_FLOAT_OES || gl.FLOAT) : gl.UNSIGNED_BYTE;
 gl.getExtension('OES_texture_half_float_linear');
-gl.getExtension('OES_texture_float_linear');
 
 const VERT = `attribute vec2 aPos; varying vec2 vUV; void main() { vUV = aPos*0.5+0.5; gl_Position = vec4(aPos,0.,1.); }`;
+
 const SIM_FRAG = `
 precision highp float;
 varying vec2 vUV;
@@ -80,25 +71,27 @@ uniform vec2 uTexel;
 uniform vec4 uBoat; // x, y, angle, speed
 
 void main() {
-    vec4 s = texture2D(uState, vUV);
-    float h = s.r * 2.0 - 1.0;
-    float hp = s.g * 2.0 - 1.0;
+    vec4 data = texture2D(uState, vUV);
+    float h = data.r * 2.0 - 1.0;
+    float hp = data.g * 2.0 - 1.0;
+    float foam = data.b;
 
     float n = texture2D(uState, vUV + vec2(0., uTexel.y)).r * 2. - 1.;
-    float so = texture2D(uState, vUV - vec2(0., uTexel.y)).r * 2. - 1.;
+    float s = texture2D(uState, vUV - vec2(0., uTexel.y)).r * 2. - 1.;
     float e = texture2D(uState, vUV + vec2(uTexel.x, 0.)).r * 2. - 1.;
     float w = texture2D(uState, vUV - vec2(uTexel.x, 0.)).r * 2. - 1.;
 
-    float nextH = (n + so + e + w) * 0.5 - hp;
-    nextH *= 0.992;
+    float nextH = (n + s + e + w) * 0.5 - hp;
+    nextH *= 0.994;
 
-    // Wake Injection
-    float dist = length(vUV - uBoat.xy);
-    if(uBoat.w > 0.0) {
-        nextH += smoothstep(0.04, 0.0, dist) * uBoat.w * 5.0;
-    }
+    float d = length(vUV - uBoat.xy);
+    float wakeStr = smoothstep(0.05, 0.0, d) * uBoat.w * 8.0;
+    nextH += wakeStr;
 
-    gl_FragColor = vec4(nextH * 0.5 + 0.5, s.r, 0., 1.);
+    // Foam simulation (decay and movement)
+    float nextFoam = foam * 0.98 + wakeStr * 2.0;
+
+    gl_FragColor = vec4(nextH * 0.5 + 0.5, data.r, nextFoam, 1.0);
 }`;
 
 const REN_FRAG = `
@@ -107,33 +100,55 @@ varying vec2 vUV;
 uniform sampler2D uWater;
 uniform vec4 uBoat;
 uniform float uAspect;
+uniform float uTime;
 
 void main() {
     vec2 texel = vec2(1.0/512.0);
-    float h = texture2D(uWater, vUV).r * 2.0 - 1.0;
+    vec4 data = texture2D(uWater, vUV);
+    float h = data.r * 2.0 - 1.0;
+    float foam = data.b;
+    
+    // Calculate Normals
     float hR = texture2D(uWater, vUV + vec2(texel.x, 0.)).r * 2.0 - 1.0;
     float hU = texture2D(uWater, vUV + vec2(0., texel.y)).r * 2.0 - 1.0;
+    vec3 normal = normalize(vec3(h - hR, h - hU, 0.08));
+
+    // Sun & Lighting
+    vec3 sunDir = normalize(vec3(0.5, 0.7, 1.0));
+    float fresnel = pow(1.0 - dot(normal, vec3(0,0,1)), 5.0);
     
-    vec3 normal = normalize(vec3(h - hR, h - hU, 0.1));
+    // Sub-surface Scattering (Glowing water peaks)
+    vec3 sss = vec3(0.0, 0.6, 0.5) * pow(max(0.0, h), 2.0) * 0.5;
     
-    // Water Color
-    float fresnel = pow(1.0 - normal.z, 4.0);
-    vec3 col = mix(vec3(0.02, 0.15, 0.25), vec3(0.5, 0.7, 0.9), fresnel + 0.1);
+    // Deep water color
+    vec3 deep = vec3(0.01, 0.05, 0.1);
+    vec3 shallow = vec3(0.1, 0.4, 0.5);
+    vec3 waterBase = mix(deep, shallow, fresnel + 0.1) + sss;
     
-    // 3D Boat
+    // Sky Reflection
+    vec3 sky = mix(waterBase, vec3(0.7, 0.85, 1.0), fresnel * 0.6);
+    
+    // Specular Glints
+    float spec = pow(max(0.0, dot(reflect(-sunDir, normal), vec3(0,0,1))), 100.0);
+    vec3 col = sky + spec * 0.8;
+    
+    // Dynamic Foam
+    col = mix(col, vec3(0.9, 0.95, 1.0), clamp(foam * 0.5, 0.0, 1.0));
+
+    // 3D Luxury Boat Rendering
     vec2 bP = vUV - uBoat.xy;
-    float cosA = cos(-uBoat.z), sinA = sin(-uBoat.z);
-    vec2 rUV = vec2(bP.x * cosA - bP.y * sinA, bP.x * sinA + bP.y * cosA);
+    float c = cos(-uBoat.z), s = sin(-uBoat.z);
+    vec2 rUV = vec2(bP.x * c - bP.y * s, bP.x * s + bP.y * c);
     rUV.x *= uAspect;
-    
-    // Hull shape
-    float hull = max(abs(rUV.x) - 0.015, abs(rUV.y) - 0.04 + abs(rUV.x));
+
+    float hull = max(abs(rUV.x) - 0.012, abs(rUV.y) - 0.04 + abs(rUV.x));
     if(hull < 0.0) {
-        vec3 hullCol = mix(vec3(0.8, 0.8, 0.8), vec3(0.1, 0.1, 0.15), smoothstep(-0.015, 0.0, hull));
-        col = mix(col, hullCol, 1.0);
+        vec3 hullCol = mix(vec3(0.2, 0.1, 0.05), vec3(0.8, 0.8, 0.9), step(abs(rUV.x), 0.005)); // Wood & Chrome
+        float hullShade = dot(normalize(vec3(rUV.x, rUV.y, 0.1)), sunDir);
+        col = mix(col, hullCol * (0.5 + hullShade), 1.0);
     }
 
-    gl_FragColor = vec4(col, 1.0);
+    gl_FragColor = vec4(pow(col, vec3(0.9)), 1.0);
 }`;
 
 function createProg(vs, fs) {
@@ -161,43 +176,40 @@ let fbo1 = createFBO(), fbo2 = createFBO();
 const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
 gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
 
-// Boat State
-let boat = { x: 0.5, y: 0.5, angle: 1.57, targetAngle: 1.57, speed: 0, active: false };
+// Boat Physics
+let boat = { x: 0.5, y: 0.5, angle: 1.57, targetAngle: 1.57, speed: 0, power: 0 };
 const wheel = document.getElementById('wheel');
-
-document.getElementById('wheel-container').addEventListener('touchstart', (e) => {
-    boat.active = true;
-}, {passive: false});
+const tFill = document.getElementById('throttle-fill');
 
 window.addEventListener('touchmove', (e) => {
-    if(!boat.active) return;
-    const t = e.touches[0];
-    const rect = document.getElementById('wheel-container').getBoundingClientRect();
-    const cx = rect.left + rect.width/2, cy = rect.top + rect.height/2;
-    boat.targetAngle = Math.atan2(cy - t.clientY, t.clientX - cx);
-    wheel.style.transform = `rotate(${-boat.targetAngle + 1.57}rad)`;
-    boat.speed = 0.004;
+    e.preventDefault();
+    for(let t of e.touches) {
+        if(t.clientX < CW * 0.7) { // Wheel Area
+            const rect = document.getElementById('wheel-container').getBoundingClientRect();
+            const cx = rect.left + rect.width/2, cy = rect.top + rect.height/2;
+            boat.targetAngle = Math.atan2(cy - t.clientY, t.clientX - cx);
+            wheel.style.transform = `rotate(${-boat.targetAngle + 1.57}rad)`;
+        } else { // Throttle Area
+            let p = 1.0 - (t.clientY - (CH - 280)) / 220;
+            boat.power = Math.max(0, Math.min(1, p));
+            tFill.style.height = (boat.power * 100) + "%";
+        }
+    }
 }, {passive: false});
 
-window.addEventListener('touchend', () => { boat.speed = 0; });
-document.getElementById('btn-spawn').onclick = () => { boat.x = 0.5; boat.y = 0.5; };
+document.getElementById('btn-reset').onclick = () => { boat.x = 0.5; boat.y = 0.5; boat.power = 0; tFill.style.height = "0%"; };
 
-function loop() {
-    // Smooth angle movement to stop the "tweaking"
+function loop(time) {
     let diff = boat.targetAngle - boat.angle;
     while (diff < -Math.PI) diff += Math.PI * 2;
     while (diff > Math.PI) diff -= Math.PI * 2;
-    boat.angle += diff * 0.1;
+    boat.angle += diff * 0.08;
 
-    if(boat.speed > 0) {
-        boat.x += Math.cos(boat.angle) * boat.speed;
-        boat.y -= Math.sin(boat.angle) * boat.speed;
-        // Wrap
-        if(boat.x < 0) boat.x = 1; if(boat.x > 1) boat.x = 0;
-        if(boat.y < 0) boat.y = 1; if(boat.y > 1) boat.y = 0;
-    }
+    boat.speed = boat.speed * 0.95 + (boat.power * 0.006) * 0.05;
+    boat.x += Math.cos(boat.angle) * boat.speed;
+    boat.y -= Math.sin(boat.angle) * boat.speed;
+    boat.x = (boat.x + 1.1) % 1.2 - 0.1; boat.y = (boat.y + 1.1) % 1.2 - 0.1;
 
-    // Physics
     gl.useProgram(simP);
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo2.f);
     gl.viewport(0,0,S,S);
@@ -210,18 +222,18 @@ function loop() {
 
     let tmp = fbo1; fbo1 = fbo2; fbo2 = tmp;
 
-    // Render
     gl.useProgram(renP);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, W, H);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fbo1.t);
     gl.uniform4f(gl.getUniformLocation(renP, "uBoat"), boat.x, boat.y, boat.angle, boat.speed);
     gl.uniform1f(gl.getUniformLocation(renP, "uAspect"), CW/CH);
+    gl.uniform1f(gl.getUniformLocation(renP, "uTime"), time * 0.001);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
     requestAnimationFrame(loop);
 }
-loop();
+loop(0);
 </script>
 </body>
 </html>
