@@ -136,7 +136,6 @@ uniform float uRadius;
 uniform float uStrength;
 
 #ifdef UINT8_MODE
-  // 16-bit packing for mobile stability
   vec2 enc16(float v) {
     float t = clamp(v * 0.5 + 0.5, 0.0, 0.99999);
     float t255 = t * 255.0;
@@ -151,47 +150,57 @@ uniform float uStrength;
 #endif
 
 void main() {
-  // Current state retrieval
-  float height = CURR(vUV);
-  float prevHeight = PREV(vUV);
+    float h = CURR(vUV);
+    float p = PREV(vUV);
 
-  // 1. Five-point stencil (Stable Laplacian)
-  // We use a specific weight (0.5) to ensure we don't exceed the CFL stability limit
-  float n = CURR(vUV + vec2(0.0, uTexel.y));
-  float s = CURR(vUV - vec2(0.0, uTexel.y));
-  float e = CURR(vUV + vec2(uTexel.x, 0.0));
-  float w = CURR(vUV - vec2(uTexel.x, 0.0));
+    // 1. STABILIZED 9-POINT LAPLACIAN
+    // We sample a 3x3 grid to calculate the surface curvature.
+    // This allows ripples to be perfectly circular instead of diamond-shaped.
+    vec2 tx = uTexel;
+    float n  = CURR(vUV + vec2( 0.0,  tx.y));
+    float s  = CURR(vUV - vec2( 0.0,  tx.y));
+    float e  = CURR(vUV + vec2( tx.x, 0.0));
+    float w  = CURR(vUV - vec2(-tx.x, 0.0));
+    float nw = CURR(vUV + vec2(-tx.x, tx.y));
+    float ne = CURR(vUV + vec2( tx.x, tx.y));
+    float sw = CURR(vUV + vec2(-tx.x,-tx.y));
+    float se = CURR(vUV + vec2( tx.x,-tx.y));
 
-  // 2. Wave Equation Calculation
-  // 'next' is calculated by accelerating the height based on the local curvature
-  float velocity = height - prevHeight;
-  float pressure = (n + s + e + w) * 0.5 - height * 2.0;
-  
-  // 0.99 damping ratio: keeps waves lively but prevents feedback loops
-  float next = height + velocity + pressure * 0.48;
-  next *= 0.992; 
+    // Weighted average of neighbors (4 cardinals at 0.5, 4 diagonals at 0.25)
+    float laplacian = (n + s + e + w) * 0.5 + (nw + ne + sw + se) * 0.25 - h * 3.0;
 
-  // 3. Smooth Boundary Damping (The "Sponge Layer")
-  // Prevents waves from reflecting off the edges and causing "noise"
-  vec2 boundary = smoothstep(0.0, 0.1, vUV) * smoothstep(1.0, 0.9, vUV);
-  next *= boundary.x * boundary.y;
+    // 2. DISPERSIVE WAVE DYNAMICS
+    // We use a damping factor (0.994) to simulate viscosity.
+    // The 0.46 multiplier ensures we stay below the stability limit (CFL condition).
+    float velocity = (h - p) * 0.994;
+    float next = h + velocity + laplacian * 0.46;
 
-  // 4. Input Disturbance
-  float d = length(vUV - uMouse);
-  if (uStrength > 0.0) {
-    // Gaussian falloff for the touch point
-    float force = exp(-pow(d / uRadius, 2.0));
-    next -= force * uStrength * 0.5;
-  }
+    // 3. INTERNAL TENSION (High-pass filter)
+    // This prevents "blobs" from forming by slightly pulling 
+    // the water back to a neutral state (0.0).
+    next -= next * 0.002;
 
-  // Final Output
-  next = clamp(next, -1.0, 1.0);
+    // 4. DYNAMIC INTERACTION
+    float d = length(vUV - uMouse);
+    if (uStrength > 0.0) {
+        // Soft Gaussian splash profile
+        float splash = exp(-pow(d / uRadius, 2.0));
+        next -= splash * uStrength;
+    }
 
-  #ifdef UINT8_MODE
-    gl_FragColor = vec4(enc16(next), enc16(height));
-  #else
-    gl_FragColor = vec4(next * 0.5 + 0.5, height * 0.5 + 0.5, 0.0, 1.0);
-  #endif
+    // 5. EDGE ABSORPTION (Sponge Layer)
+    // Kills kinetic energy at the borders to prevent "infinite bouncing"
+    float margin = 0.06;
+    vec2 edge = smoothstep(0.0, margin, vUV) * smoothstep(1.0, 1.0 - margin, vUV);
+    next *= edge.x * edge.y;
+
+    next = clamp(next, -1.0, 1.0);
+
+    #ifdef UINT8_MODE
+        gl_FragColor = vec4(enc16(next), enc16(h));
+    #else
+        gl_FragColor = vec4(next * 0.5 + 0.5, h * 0.5 + 0.5, 0.0, 1.0);
+    #endif
 }`;
 
 const RENDER_FRAG = (UINT8 ? '#define UINT8_MODE\n' : '') + `
