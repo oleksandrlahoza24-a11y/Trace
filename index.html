@@ -3,30 +3,66 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Ultra Real Water - iPad Edition</title>
+<title>Pro Water Sim - iPad</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { 
+  body, html { 
     width:100%; height:100%; overflow:hidden; 
-    background:#000; position: fixed;
+    background:#000; position: fixed; touch-action: none;
   }
-  canvas { 
-    display:block; width:100vw; height:100vh; 
-    touch-action:none; -webkit-user-select:none;
+  canvas { display:block; width:100vw; height:100vh; }
+  
+  #ui-layer {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto;
+  }
+  
+  #wheel-container {
+    position: absolute; bottom: 40px; left: 40px;
+    width: 180px; height: 180px;
+    pointer-events: auto;
+    background: rgba(255,255,255,0.1);
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(5px);
+  }
+
+  #wheel {
+    width: 150px; height: 150px;
+    border: 8px dashed #aaa;
+    border-radius: 50%;
+    transition: transform 0.1s linear;
+  }
+
+  #btn-spawn {
+    position: absolute; top: 40px; right: 40px;
+    padding: 15px 30px; background: rgba(0, 100, 200, 0.6);
+    color: white; border: 1px solid rgba(255,255,255,0.5);
+    border-radius: 30px; pointer-events: auto;
+    font-weight: bold; backdrop-filter: blur(10px);
   }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
+<div id="ui-layer">
+  <button id="btn-spawn">SPAWN BOAT</button>
+  <div id="wheel-container">
+    <div id="wheel"></div>
+  </div>
+</div>
+
 <script>
 'use strict';
 
 const canvas = document.getElementById('c');
-const gl = canvas.getContext('webgl', { antialias: false, alpha: false, depth: false });
+const gl = canvas.getContext('webgl', { antialias: false, alpha: false });
+const wheelEl = document.getElementById('wheel');
+const btnSpawn = document.getElementById('btn-spawn');
 
 const DPR = Math.min(window.devicePixelRatio || 1, 2);
 let W, H, CW, CH;
-
 function resize() {
   CW = window.innerWidth; CH = window.innerHeight;
   W = Math.round(CW * DPR); H = Math.round(CH * DPR);
@@ -35,12 +71,35 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-// iPad specific float texture support
-const extHalf = gl.getExtension('OES_texture_half_float');
-const extHalfLin = gl.getExtension('OES_texture_half_float_linear');
-const FTYPE = (extHalf) ? extHalf.HALF_FLOAT_OES : gl.UNSIGNED_BYTE;
+// ─── BOAT LOGIC ───────────────────────────────────────────
+let boat = { active: false, x: 0.5, y: 0.5, angle: 0, speed: 0, targetAngle: 0 };
+btnSpawn.onclick = () => { boat.active = true; boat.x = 0.5; boat.y = 0.5; };
 
+let isSteering = false;
+let lastAngle = 0;
+document.getElementById('wheel-container').addEventListener('touchstart', (e) => {
+    isSteering = true;
+}, {passive: false});
+
+window.addEventListener('touchmove', (e) => {
+    if(!isSteering) return;
+    const t = e.touches[0];
+    const rect = document.getElementById('wheel-container').getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const ang = Math.atan2(t.clientY - centerY, t.clientX - centerX);
+    boat.angle = ang;
+    wheelEl.style.transform = `rotate(${ang}rad)`;
+    boat.speed = 0.004; // Constant forward speed when steering
+}, {passive: false});
+
+window.addEventListener('touchend', () => { isSteering = false; boat.speed *= 0.95; });
+
+// ─── SHADERS ──────────────────────────────────────────────
 const S = 512;
+const extHalf = gl.getExtension('OES_texture_half_float');
+const FTYPE = extHalf ? extHalf.HALF_FLOAT_OES : gl.UNSIGNED_BYTE;
+
 const VERT = `attribute vec2 aPos; varying vec2 vUV; void main() { vUV = aPos*0.5+0.5; gl_Position = vec4(aPos,0.,1.); }`;
 
 const SIM_FRAG = `
@@ -48,23 +107,22 @@ precision highp float;
 varying vec2 vUV;
 uniform sampler2D uState;
 uniform vec2 uTexel;
-uniform vec3 uMouse; 
+uniform vec4 uForce; // x, y, active, strength
 
 void main() {
     vec4 state = texture2D(uState, vUV);
     float curr = state.r * 2.0 - 1.0;
     float prev = state.g * 2.0 - 1.0;
-
     float n = texture2D(uState, vUV + vec2(0.0, uTexel.y)).r * 2.0 - 1.0;
     float s = texture2D(uState, vUV - vec2(0.0, uTexel.y)).r * 2.0 - 1.0;
     float e = texture2D(uState, vUV + vec2(uTexel.x, 0.0)).r * 2.0 - 1.0;
     float w = texture2D(uState, vUV - vec2(uTexel.x, 0.0)).r * 2.0 - 1.0;
 
     float next = (n + s + e + w) * 0.5 - prev;
-    next *= 0.992;
+    next *= 0.994;
 
-    float d = length(vUV - uMouse.xy);
-    next -= smoothstep(0.06, 0.0, d) * uMouse.z;
+    float d = length(vUV - uForce.xy);
+    if(uForce.z > 0.5) next -= smoothstep(0.06, 0.0, d) * uForce.w;
 
     gl_FragColor = vec4(clamp(next * 0.5 + 0.5, 0.0, 1.0), state.r, 0.0, 1.0);
 }`;
@@ -75,39 +133,38 @@ varying vec2 vUV;
 uniform sampler2D uWater;
 uniform vec2 uTexel;
 uniform float uAspect;
-
-float hash(vec2 p) { return fract(sin(dot(p, vec2(12.7, 31.1))) * 43758.5); }
-float noise(vec2 p) {
-    vec2 i = floor(p), f = fract(p);
-    f = f*f*(3.0-2.0*f);
-    return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y);
-}
+uniform vec4 uBoat; // x, y, angle, active
 
 void main() {
     float h = texture2D(uWater, vUV).r * 2.0 - 1.0;
     float hR = texture2D(uWater, vUV + vec2(uTexel.x, 0.0)).r * 2.0 - 1.0;
     float hU = texture2D(uWater, vUV + vec2(0.0, uTexel.y)).r * 2.0 - 1.0;
     
-    vec3 normal = normalize(vec3(h - hR, h - hU, 0.1));
-    vec2 refrUV = vUV + normal.xy * 0.04;
+    vec3 normal = normalize(vec3(h - hR, h - hU, 0.12));
     
-    // Seabed Texture
-    float n = noise(refrUV * 10.0 * vec2(uAspect, 1.0));
-    vec3 seabed = mix(vec3(0.3, 0.25, 0.1), vec3(0.5, 0.45, 0.3), n);
+    // Refracted Seabed
+    vec2 refrUV = vUV + normal.xy * 0.05;
+    vec3 seabed = mix(vec3(0.2, 0.4, 0.5), vec3(0.6, 0.5, 0.3), 0.4);
     
-    // Lighting
-    float fresnel = pow(1.0 - normal.z, 3.0);
-    vec3 skyCol = mix(vec3(0.02, 0.1, 0.2), vec3(0.5, 0.8, 1.0), fresnel);
-    
-    vec3 col = mix(seabed * vec3(0.4, 0.8, 0.9), skyCol, fresnel + 0.2);
-    
-    // Caustics shimmer
-    float caust = pow(max(0.0, 1.0 - abs(h)*8.0), 3.0);
-    col += caust * 0.2;
+    // Boat Rendering
+    float isBoat = 0.0;
+    if(uBoat.w > 0.5) {
+        vec2 bPos = vUV - uBoat.xy;
+        float cosA = cos(-uBoat.z); float sinA = sin(-uBoat.z);
+        vec2 rotUV = vec2(bPos.x * cosA - bPos.y * sinA, bPos.x * sinA + bPos.y * cosA);
+        if(abs(rotUV.x) < 0.015 && abs(rotUV.y) < 0.04) isBoat = 1.0;
+    }
 
+    float fresnel = pow(1.0 - normal.z, 4.0);
+    vec3 sky = mix(vec3(0.1, 0.2, 0.4), vec3(0.8, 0.9, 1.0), fresnel);
+    vec3 col = mix(seabed, sky, fresnel + 0.1);
+    
+    if(isBoat > 0.5) col = vec3(0.1); // Simple dark boat silhouette
+    
     gl_FragColor = vec4(col, 1.0);
 }`;
 
+// ─── SETUP ───────────────────────────────────────────────
 function mkProg(vs, fs) {
     const p = gl.createProgram();
     const s1 = gl.createShader(gl.VERTEX_SHADER); gl.shaderSource(s1, vs); gl.compileShader(s1);
@@ -118,73 +175,61 @@ function mkProg(vs, fs) {
 
 const simProg = mkProg(VERT, SIM_FRAG);
 const renProg = mkProg(VERT, REN_FRAG);
-
-const uSim = { state: gl.getUniformLocation(simProg, 'uState'), texel: gl.getUniformLocation(simProg, 'uTexel'), mouse: gl.getUniformLocation(simProg, 'uMouse') };
-const uRen = { water: gl.getUniformLocation(renProg, 'uWater'), texel: gl.getUniformLocation(renProg, 'uTexel'), aspect: gl.getUniformLocation(renProg, 'uAspect') };
-
-const buf = gl.createBuffer();
-gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
+const uSim = { force: gl.getUniformLocation(simProg, 'uForce') };
+const uRen = { boat: gl.getUniformLocation(renProg, 'uBoat'), aspect: gl.getUniformLocation(renProg, 'uAspect') };
 
 function mkFBO() {
     const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, S, S, 0, gl.RGBA, FTYPE, null);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
     return { t, f };
 }
-
 let fbo1 = mkFBO(), fbo2 = mkFBO();
-const ptr = { x: 0.5, y: 0.5, active: 0 };
 
-const handleTouch = (e) => {
-    e.preventDefault();
-    const t = e.touches[0];
-    ptr.x = t.clientX / CW;
-    ptr.y = 1.0 - t.clientY / CH;
-    ptr.active = 1;
-};
-
-canvas.addEventListener('touchstart', handleTouch, { passive: false });
-canvas.addEventListener('touchmove', handleTouch, { passive: false });
-canvas.addEventListener('touchend', () => { ptr.active = 0; }, { passive: false });
-
-// Mouse support just in case
-canvas.addEventListener('mousedown', (e) => { ptr.active = 1; ptr.x = e.clientX/CW; ptr.y = 1.0-e.clientY/CH; });
-canvas.addEventListener('mousemove', (e) => { if(ptr.active) { ptr.x = e.clientX/CW; ptr.y = 1.0-e.clientY/CH; }});
-window.addEventListener('mouseup', () => ptr.active = 0);
+const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
 
 function frame() {
+    // Boat Physics
+    if(boat.active) {
+        boat.x += Math.cos(boat.angle) * boat.speed * (CH/CW);
+        boat.y -= Math.sin(boat.angle) * boat.speed;
+        // Keep in bounds
+        boat.x = Math.max(0.1, Math.min(0.9, boat.x));
+        boat.y = Math.max(0.1, Math.min(0.9, boat.y));
+    }
+
+    // Step Simulation
     gl.useProgram(simProg);
     gl.viewport(0, 0, S, S);
     const loc = gl.getAttribLocation(simProg, 'aPos');
     gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-    
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo2.f);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fbo1.t);
-    gl.uniform1i(uSim.state, 0);
-    gl.uniform2f(uSim.texel, 1/S, 1/S);
-    gl.uniform3f(uSim.mouse, ptr.x, ptr.y, ptr.active ? 0.3 : 0.0);
+    gl.uniform2f(gl.getUniformLocation(simProg, 'uTexel'), 1/S, 1/S);
+    gl.uniform4f(uSim.force, boat.x, boat.y, (boat.active && boat.speed > 0.001) ? 1.0 : 0.0, 0.1);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    
     let tmp = fbo1; fbo1 = fbo2; fbo2 = tmp;
 
+    // Render
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, W, H);
     gl.useProgram(renProg);
-    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fbo1.t);
-    gl.uniform1i(uRen.water, 0);
-    gl.uniform2f(uRen.texel, 1/S, 1/S);
+    gl.uniform1i(gl.getUniformLocation(renProg, 'uWater'), 0);
+    gl.uniform2f(gl.getUniformLocation(renProg, 'uTexel'), 1/S, 1/S);
     gl.uniform1f(uRen.aspect, CW/CH);
+    gl.uniform4f(uRen.boat, boat.x, boat.y, boat.angle, boat.active ? 1.0 : 0.0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
     requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+
+// Disable iPad gestures
+document.addEventListener('gesturestart', (e) => e.preventDefault());
 </script>
 </body>
 </html>
