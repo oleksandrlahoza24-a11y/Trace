@@ -131,20 +131,19 @@ varying vec2  vUV;
 uniform sampler2D uState;
 uniform vec2  uTexel;
 uniform vec2  uMouse;
+uniform vec2  uMouseVel; // New: Pass mouse velocity for realistic wakes
 uniform float uRadius;
 uniform float uStrength;
+uniform float uTime;
 
+// ── HIGH-PRECISION ENCODING ──────────────────────────────────────────────
 #ifdef UINT8_MODE
-  // High-precision 16-bit packing into RG and BA channels
   vec2 enc16(float v) {
-    v = clamp(v * 0.5 + 0.5, 0.0, 1.0);
-    float v1 = floor(v * 255.0);
-    float v2 = fract(v * 255.0);
-    return vec2(v1 / 255.0, v2);
+    float t = clamp(v * 0.5 + 0.5, 0.0, 0.99999);
+    float t255 = t * 255.0;
+    return vec2(floor(t255) / 255.0, fract(t255));
   }
-  float dec16(vec2 v) {
-    return (v.x + v.y / 255.0) * 2.0 - 1.0;
-  }
+  float dec16(vec2 v) { return (v.x + v.y / 255.0) * 2.0 - 1.0; }
   float CURR(vec2 uv) { return dec16(texture2D(uState, uv).rg); }
   float PREV(vec2 uv) { return dec16(texture2D(uState, uv).ba); }
 #else
@@ -153,43 +152,50 @@ uniform float uStrength;
 #endif
 
 void main() {
-  // ── 9-TAP ISOTROPIC STENCIL ─────────────────────────────────────────────
-  // Standard 4-tap creates diamond waves. 9-tap creates circular waves.
-  float n  = CURR(vUV + vec2(0.0, uTexel.y));
-  float s  = CURR(vUV - vec2(0.0, uTexel.y));
-  float e  = CURR(vUV + vec2(uTexel.x, 0.0));
-  float w  = CURR(vUV - vec2(uTexel.x, 0.0));
+  vec2 uv = vUV;
   
-  float nw = CURR(vUV + vec2(-uTexel.x,  uTexel.y));
-  float ne = CURR(vUV + vec2( uTexel.x,  uTexel.y));
-  float sw = CURR(vUV + vec2(-uTexel.x, -uTexel.y));
-  float se = CURR(vUV + vec2( uTexel.x, -uTexel.y));
+  // Fetching the 8-neighbor kernel for "Perfect Circular" propagation
+  // Center
+  float curr = CURR(uv);
+  float prev = PREV(uv);
 
-  float curr = CURR(vUV);
-  float prev = PREV(vUV);
+  // Orthogonal neighbors (Weight: 0.5)
+  float n = CURR(uv + vec2(0.0, uTexel.y));
+  float s = CURR(uv - vec2(0.0, uTexel.y));
+  float e = CURR(uv + vec2(uTexel.x, 0.0));
+  float w = CURR(uv - vec2(uTexel.x, 0.0));
+  
+  // Diagonal neighbors (Weight: 0.25 - helps prevent pixelation/aliasing)
+  float nw = CURR(uv + vec2(-uTexel.x,  uTexel.y));
+  float ne = CURR(uv + vec2( uTexel.x,  uTexel.y));
+  float sw = CURR(uv + vec2(-uTexel.x, -uTexel.y));
+  float se = CURR(uv + vec2( uTexel.x, -uTexel.y));
 
-  // ── WAVE EQUATION ───────────────────────────────────────────────────────
-  // Weights: 0.5 for direct neighbors, 0.25 for diagonals. 
-  // This is mathematically "isotropic," meaning speed is the same in all directions.
-  float neighbors = (n + s + e + w) * 0.5 + (nw + ne + sw + se) * 0.25;
-  float next = (neighbors * 0.5 - prev) * 0.996; // 0.996 = Global Damping
+  // ── ADVANCED WAVE EQUATION ──────────────────────────────────────────────
+  // We use a weighted Laplacian to ensure waves don't look "square" on large canvases
+  float laplacian = (n + s + e + w) * 0.5 + (nw + ne + sw + se) * 0.25 - 3.0 * curr;
+  
+  // Numerical Integration (Verlet-style)
+  float next = (2.0 * curr - prev) + laplacian * 0.5;
+  
+  // Dynamic Damping (High-frequency ripples die faster, looks more realistic)
+  next *= 0.992 + (abs(curr - prev) * 0.005);
 
-  // ── ANTI-PIXELATION / HIGH-FREQ FILTER ──────────────────────────────────
-  // Low-pass filter to prevent "sparkle" noise on massive canvases
-  next = mix(next, (n+s+e+w)*0.25, 0.01);
+  // ── ORGANIC SPONGE BOUNDARIES ──────────────────────────────────────────
+  // Smoother edge absorption to prevent "bouncing" off the canvas walls
+  float distToEdge = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
+  float sponge = smoothstep(0.0, 0.05, distToEdge);
+  next *= mix(0.9, 1.0, sponge);
 
-  // ── SPONGE LAYER (Adaptive Border Damping) ──────────────────────────────
-  // Softens reflections at the edges of the "massive" canvas
-  vec2 border = smoothstep(0.0, 0.15, min(vUV, 1.0 - vUV));
-  next *= border.x * border.y;
+  // ── INTERACTIVE WAKE ────────────────────────────────────────────────────
+  float d = length((uv - uMouse) * vec2(uTexel.y / uTexel.x, 1.0));
+  if (d < uRadius) {
+    // Add pressure based on mouse speed
+    float p = uStrength * (1.0 - d / uRadius);
+    next -= p * (1.0 + length(uMouseVel) * 15.0); 
+  }
 
-  // ── ORGANIC INTERACTION ─────────────────────────────────────────────────
-  // Gaussian splat for smooth, non-pixelated mouse ripples
-  float dist = length((vUV - uMouse) / vec2(1.0, uTexel.x/uTexel.y));
-  float splat = exp(-pow(dist / uRadius, 2.0));
-  next -= splat * uStrength * 0.2;
-
-  // Stability clamp
+  // Anti-jitter clamp
   next = clamp(next, -1.0, 1.0);
 
   #ifdef UINT8_MODE
