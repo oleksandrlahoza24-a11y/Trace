@@ -2,54 +2,187 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Massive Island WebGL</title>
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <title>WebGL Massive Island</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; }
-        canvas { display: block; }
-        
-        /* Joystick Styles */
-        #joystick-base {
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
+        #joystick-zone {
             position: absolute;
-            bottom: 40px;
-            left: 40px;
-            width: 120px;
-            height: 120px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            touch-action: none;
+            bottom: 50px;
+            left: 50px;
+            width: 150px;
+            height: 150px;
             z-index: 10;
         }
-        #joystick-knob {
+        #ui {
             position: absolute;
-            top: 30px;
-            left: 30px;
-            width: 60px;
-            height: 60px;
-            background: rgba(255, 255, 255, 0.5);
-            border-radius: 50%;
+            top: 10px;
+            left: 10px;
+            color: white;
             pointer-events: none;
+            text-shadow: 1px 1px 2px black;
         }
     </style>
 </head>
 <body>
 
-    <div id="joystick-base">
-        <div id="joystick-knob"></div>
-    </div>
+    <div id="ui">Use the joystick to walk • iPad WebGL Island</div>
+    <div id="joystick-zone"></div>
 
     <script type="importmap">
         {
             "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
             }
         }
     </script>
 
-    <script type="module" src="shaders.js"></script>
-    <script type="module" src="controls.js"></script>
-    <script type="module" src="main.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
 
+    <script type="module">
+        import * as THREE from 'three';
+        import { Water } from 'three/addons/objects/Water.js';
+        import { Sky } from 'three/addons/objects/Sky.js';
+
+        // --- Core Variables ---
+        let scene, camera, renderer, water, sun, player;
+        let moveForward = 0, moveRight = 0;
+        const clock = new THREE.Clock();
+
+        init();
+        animate();
+
+        function init() {
+            // 1. Scene & Camera
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 20000);
+            
+            // Player proxy (for movement)
+            player = new THREE.Group();
+            player.position.set(0, 10, 100);
+            player.add(camera);
+            scene.add(player);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            document.body.appendChild(renderer.domElement);
+
+            // 2. Sun & Sky (Atmospheric Scattering)
+            sun = new THREE.Vector3();
+            const sky = new Sky();
+            sky.scale.setScalar(10000);
+            scene.add(sky);
+
+            const skyUniforms = sky.material.uniforms;
+            skyUniforms['turbidity'].value = 10;
+            skyUniforms['rayleigh'].value = 2;
+            skyUniforms['mieCoefficient'].value = 0.005;
+            skyUniforms['mieDirectionalG'].value = 0.8;
+
+            const phi = THREE.MathUtils.degToRad(88);
+            const theta = THREE.MathUtils.degToRad(180);
+            sun.setFromSphericalCoords(1, phi, theta);
+            skyUniforms['sunPosition'].value.copy(sun);
+
+            // 3. Water Shader (The "Render Frag" part)
+            const waterGeometry = new THREE.PlaneGeometry(10000, 10000);
+            water = new Water(waterGeometry, {
+                textureWidth: 512,
+                textureHeight: 512,
+                waterNormals: new THREE.TextureLoader().load('https://threejs.org/examples/textures/waternormals.jpg', function (texture) {
+                    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+                }),
+                sunDirection: sun,
+                sunColor: 0xffffff,
+                waterColor: 0x001e0f,
+                distortionScale: 3.7,
+                fog: scene.fog !== undefined
+            });
+            water.rotation.x = -Math.PI / 2;
+            scene.add(water);
+
+            // 4. The Island (Terrain)
+            const terrainSize = 1024;
+            const geometry = new THREE.PlaneGeometry(2000, 2000, 128, 128);
+            
+            // Simulating height via a vertex manipulation
+            const pos = geometry.attributes.position;
+            for (let i = 0; i < pos.count; i++) {
+                let x = pos.getX(i);
+                let y = pos.getY(i);
+                // Create a circular island shape using distance from center
+                let dist = Math.sqrt(x*x + y*y);
+                let h = Math.max(0, 150 * Math.exp(-dist/400) - 20); 
+                // Add some noise/randomness
+                h += Math.sin(x / 20) * Math.cos(y / 20) * 5;
+                pos.setZ(i, h);
+            }
+            geometry.computeVertexNormals();
+
+            const terrainMat = new THREE.MeshStandardMaterial({ 
+                color: 0x3c613c, 
+                flatShading: true,
+                roughness: 0.8 
+            });
+            const terrain = new THREE.Mesh(geometry, terrainMat);
+            terrain.rotation.x = -Math.PI / 2;
+            terrain.position.y = -2; // Slightly below water line
+            scene.add(terrain);
+
+            // 5. Touch Joystick (NippleJS)
+            const manager = nipplejs.create({
+                zone: document.getElementById('joystick-zone'),
+                mode: 'static',
+                position: { left: '75px', bottom: '75px' },
+                color: 'white'
+            });
+
+            manager.on('move', (evt, data) => {
+                const forward = data.vector.y;
+                const right = data.vector.x;
+                moveForward = forward;
+                moveRight = right;
+                
+                // Rotate player based on joystick angle
+                if (data.angle) {
+                    player.rotation.y = -data.angle.rad + Math.PI/2;
+                }
+            });
+
+            manager.on('end', () => {
+                moveForward = 0;
+                moveRight = 0;
+            });
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getElapsedTime();
+
+            // Water animation sim
+            water.material.uniforms['time'].value += 1.0 / 60.0;
+
+            // Player Movement
+            const speed = 2.0;
+            player.translateZ(-moveForward * speed);
+            player.translateX(moveRight * speed);
+            
+            // Keep player above water level
+            player.position.y = 10; 
+
+            renderer.render(scene, camera);
+        }
+    </script>
 </body>
 </html>
