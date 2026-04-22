@@ -127,6 +127,7 @@ uniform vec2  uMv;
 uniform float uR;
 uniform float uStr;
 uniform float uWind;
+uniform float uTime;
 
 #ifdef U8
   float dec(vec2 v){ return v.x + v.y/255.; }
@@ -136,65 +137,73 @@ uniform float uWind;
   float H(vec2 u){ return texture2D(uS,u).r; }
 #endif
 
-// Random noise to vary the angle of repose slightly (simulates varying compaction)
 float hash(vec2 p){ return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453); }
 
 void main(){
-  float h  = H(vUV);
-  float tx = uTx.x, ty = uTx.y;
+  vec2 uv = vUV;
+  float h = H(uv);
+  vec2 tx = vec2(uTx.x, 0.0);
+  vec2 ty = vec2(0.0, uTx.y);
 
-  float hN  = H(vUV+vec2( 0., ty));
-  float hS  = H(vUV+vec2( 0.,-ty));
-  float hE  = H(vUV+vec2( tx, 0.));
-  float hW  = H(vUV+vec2(-tx, 0.));
-  float hNE = H(vUV+vec2( tx, ty));
-  float hNW = H(vUV+vec2(-tx, ty));
-  float hSE = H(vUV+vec2( tx,-ty));
-  float hSW = H(vUV+vec2(-tx,-ty));
+  // 1. STOCHASTIC ANGLE OF REPOSE (AOR)
+  // Varies compaction based on local coordinates to prevent "perfect" digital slopes
+  float noise = hash(uv + uTime * 0.01);
+  float localAOR = 0.025 + (noise * 0.008); 
+  const float FLOW_K = 0.15; // Viscosity of the sand flow
 
-  // Tighter AOR and slightly lower flow rate for more dry, granular behavior
-  float localAorMod = (hash(vUV * 100.0) * 0.004) - 0.002;
-  float AOR  = 0.026 + localAorMod;  
-  float AOR2 = 0.036 + localAorMod;  
-  const float FR   = 0.11; 
+  // 8-Tap Sampling for high-fidelity slope detection
+  float hN = H(uv + ty), hS = H(uv - ty);
+  float hE = H(uv + tx), hW = H(uv - tx);
+  float hNE = H(uv + tx + ty), hNW = H(uv - tx + ty);
+  float hSE = H(uv + tx - ty), hSW = H(uv - tx - ty);
 
-  float flow = 0.;
-  float dN=hN-h; flow+=sign(dN)*max(0.,abs(dN)-AOR )*FR;
-  float dS=hS-h; flow+=sign(dS)*max(0.,abs(dS)-AOR )*FR;
-  float dE=hE-h; flow+=sign(dE)*max(0.,abs(dE)-AOR )*FR;
-  float dW=hW-h; flow+=sign(dW)*max(0.,abs(dW)-AOR )*FR;
-
-  float dNE=hNE-h; flow+=sign(dNE)*max(0.,abs(dNE)-AOR2)*FR*0.5;
-  float dNW=hNW-h; flow+=sign(dNW)*max(0.,abs(dNW)-AOR2)*FR*0.5;
-  float dSE=hSE-h; flow+=sign(dSE)*max(0.,abs(dSE)-AOR2)*FR*0.5;
-  float dSW=hSW-h; flow+=sign(dSW)*max(0.,abs(dSW)-AOR2)*FR*0.5;
+  // 2. NON-LINEAR GRANULAR FLOW
+  // This simulates the "collapse" threshold of dry sand
+  float flow = 0.0;
+  
+  // Helper for thresholded movement
+  #define ADD_FLOW(nh) { float d = nh - h; flow += sign(d) * pow(max(0.0, abs(d) - localAOR), 1.2) * FLOW_K; }
+  
+  ADD_FLOW(hN);  ADD_FLOW(hS);
+  ADD_FLOW(hE);  ADD_FLOW(hW);
+  ADD_FLOW(hNE); ADD_FLOW(hNW);
+  ADD_FLOW(hSE); ADD_FLOW(hSW);
 
   float newH = h + flow;
 
-  float wSrc = H(vUV - vec2(tx*1.8, ty*0.15)); 
-  float wDst = H(vUV + vec2(tx*1.8, ty*0.15)); 
-  float wDiff = wSrc - wDst;
-  newH += max(0., wDiff - AOR*0.5) * 0.05 * uWind;
+  // 3. SALTATION (Wind-driven dune formation)
+  // Instead of just adding height, we sample from an "upwind" position
+  // with a noise-based fetch to simulate grains jumping (saltation)
+  vec2 windDir = normalize(vec2(1.0, 0.1)); // Dominant wind direction
+  float saltationFetch = (0.5 + 0.5 * noise) * 3.5 * uWind;
+  float hUpwind = H(uv - windDir * uTx * saltationFetch);
+  float windTransport = max(0.0, (hUpwind - h) - localAOR) * 0.04 * uWind;
+  newH += windTransport;
+  newH -= windTransport * 0.5; // Conservation of mass approximation
 
-  float dist  = length(vUV - uM);
-  float touch = smoothstep(uR, 0., dist);
-  newH -= touch * uStr;
+  // 4. VOLUME-PRESERVING INTERACTION
+  // Instead of just erasing sand, we push it forward
+  float dist = length(uv - uM);
+  float brush = smoothstep(uR, 0.0, dist);
+  
+  // Digging effect
+  newH -= brush * uStr;
 
+  // Displacement/Pushing effect (The "Bow Wave")
   float mvSpd = length(uMv);
-  float hasMv = step(0.0012, mvSpd);
-  vec2 mvDir  = uMv / max(mvSpd, 0.0001);
-  vec2 toP    = vUV - uM;
-  float along = dot(toP, mvDir);
-  float aside = length(toP - along*mvDir);
-  float pushZ = smoothstep(uR*2.5, 0., aside) * smoothstep(uR*0.3, uR*2.0, along);
-  newH += pushZ * uStr * min(mvSpd*25., 1.) * 0.45 * hasMv;
+  if (mvSpd > 0.001) {
+    vec2 dir = uMv / mvSpd;
+    // Sample a point behind the current movement to "transfer" sand from
+    float trail = smoothstep(uR * 1.5, uR * 0.5, length(uv - (uM - dir * uR)));
+    newH += trail * uStr * min(mvSpd * 40.0, 1.2);
+  }
 
-  newH = clamp(newH, 0., 1.);
+  newH = clamp(newH, 0.0, 1.0);
 
   #ifdef U8
-    gl_FragColor = vec4(enc(newH), 0., 1.);
+    gl_FragColor = vec4(enc(newH), 0.0, 1.0);
   #else
-    gl_FragColor = vec4(newH, 0., 0., 1.);
+    gl_FragColor = vec4(newH, 0.0, 0.0, 1.0);
   #endif
 }`;
 
@@ -205,19 +214,17 @@ uniform sampler2D uW;
 uniform vec2  uTx;
 uniform float uTime, uAspect;
 
-// --- HIGH-PERFORMANCE HASHING ---
-float hash(vec2 p) {
-    p = fract(p * vec2(123.34, 456.21));
-    p += dot(p, p + 45.32);
-    return fract(p.x * p.y);
+// --- UTILS & NOISE ---
+float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+float vn(vec2 p){
+    vec2 i=floor(p), f=p-i; f=f*f*(3.-2.*f);
+    return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),
+               mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);
 }
-
-// --- MICRO-DETAIL NOISE ---
-float grain(vec2 p) {
-    vec2 i = floor(p), f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash(i), hash(i + vec2(1,0)), f.x),
-               mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x), f.y);
+float fbm(vec2 p){ 
+    float v=0., a=.5; 
+    for(int i=0;i<6;i++){ v+=vn(p)*a; p*=2.1; a*=.48; } 
+    return v; 
 }
 
 #ifdef U8
@@ -226,81 +233,97 @@ float grain(vec2 p) {
   float H(vec2 uv){ return texture2D(uW,uv).r; }
 #endif
 
-// --- PHYSICALLY BASED RENDERING (PBR) ---
-float D_GGX(float NoH, float roughness) {
-    float a = roughness * roughness;
-    float a2 = a * a;
+// --- ADVANCED PBR UTILS ---
+float D_GGX(float NoH, float r){
+    float a = r*r;
+    float a2 = a*a;
     float d = (NoH * a2 - NoH) * NoH + 1.0;
     return a2 / (3.14159 * d * d + 1e-7);
 }
 
-void main() {
+// Micro-shadowing: Checks if light is occluded by nearby sand height
+float getSelfShadow(vec2 uv, vec3 L, float hC) {
+    float shadow = 1.0;
+    float steps = 8.0;
+    for(float i=1.0; i<=8.0; i++) {
+        float h = H(uv + L.xy * i * 0.005);
+        shadow -= max(0.0, (h - hC) * 2.0 / i);
+    }
+    return clamp(shadow, 0.0, 1.0);
+}
+
+void main(){
     vec2 uv = vUV;
     float t = uTime;
+    vec3 V = normalize(vec3(0.0, 0.0, 1.0)); // View vector
     
-    // 1. ITERATIVE PARALLAX OCCLUSION (3-Step Search)
-    // Simulates true 3D depth by shifting textures based on view angle
-    vec3 V = normalize(vec3((uv - 0.5) * 2.0, 1.0));
-    float h = H(uv);
-    for(int i=0; i<3; i++) {
-        uv -= V.xy * (1.0 - h) * 0.015;
-        h = H(uv);
-    }
+    // --- PARALLAX OCCLUSION MAPPING (The "3D" secret) ---
+    // This shifts the UVs based on height to simulate 3D depth
+    float depthScale = 0.045;
+    float currentHeight = H(uv);
+    vec2 pUV = uv - (V.xy * (1.0 - currentHeight) * depthScale);
     
-    // 2. HIGH-DEFINITION NORMAL RECONSTRUCTION
-    vec2 tx = uTx * 1.2;
-    float hL = H(uv - vec2(tx.x, 0.0)), hR = H(uv + vec2(tx.x, 0.0));
-    float hD = H(uv - vec2(0.0, tx.y)), hU = H(uv + vec2(0.0, tx.y));
+    // Refresh height and normals with Parallax-corrected UVs
+    float hC = H(pUV);
+    vec2 tx = uTx * 1.8;
+    float hL = H(pUV-vec2(tx.x,0.)), hR = H(pUV+vec2(tx.x,0.));
+    float hU = H(pUV+vec2(0.,tx.y)), hD = H(pUV-vec2(0.,tx.y));
     
-    // Inject microscopic "grain" into the normals
-    float gN = (grain(uv * 1200.0) - 0.5) * 0.15;
-    vec3 N = normalize(vec3(hL - hR + gN, hD - hU + gN, 0.1));
-
-    // 3. COLOR & WETNESS GRADIENTS
-    vec3 L = normalize(vec3(0.5, 0.5, 0.8)); // Light dir
+    vec3 N = normalize(vec3(hL-hR, hD-hU, 0.15)); // Steeper normals for "crunchy" sand
+    vec3 L = normalize(vec3(0.6, 0.4, 0.8));     // Sun direction
     vec3 Hv = normalize(V + L);
+    
     float NoL = max(dot(N, L), 0.0);
-    float NoV = max(dot(N, V), 0.0);
     float NoH = max(dot(N, Hv), 0.0);
-    
-    // Deep parts look wetter and richer
-    float wet = smoothstep(0.7, 0.2, h);
-    vec3 drySand = vec3(0.88, 0.76, 0.62);
-    vec3 wetSand = vec3(0.45, 0.32, 0.20);
-    vec3 albedo = mix(drySand, wetSand, wet);
-    albedo *= 0.9 + 0.15 * grain(uv * 400.0); // Macro variation
+    float NoV = max(dot(N, V), 0.0);
 
-    // 4. ADVANCED LIGHTING LOBES
-    // Self-shadowing approximation
-    float shadow = clamp(NoL * 2.5, 0.0, 1.0);
-    
-    // Specular 1: Broad "Quartz" sheen
-    float specBroad = D_GGX(NoH, 0.3) * NoL * 0.15;
-    // Specular 2: Sharp Micro-glints
-    float glint = pow(NoH, 600.0) * step(0.994, hash(uv * 1800.0 + t * 0.01));
-    
-    // 5. SUBSURFACE SCATTERING & RIM LIGHT
-    float rim = pow(1.0 - NoV, 4.0) * h * 0.4;
-    vec3 scattering = vec3(1.0, 0.5, 0.2) * pow(max(0.0, dot(V, -L)), 3.0) * h;
+    // --- COLOR PALETTE (Cinematic Grade) ---
+    vec3 sandBase = mix(vec3(0.32, 0.22, 0.15), vec3(0.85, 0.72, 0.55), smoothstep(0.1, 0.9, hC));
+    sandBase *= 0.9 + 0.15 * fbm(pUV * 150.0); // Micro-detail grain
 
-    // 6. CAUSTIC FOCUSING
-    float lap = (hL + hR + hU + hD) - 4.0 * h;
-    float focus = pow(max(0.0, -lap * 18.0), 1.6) * shadow;
-
-    // Final Integration
-    vec3 ambient = vec3(0.12, 0.15, 0.22) * (h + 0.5);
-    vec3 final = albedo * (NoL * shadow * vec3(1.0, 0.95, 0.8) + ambient);
-    final += (specBroad + glint * 12.0) * shadow;
-    final += scattering * 0.3 + vec3(0.6, 0.9, 1.0) * focus * 0.4;
-    final += vec3(0.9, 0.8, 0.7) * rim * NoL;
-
-    // 7. CINEMATIC POST
-    // Tone mapping (Reinhard modified)
-    final = final / (final + 1.0);
-    // Color balance: Warm highlights, cool shadows
-    final = mix(final, final * vec3(1.05, 1.0, 0.9), NoL);
+    // --- LIGHTING MODEL ---
+    float shadow = getSelfShadow(pUV, L, hC);
     
-    gl_FragColor = vec4(pow(final, vec3(1.0/2.2)), 1.0);
+    // Subsurface Scattering (Light bleeding through ridge tops)
+    float sss = pow(clamp(1.0 - NoL, 0.0, 1.0), 3.0) * hC * 0.4;
+    vec3 sssCol = vec3(1.0, 0.4, 0.2) * sss;
+
+    // Ambient Occlusion
+    float ao = smoothstep(0.0, 0.6, hC);
+    vec3 ambient = vec3(0.4, 0.5, 0.65) * 0.15 * ao;
+    
+    vec3 direct = vec3(1.0, 0.9, 0.75) * NoL * shadow * 1.4;
+    vec3 col = sandBase * (direct + ambient) + sssCol;
+
+    // --- QUARTZ & SPECULAR ---
+    // GGX Specular for "wet" or "silica" shine
+    float spec = D_GGX(NoH, 0.25) * NoL * shadow;
+    col += vec3(1.0, 0.95, 0.9) * spec * 0.1;
+
+    // High-frequency Glints (The "Quartz" Sparkle)
+    float glintNoise = hash(pUV * 1500.0 + t * 0.005);
+    float glint = pow(NoH, 400.0) * step(0.992, glintNoise) * shadow;
+    col += vec3(1.0, 0.98, 1.0) * glint * 15.0;
+
+    // --- CAUSTICS (Light focusing) ---
+    float lap = hU + hD + hL + hR - 4.0 * hC;
+    float caustic = pow(max(0.0, -lap * 15.0), 1.8) * shadow;
+    col += vec3(0.8, 1.0, 0.95) * caustic * 0.4;
+
+    // --- DUST MOTES (Volumetric style) ---
+    float mHash = hash(floor(pUV * 40.0 + t * 0.02));
+    float mote = smoothstep(0.02, 0.0, length(fract(pUV * 40.0 + t * 0.01) - 0.5));
+    col += vec3(1.0, 0.8, 0.6) * mote * step(0.99, mHash) * 0.3 * shadow;
+
+    // --- POST PROCESSING ---
+    // ACES Filmic Tone Mapping
+    col *= 1.2;
+    vec3 a = vec3(2.51); vec3 b = vec3(0.03); vec3 c = vec3(2.43);
+    vec3 d = vec3(0.59); vec3 e = vec3(0.14);
+    col = clamp((col*(a*col+b))/(col*(c*col+d)+e), 0.0, 1.0);
+    
+    // Gamma Correction
+    gl_FragColor = vec4(pow(col, vec3(1.0/2.2)), 1.0);
 }`;
 
 function mkSh(type, src){
