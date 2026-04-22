@@ -1,46 +1,23 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Modular WebGL Island</title>
-    <style>
-        body { margin: 0; overflow: hidden; background: #000; touch-action: none; -webkit-user-select: none; }
-        #joystick-zone { position: absolute; bottom: 50px; left: 50px; width: 150px; height: 150px; z-index: 10; }
-        #ui { position: absolute; top: 20px; left: 20px; color: white; font-family: sans-serif; pointer-events: none; z-index: 5; }
-    </style>
-</head>
-<body>
+<style>
+    /* This stops the iPad from trying to "save" or "zoom" the joystick */
+    body, html { 
+        margin: 0; 
+        padding: 0; 
+        width: 100%; 
+        height: 100%; 
+        overflow: hidden; 
+        touch-action: none; /* Prevents all browser gestures */
+        -webkit-user-select: none; /* Prevents text selection popups */
+        user-select: none;
+    }
 
-    <div id="ui">SYSTEM: MODULAR ENGINE<br>Graphics & Character Separate</div>
-    <div id="joystick-zone"></div>
-
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
-        }
-    </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
-
-    <script type="module">
-        import { GraphicsEngine } from './graphics.js';
-        import { CharacterController } from './character.js';
-
-        const graphics = new GraphicsEngine();
-        const character = new CharacterController(graphics.scene, graphics.camera);
-
-        function update() {
-            requestAnimationFrame(update);
-            const delta = graphics.clock.getDelta();
-            
-            character.update(graphics.getTerrainHeight.bind(graphics));
-            graphics.render();
-        }
-
-        update();
-    </script>
-</body>
-</html>
+    #joystick-zone { 
+        position: absolute; 
+        bottom: 60px; 
+        left: 60px; 
+        width: 120px; 
+        height: 120px; 
+        z-index: 999;
+        touch-action: none; /* Specifically lock the joystick area */
+    }
+</style>
