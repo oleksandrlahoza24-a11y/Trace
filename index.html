@@ -2,12 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Realistic Interactive Water</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Ultra Real Water - iPad Edition</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { width:100%; height:100%; overflow:hidden; background:#000; touch-action:none; }
-  canvas { display:block; position:fixed; top:0; left:0; touch-action:none; cursor:crosshair; }
+  html, body { 
+    width:100%; height:100%; overflow:hidden; 
+    background:#000; position: fixed;
+  }
+  canvas { 
+    display:block; width:100vw; height:100vh; 
+    touch-action:none; -webkit-user-select:none;
+  }
 </style>
 </head>
 <body>
@@ -16,7 +22,7 @@
 'use strict';
 
 const canvas = document.getElementById('c');
-const gl = canvas.getContext('webgl', { antialias: false, alpha: false });
+const gl = canvas.getContext('webgl', { antialias: false, alpha: false, depth: false });
 
 const DPR = Math.min(window.devicePixelRatio || 1, 2);
 let W, H, CW, CH;
@@ -25,15 +31,16 @@ function resize() {
   CW = window.innerWidth; CH = window.innerHeight;
   W = Math.round(CW * DPR); H = Math.round(CH * DPR);
   canvas.width = W; canvas.height = H;
-  canvas.style.width = CW + 'px'; canvas.style.height = CH + 'px';
 }
 window.addEventListener('resize', resize);
 resize();
 
-const S = 512;
-const extFloat = gl.getExtension('OES_texture_float');
-const FTYPE = extFloat ? gl.FLOAT : gl.UNSIGNED_BYTE;
+// iPad specific float texture support
+const extHalf = gl.getExtension('OES_texture_half_float');
+const extHalfLin = gl.getExtension('OES_texture_half_float_linear');
+const FTYPE = (extHalf) ? extHalf.HALF_FLOAT_OES : gl.UNSIGNED_BYTE;
 
+const S = 512;
 const VERT = `attribute vec2 aPos; varying vec2 vUV; void main() { vUV = aPos*0.5+0.5; gl_Position = vec4(aPos,0.,1.); }`;
 
 const SIM_FRAG = `
@@ -41,7 +48,7 @@ precision highp float;
 varying vec2 vUV;
 uniform sampler2D uState;
 uniform vec2 uTexel;
-uniform vec3 uMouse; // x, y, strength
+uniform vec3 uMouse; 
 
 void main() {
     vec4 state = texture2D(uState, vUV);
@@ -54,10 +61,10 @@ void main() {
     float w = texture2D(uState, vUV - vec2(uTexel.x, 0.0)).r * 2.0 - 1.0;
 
     float next = (n + s + e + w) * 0.5 - prev;
-    next *= 0.995;
+    next *= 0.992;
 
     float d = length(vUV - uMouse.xy);
-    next -= smoothstep(0.05, 0.0, d) * uMouse.z;
+    next -= smoothstep(0.06, 0.0, d) * uMouse.z;
 
     gl_FragColor = vec4(clamp(next * 0.5 + 0.5, 0.0, 1.0), state.r, 0.0, 1.0);
 }`;
@@ -81,24 +88,24 @@ void main() {
     float hR = texture2D(uWater, vUV + vec2(uTexel.x, 0.0)).r * 2.0 - 1.0;
     float hU = texture2D(uWater, vUV + vec2(0.0, uTexel.y)).r * 2.0 - 1.0;
     
-    vec3 normal = normalize(vec3(h - hR, h - hU, 0.15));
-    vec3 view = vec3(0.0, 0.0, 1.0);
-    float fresnel = pow(1.0 - dot(normal, view), 3.0);
-    
-    // Seabed
+    vec3 normal = normalize(vec3(h - hR, h - hU, 0.1));
     vec2 refrUV = vUV + normal.xy * 0.04;
-    float n = noise(refrUV * 12.0 * vec2(uAspect, 1.0));
-    vec3 sand = mix(vec3(0.5, 0.4, 0.2), vec3(0.7, 0.6, 0.4), n);
     
-    // Sun & Sky
-    vec3 lightDir = normalize(vec3(0.3, 0.4, 1.0));
-    float spec = pow(max(dot(reflect(-lightDir, normal), view), 0.0), 50.0);
-    vec3 skyCol = mix(vec3(0.05, 0.2, 0.4), vec3(0.7, 0.85, 1.0), fresnel);
+    // Seabed Texture
+    float n = noise(refrUV * 10.0 * vec2(uAspect, 1.0));
+    vec3 seabed = mix(vec3(0.3, 0.25, 0.1), vec3(0.5, 0.45, 0.3), n);
     
-    vec3 col = mix(sand * vec3(0.4, 0.7, 0.8), skyCol, fresnel + 0.1);
-    col += spec * 0.6;
+    // Lighting
+    float fresnel = pow(1.0 - normal.z, 3.0);
+    vec3 skyCol = mix(vec3(0.02, 0.1, 0.2), vec3(0.5, 0.8, 1.0), fresnel);
     
-    gl_FragColor = vec4(pow(col, vec3(0.9)), 1.0);
+    vec3 col = mix(seabed * vec3(0.4, 0.8, 0.9), skyCol, fresnel + 0.2);
+    
+    // Caustics shimmer
+    float caust = pow(max(0.0, 1.0 - abs(h)*8.0), 3.0);
+    col += caust * 0.2;
+
+    gl_FragColor = vec4(col, 1.0);
 }`;
 
 function mkProg(vs, fs) {
@@ -132,17 +139,24 @@ function mkFBO() {
 }
 
 let fbo1 = mkFBO(), fbo2 = mkFBO();
-
 const ptr = { x: 0.5, y: 0.5, active: 0 };
-const updatePtr = (e) => {
-    const t = e.touches ? e.touches[0] : e;
+
+const handleTouch = (e) => {
+    e.preventDefault();
+    const t = e.touches[0];
     ptr.x = t.clientX / CW;
     ptr.y = 1.0 - t.clientY / CH;
+    ptr.active = 1;
 };
 
-canvas.addEventListener('pointerdown', (e) => { ptr.active = 1; updatePtr(e); });
-canvas.addEventListener('pointermove', (e) => { if(ptr.active) updatePtr(e); });
-window.addEventListener('pointerup', () => ptr.active = 0);
+canvas.addEventListener('touchstart', handleTouch, { passive: false });
+canvas.addEventListener('touchmove', handleTouch, { passive: false });
+canvas.addEventListener('touchend', () => { ptr.active = 0; }, { passive: false });
+
+// Mouse support just in case
+canvas.addEventListener('mousedown', (e) => { ptr.active = 1; ptr.x = e.clientX/CW; ptr.y = 1.0-e.clientY/CH; });
+canvas.addEventListener('mousemove', (e) => { if(ptr.active) { ptr.x = e.clientX/CW; ptr.y = 1.0-e.clientY/CH; }});
+window.addEventListener('mouseup', () => ptr.active = 0);
 
 function frame() {
     gl.useProgram(simProg);
@@ -154,7 +168,7 @@ function frame() {
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fbo1.t);
     gl.uniform1i(uSim.state, 0);
     gl.uniform2f(uSim.texel, 1/S, 1/S);
-    gl.uniform3f(uSim.mouse, ptr.x, ptr.y, ptr.active ? 0.15 : 0.0);
+    gl.uniform3f(uSim.mouse, ptr.x, ptr.y, ptr.active ? 0.3 : 0.0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     
     let tmp = fbo1; fbo1 = fbo2; fbo2 = tmp;
