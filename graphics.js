@@ -111,7 +111,13 @@ export class GraphicsEngine {
     }
 
     render() {
-        this.water.material.uniforms['time'].value += 0.01;
-        this.renderer.render(this.scene, this.camera);
+    // Check if renderer or camera is valid before drawing
+    if (!this.renderer || !this.camera || isNaN(this.camera.aspect)) return;
+
+    this.water.material.uniforms['time'].value += 0.01;
+    this.renderer.render(this.scene, this.camera);
     }
-}
+  }
+
+
+    
