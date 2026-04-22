@@ -1,16 +1,55 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Massive Island WebGL</title>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; touch-action: none; }
-        canvas { display: block; width: 100vw; height: 100vh; }
+        body { margin: 0; overflow: hidden; background: #000; }
+        canvas { display: block; }
+        
+        /* Joystick Styles */
+        #joystick-base {
+            position: absolute;
+            bottom: 40px;
+            left: 40px;
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            touch-action: none;
+            z-index: 10;
+        }
+        #joystick-knob {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
-    <canvas id="c"></canvas>
-    <script src="water.js"></script>
-    <script src="character.js"></script>
-    <script src="main.js"></script>
+
+    <div id="joystick-base">
+        <div id="joystick-knob"></div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+            }
+        }
+    </script>
+
+    <script type="module" src="shaders.js"></script>
+    <script type="module" src="controls.js"></script>
+    <script type="module" src="main.js"></script>
+
 </body>
 </html>
