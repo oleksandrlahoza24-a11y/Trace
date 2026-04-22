@@ -266,7 +266,7 @@ void main() {
     color = color / (color + vec3(1.0));
     gl_FragColor = vec4(pow(color, vec3(1.0/2.2)), 1.0);
 }`;
-
+ 
 // ─── GL Helpers ─────────────────────────────────────────────────────────────
 function mkShader(type, src) {
   const s = gl.createShader(type);
