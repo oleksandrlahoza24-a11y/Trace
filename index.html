@@ -3,21 +3,280 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Interactive Fluid Ocean</title>
+    <title>Lush Island Explorer</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #000; touch-action: none; }
-        canvas { display: block; width: 100vw; height: 100vh; }
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #87CEEB; /* Sky blue */
+            touch-action: none; /* Prevents iPad from scrolling/zooming */
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        #ui-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            pointer-events: none;
+            z-index: 10;
+        }
+        h1 { margin: 0 0 5px 0; font-size: 24px; }
+        p { margin: 0; font-size: 16px; opacity: 0.9; }
+        
+        .zone-hint {
+            position: absolute;
+            bottom: 30px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 18px;
+            font-weight: bold;
+            pointer-events: none;
+            width: 50%;
+            text-align: center;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        #left-zone { left: 0; }
+        #right-zone { right: 0; }
     </style>
 </head>
 <body>
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
+
+    <div id="ui-container">
+        <h1>Ultra Lush Island</h1>
+        <p>Touch & Drag Left: Move | Touch & Drag Right: Look</p>
+    </div>
+    <div id="left-zone" class="zone-hint">Movement Zone</div>
+    <div id="right-zone" class="zone-hint">Look Zone</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        // --- Initialization & Setup ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB); // Sky color
+        scene.fog = new THREE.FogExp2(0x87CEEB, 0.003); // Adds atmospheric depth
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 5, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        // --- Lighting ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(100, 200, 50);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.near = 0.5;
+        dirLight.shadow.camera.far = 500;
+        dirLight.shadow.camera.left = -150;
+        dirLight.shadow.camera.right = 150;
+        dirLight.shadow.camera.top = 150;
+        dirLight.shadow.camera.bottom = -150;
+        scene.add(dirLight);
+
+        // --- Lush Environment ---
+        // 1. The Island Ground
+        const groundGeo = new THREE.PlaneGeometry(300, 300, 64, 64);
+        groundGeo.rotateX(-Math.PI / 2);
+        
+        // Add gentle rolling hills to the geometry
+        const vertices = groundGeo.attributes.position.array;
+        for (let i = 0; i < vertices.length; i += 3) {
+            const x = vertices[i];
+            const z = vertices[i + 2];
+            // Sine waves to create terrain bumps
+            vertices[i + 1] = Math.sin(x / 10) * 2 + Math.cos(z / 12) * 2;
         }
+        groundGeo.computeVertexNormals();
+
+        const groundMat = new THREE.MeshStandardMaterial({ 
+            color: 0x2e8b57, // Sea green
+            roughness: 0.8,
+            metalness: 0.1
+        });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // 2. The Ocean
+        const oceanGeo = new THREE.PlaneGeometry(1000, 1000);
+        oceanGeo.rotateX(-Math.PI / 2);
+        const oceanMat = new THREE.MeshStandardMaterial({ 
+            color: 0x1e90ff, 
+            transparent: true, 
+            opacity: 0.8,
+            roughness: 0.1,
+            metalness: 0.8
+        });
+        const ocean = new THREE.Mesh(oceanGeo, oceanMat);
+        ocean.position.y = -1; // Slightly below the ground base
+        scene.add(ocean);
+
+        // 3. Trees (InstancedMesh for High Performance on iPad)
+        const treeCount = 600;
+        const trunkGeo = new THREE.CylinderGeometry(0.5, 0.7, 3, 8);
+        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+        const leavesGeo = new THREE.ConeGeometry(3, 6, 8);
+        const leavesMat = new THREE.MeshStandardMaterial({ color: 0x228B22 });
+
+        const trunkMesh = new THREE.InstancedMesh(trunkGeo, trunkMat, treeCount);
+        const leavesMesh = new THREE.InstancedMesh(leavesGeo, leavesMat, treeCount);
+        trunkMesh.castShadow = true;
+        leavesMesh.castShadow = true;
+
+        const dummy = new THREE.Object3D();
+        for (let i = 0; i < treeCount; i++) {
+            // Random positions within a radius
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 10 + Math.random() * 130; // Keep away from exact center where player spawns
+            const tx = Math.cos(angle) * radius;
+            const tz = Math.sin(angle) * radius;
+            
+            // Calculate ground height at this point
+            const ty = Math.sin(tx / 10) * 2 + Math.cos(tz / 12) * 2;
+
+            // Random scale
+            const scale = 0.5 + Math.random() * 1.5;
+
+            // Position trunk
+            dummy.position.set(tx, ty + (1.5 * scale), tz);
+            dummy.scale.set(scale, scale, scale);
+            dummy.updateMatrix();
+            trunkMesh.setMatrixAt(i, dummy.matrix);
+
+            // Position leaves
+            dummy.position.set(tx, ty + (4 * scale), tz);
+            dummy.updateMatrix();
+            leavesMesh.setMatrixAt(i, dummy.matrix);
+        }
+        scene.add(trunkMesh);
+        scene.add(leavesMesh);
+
+        // --- iPad Touch Controls Setup ---
+        let moveTouch = { id: null, startX: 0, startY: 0, deltaX: 0, deltaY: 0 };
+        let lookTouch = { id: null, lastX: 0, lastY: 0 };
+        
+        let pitch = 0; // Up/down look angle
+        let yaw = 0;   // Left/right look angle
+        
+        const moveSpeed = 0.2;
+        const lookSpeed = 0.005;
+
+        // --- Event Listeners ---
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        window.addEventListener('touchstart', (e) => {
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                if (touch.clientX < window.innerWidth / 2) {
+                    // Left half: Movement
+                    if (moveTouch.id === null) {
+                        moveTouch.id = touch.identifier;
+                        moveTouch.startX = touch.clientX;
+                        moveTouch.startY = touch.clientY;
+                    }
+                } else {
+                    // Right half: Look
+                    if (lookTouch.id === null) {
+                        lookTouch.id = touch.identifier;
+                        lookTouch.lastX = touch.clientX;
+                        lookTouch.lastY = touch.clientY;
+                    }
+                }
+            }
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                
+                if (touch.identifier === moveTouch.id) {
+                    // Calculate movement delta from starting point
+                    moveTouch.deltaX = touch.clientX - moveTouch.startX;
+                    moveTouch.deltaY = touch.clientY - moveTouch.startY;
+                } else if (touch.identifier === lookTouch.id) {
+                    // Calculate look delta from last frame
+                    const dx = touch.clientX - lookTouch.lastX;
+                    const dy = touch.clientY - lookTouch.lastY;
+                    
+                    yaw -= dx * lookSpeed;
+                    pitch -= dy * lookSpeed;
+                    
+                    // Clamp pitch to avoid breaking your neck backwards
+                    pitch = Math.max(-Math.PI/2.1, Math.min(Math.PI/2.1, pitch));
+                    
+                    lookTouch.lastX = touch.clientX;
+                    lookTouch.lastY = touch.clientY;
+                }
+            }
+        });
+
+        const handleTouchEnd = (e) => {
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                if (touch.identifier === moveTouch.id) {
+                    moveTouch.id = null;
+                    moveTouch.deltaX = 0;
+                    moveTouch.deltaY = 0;
+                } else if (touch.identifier === lookTouch.id) {
+                    lookTouch.id = null;
+                }
+            }
+        };
+
+        window.addEventListener('touchend', handleTouchEnd);
+        window.addEventListener('touchcancel', handleTouchEnd);
+
+        // --- Game Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Apply Look Rotation
+            const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+            euler.x = pitch;
+            euler.y = yaw;
+            camera.quaternion.setFromEuler(euler);
+
+            // Apply Movement
+            if (moveTouch.id !== null) {
+                // Determine direction based on camera angle
+                const direction = new THREE.Vector3();
+                camera.getWorldDirection(direction);
+                direction.y = 0; // Don't fly into the air
+                direction.normalize();
+
+                // Forward/Backward
+                const moveZ = -moveTouch.deltaY / 50; 
+                camera.position.addScaledVector(direction, moveZ * moveSpeed);
+
+                // Strafe Left/Right
+                const right = new THREE.Vector3().crossVectors(camera.up, direction).normalize();
+                const moveX = moveTouch.deltaX / 50;
+                camera.position.addScaledVector(right, moveX * moveSpeed);
+            }
+
+            // Keep player attached to the ground
+            const groundHeight = Math.sin(camera.position.x / 10) * 2 + Math.cos(camera.position.z / 12) * 2;
+            camera.position.y = groundHeight + 4; // Player height is 4 units above ground
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
     </script>
-    <script type="module" src="ocean.js"></script>
 </body>
 </html>
