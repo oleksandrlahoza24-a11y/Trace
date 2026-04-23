@@ -3,228 +3,135 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Property of [REDACTED]</title>
+    <title>Procedural 3D Universe</title>
     <style>
-        :root {
-            --terminal-green: #1aff80;
-            --dark-bg: #050505;
-            --monitor-frame: #2a2a2a;
-        }
-
-        body, html {
-            margin: 0; padding: 0;
-            background: var(--dark-bg);
-            color: var(--terminal-green);
-            font-family: 'Courier New', Courier, monospace;
-            overflow: hidden;
-            height: 100%;
-        }
-
-        /* --- 3D INTRO SCENE --- */
-        #intro-scene {
-            perspective: 1200px;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            transition: opacity 1.5s ease-in-out;
-        }
-
-        .room-ambient {
+        body { margin: 0; overflow: hidden; background-color: #000; }
+        canvas { display: block; }
+        #ui {
             position: absolute;
-            width: 100%; height: 100%;
-            background: radial-gradient(circle, #111 0%, #000 70%);
-            z-index: -1;
-        }
-
-        #computer-setup {
-            transform: rotateX(15deg) rotateY(-15deg);
-            transform-style: preserve-3d;
-            cursor: pointer;
-            transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-
-        #computer-setup:hover {
-            transform: rotateX(5deg) rotateY(-5deg) scale(1.1);
-        }
-
-        .monitor-body {
-            width: 350px; height: 280px;
-            background: var(--monitor-frame);
-            border: 12px solid #333;
-            border-radius: 10px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            box-shadow: 20px 20px 50px rgba(0,0,0,0.5);
-            position: relative;
-        }
-
-        .screen-off {
-            width: 90%; height: 85%;
-            background: #111;
-            border-radius: 5px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .click-prompt {
-            font-size: 0.8rem;
-            letter-spacing: 2px;
-            animation: blink 2s infinite;
-            color: #444;
-            text-align: center;
-        }
-
-        /* --- OS INTERFACE --- */
-        #os-interface {
-            height: 100vh;
-            display: grid;
-            grid-template-columns: 280px 1fr;
-            background: #020502;
-            opacity: 0;
-            transition: opacity 2s;
-        }
-
-        .sidebar {
-            border-right: 1px solid rgba(26, 255, 128, 0.2);
-            padding: 20px;
-            background: rgba(0, 20, 0, 0.3);
-        }
-
-        .sidebar h3 { font-size: 0.9rem; border-bottom: 1px solid var(--terminal-green); padding-bottom: 10px; }
-        
-        .file-list { list-style: none; padding: 0; }
-        .file-list li {
-            padding: 10px;
-            cursor: pointer;
-            font-size: 0.85rem;
-            transition: background 0.2s;
-        }
-        .file-list li:hover { background: rgba(26, 255, 128, 0.1); }
-
-        #chat-window {
-            padding: 40px;
-            max-width: 700px;
-            margin: 0 auto;
-            overflow-y: auto;
-            position: relative;
-        }
-
-        .chat-bubble {
-            margin-bottom: 20px;
-            line-height: 1.4;
-            max-width: 80%;
-        }
-
-        .sender-name { font-weight: bold; margin-bottom: 4px; display: block; font-size: 0.7rem; opacity: 0.7; }
-
-        /* --- VISUAL EFFECTS --- */
-        .crt-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), 
-                        linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
-            background-size: 100% 3px, 2px 100%;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             pointer-events: none;
-            z-index: 100;
+            text-shadow: 1px 1px 2px black;
         }
-
-        @keyframes blink { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
-        
-        .hidden { display: none !important; }
-        .visible { opacity: 1 !important; }
-
     </style>
 </head>
 <body>
-
-    <div class="crt-overlay"></div>
-
-    <div id="intro-scene">
-        <div class="room-ambient"></div>
-        <div id="computer-setup" onclick="bootSystem()">
-            <div class="monitor-body">
-                <div class="screen-off">
-                    <div class="click-prompt">SYSTEM OFFLINE<br>[ CLICK MONITOR TO INITIALIZE ]</div>
-                </div>
-            </div>
-        </div>
+    <div id="ui">
+        <h1>Procedural Universe</h1>
+        <p>Scroll to Zoom | Drag to Rotate</p>
     </div>
 
-    <div id="os-interface">
-        <div class="sidebar">
-            <h3>USER_ARCHIVE_042</h3>
-            <ul class="file-list">
-                <li onclick="startStory()">💬 logs_04_july.db</li>
-                <li style="opacity: 0.3">📁 encrypted_photos</li>
-                <li style="opacity: 0.3">📄 medical_debt.pdf</li>
-            </ul>
-        </div>
-        <div id="chat-window">
-            <div id="chat-content">
-                <p style="opacity: 0.5;">Select a file from the left to begin recovery...</p>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        const story = [
-            { name: "S_Sampson", text: "Is the machine still on?" },
-            { name: "The_Void", text: "Yeah. I'm just watching the cursor blink." },
-            { name: "S_Sampson", text: "The doctors called again. They said the insurance stopped the payments." },
-            { name: "The_Void", text: "I know. I saw the email." },
-            { name: "S_Sampson", text: "We have to sell the house, don't we?" },
-            { name: "The_Void", text: "It's okay. As long as we're together." },
-            { name: "S_Sampson", text: "But you're not here. You've been in that room for three days." },
-            { name: "The_Void", text: "I'm just trying to finish the code. If I finish it, we'll have the money." },
-            { name: "S_Sampson", text: "It's too late for the money. Please. Just come out and say goodbye while he's still awake." },
-            { name: "SYSTEM", text: "[ CONNECTION LOST: TIMEOUT ]" },
-            { name: "The_Void", text: "I'm sorry. I almost had it." }
-        ];
-
-        function bootSystem() {
-            const intro = document.getElementById('intro-scene');
-            const os = document.getElementById('os-interface');
-            
-            // Audio cue (optional browser-safe beep)
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = audioCtx.createOscillator();
-            osc.type = 'square';
-            osc.frequency.setValueAtTime(440, audioCtx.currentTime);
-            osc.connect(audioCtx.destination);
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.1);
-
-            intro.style.opacity = '0';
-            setTimeout(() => {
-                intro.classList.add('hidden');
-                os.classList.add('visible');
-            }, 1500);
-        }
-
-        let isRunning = false;
-        async function startStory() {
-            if (isRunning) return;
-            isRunning = true;
-            
-            const content = document.getElementById('chat-content');
-            content.innerHTML = "";
-
-            for (let msg of story) {
-                const div = document.createElement('div');
-                div.className = 'chat-bubble';
-                div.innerHTML = `<span class="sender-name">${msg.name}</span> <span class="text">${msg.text}</span>`;
-                content.appendChild(div);
-                
-                // Auto-scroll
-                window.scrollTo(0, document.body.scrollHeight);
-                
-                // Slow typing/reveal effect
-                await new Promise(r => setTimeout(r, 2000));
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
             }
         }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Scene Setup ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        camera.position.set(0, 50, 150);
+        controls.update();
+
+        // --- Lights ---
+        const sunLight = new THREE.PointLight(0xffffff, 2, 1000);
+        scene.add(sunLight);
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+        scene.add(ambientLight);
+
+        // --- Starfield (Background) ---
+        const starGeometry = new THREE.BufferGeometry();
+        const starMaterial = new THREE.PointsMaterial({ color: 0xffffff });
+        const starVertices = [];
+        for (let i = 0; i < 10000; i++) {
+            const x = (Math.random() - 0.5) * 2000;
+            const y = (Math.random() - 0.5) * 2000;
+            const z = (Math.random() - 0.5) * 2000;
+            starVertices.push(x, y, z);
+        }
+        starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+        const stars = new THREE.Points(starGeometry, starMaterial);
+        scene.add(stars);
+
+        // --- The Sun ---
+        const sunGeo = new THREE.SphereGeometry(10, 32, 32);
+        const sunMat = new THREE.MeshBasicMaterial({ color: 0xffdd00 });
+        const sun = new THREE.Mesh(sunGeo, sunMat);
+        scene.add(sun);
+
+        // --- Procedural Planets ---
+        const planets = [];
+        const planetCount = 6 + Math.floor(Math.random() * 5); // 6 to 10 planets
+
+        for (let i = 0; i < planetCount; i++) {
+            // Randomize properties
+            const radius = Math.random() * 4 + 1;
+            const distance = (i + 1) * 25 + (Math.random() * 10);
+            const speed = (Math.random() * 0.02) + 0.005;
+            const color = new THREE.Color().setHSL(Math.random(), 0.7, 0.5);
+
+            // Create Planet Mesh
+            const geometry = new THREE.SphereGeometry(radius, 32, 32);
+            const material = new THREE.MeshStandardMaterial({ color: color, roughness: 0.8 });
+            const planet = new THREE.Mesh(geometry, material);
+
+            // Orbit Group (to handle rotation easily)
+            const orbitGroup = new THREE.Group();
+            scene.add(orbitGroup);
+            orbitGroup.add(planet);
+            planet.position.set(distance, 0, 0);
+
+            // Add an orbit ring
+            const ringGeo = new THREE.RingGeometry(distance - 0.1, distance + 0.1, 64);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.1 });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = Math.PI / 2;
+            scene.add(ring);
+
+            planets.push({ mesh: planet, group: orbitGroup, speed: speed });
+        }
+
+        // --- Animation Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Rotate Sun
+            sun.rotation.y += 0.005;
+
+            // Orbit Planets
+            planets.forEach(p => {
+                p.group.rotation.y += p.speed;
+                p.mesh.rotation.y += 0.01;
+            });
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Handle Window Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
     </script>
 </body>
 </html>
