@@ -3,162 +3,217 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HELLDIVERS: TOTAL LIBERATION</title>
+    <title>HELLDIVERS: ULTRA MOBILE</title>
     <style>
         :root {
-            --yellow: #fbff00; --cyan: #00ffff; --red: #ff3300;
-            --bg: rgba(5, 10, 5, 0.95); --glow: 0 0 15px rgba(251, 255, 0, 0.4);
+            --gold: #fbff00; --cyan: #00ffff; --red: #ff3300; --bg: rgba(5, 10, 5, 0.95);
+            --border: 2px solid #445544; --font: 'Segoe UI', 'Courier New', monospace;
         }
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', monospace; touch-action: none; user-select: none; }
+        body { margin: 0; padding: 0; overflow: hidden; background: #020202; color: var(--gold); font-family: var(--font); touch-action: none; -webkit-user-select: none; }
         
-        #ui { position: absolute; width: 100%; height: 100%; pointer-events: none; z-index: 100; color: var(--yellow); }
-        .panel { position: absolute; background: var(--bg); border: 1px solid #445544; pointer-events: auto; backdrop-filter: blur(8px); }
+        /* --- HIGH-FIDELITY HUD --- */
+        #hud-container { position: absolute; width: 100%; height: 100%; pointer-events: none; z-index: 100; }
+        .glass-panel { position: absolute; background: var(--bg); border: var(--border); pointer-events: auto; backdrop-filter: blur(8px); padding: 12px; border-radius: 4px; box-shadow: 0 0 25px rgba(0,0,0,0.5); }
 
-        /* STRATAGEM SYSTEM */
-        #strat-panel { top: 15px; left: 15px; width: 240px; padding: 12px; border-left: 4px solid var(--yellow); }
-        #combo-view { font-size: 32px; height: 40px; text-align: center; margin: 10px 0; color: var(--cyan); text-shadow: var(--glow); }
-        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-        .btn { background: rgba(255,255,255,0.05); border: 1px solid var(--yellow); color: var(--yellow); height: 55px; font-size: 28px; border-radius: 4px; }
-        .btn:active { background: var(--yellow); color: #000; }
+        /* STRATAGEM CONSOLE V4 */
+        #strat-console { top: 15px; left: 15px; width: 240px; }
+        .strat-header { font-size: 10px; letter-spacing: 2px; border-bottom: 1px solid #334433; margin-bottom: 8px; color: #88aa88; }
+        #input-track { height: 40px; display: flex; justify-content: center; align-items: center; gap: 5px; font-size: 24px; background: rgba(0,0,0,0.3); margin-bottom: 10px; border-radius: 4px; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+        .btn-core { 
+            background: rgba(251, 255, 0, 0.05); border: 1px solid var(--gold); color: var(--gold); 
+            height: 55px; font-size: 28px; border-radius: 4px; transition: 0.05s;
+        }
+        .btn-core:active { background: var(--gold); color: #000; transform: translateY(2px); }
 
-        /* STATUS & LOGS */
-        #status-panel { top: 15px; right: 15px; width: 280px; padding: 12px; border-right: 4px solid var(--yellow); text-align: right; }
-        .stat-row { display: flex; justify-content: space-between; margin: 4px 0; font-size: 14px; }
-        #log { height: 120px; overflow: hidden; font-size: 11px; color: #aaa; border-top: 1px solid #333; margin-top: 10px; text-align: left; line-height: 1.4; }
+        /* VITAL STATUS & MISSION */
+        #mission-panel { top: 15px; right: 15px; width: 280px; text-align: right; }
+        .stat-line { display: flex; justify-content: space-between; margin: 4px 0; font-size: 13px; }
+        #health-container { display: flex; gap: 3px; justify-content: flex-end; margin-top: 5px; }
+        .hp-segment { width: 20px; height: 12px; background: var(--red); border: 1px solid #770000; skew: -15deg; }
+        .hp-off { background: #220000; border: 1px solid #331111; }
         
-        /* BARS */
-        .bar-bg { width: 100%; height: 8px; background: #222; margin: 4px 0; border: 1px solid #444; }
-        #hp-bar { height: 100%; background: var(--red); width: 100%; transition: 0.2s; }
-        #ammo-bar { height: 100%; background: var(--cyan); width: 100%; }
+        #weapon-card { margin-top: 15px; padding: 10px; background: rgba(0, 255, 255, 0.05); border: 1px solid var(--cyan); border-radius: 4px; color: var(--cyan); }
+        #feed { height: 100px; overflow: hidden; font-size: 11px; color: #aaa; margin-top: 10px; border-top: 1px solid #222; padding-top: 5px; line-height: 1.4; }
 
-        /* JOYSTICKS */
-        .joy { position: absolute; width: 160px; height: 160px; background: rgba(255,255,255,0.03); border: 2px solid rgba(251, 255, 0, 0.2); border-radius: 50%; bottom: 40px; pointer-events: auto; }
-        #move-joy { left: 40px; } #aim-joy { right: 40px; }
-        .knob { position: absolute; width: 70px; height: 70px; background: var(--yellow); border-radius: 50%; top: 45px; left: 45px; box-shadow: var(--glow); }
+        /* ANALOG CONTROLS */
+        .stick-base { position: absolute; width: 160px; height: 160px; border: 2px solid rgba(251, 255, 0, 0.2); border-radius: 50%; bottom: 40px; background: radial-gradient(circle, rgba(251,255,0,0.05) 0%, transparent 70%); }
+        #move-base { left: 40px; }
+        #aim-base { right: 40px; }
+        .stick-head { position: absolute; width: 75px; height: 75px; background: var(--gold); border-radius: 50%; top: 42.5px; left: 42.5px; box-shadow: 0 0 20px var(--gold); }
 
-        #score-msg { position: absolute; top: 50%; width: 100%; text-align: center; font-size: 40px; opacity: 0; transition: 0.5s; pointer-events: none; font-weight: bold; }
+        /* SCREENS & OVERLAYS */
+        #crosshair { position: absolute; top: 50%; left: 50%; width: 30px; height: 30px; border: 1px solid var(--cyan); border-radius: 50%; transform: translate(-50%, -50%); opacity: 0.3; }
     </style>
 </head>
 <body>
 
-<div id="ui">
-    <div id="strat-panel" class="panel">
-        <div style="font-size: 10px; opacity: 0.7;">ORBITAL UPLINK ESTABLISHED</div>
-        <div id="combo-view">----</div>
-        <div class="grid">
-            <div></div><button class="btn" onpointerdown="input('U')">▲</button><div></div>
-            <button class="btn" onpointerdown="input('L')">◀</button>
-            <button class="btn" onpointerdown="input('D')">▼</button>
-            <button class="btn" onpointerdown="input('R')">▶</button>
+<div id="hud-container">
+    <div id="strat-console" class="glass-panel">
+        <div class="strat-header">ORBITAL UPLINK STATUS: ONLINE</div>
+        <div id="input-track">----</div>
+        <div class="grid-3">
+            <div></div><button class="btn-core" onpointerdown="inputS('U')">▲</button><div></div>
+            <button class="btn-core" onpointerdown="inputS('L')">◀</button>
+            <button class="btn-core" onpointerdown="inputS('D')">▼</button>
+            <button class="btn-core" onpointerdown="inputS('R')">▶</button>
         </div>
-        <div id="active-strat" style="font-size: 10px; margin-top: 8px; color: var(--cyan);">READY FOR ORDERS</div>
+        <div style="font-size: 9px; margin-top: 8px; color: #666;">CODES: 500KG (UDRL) | LASER (URUL) | SHIELD (LLRR) | TESLA (DDUU)</div>
     </div>
 
-    <div id="status-panel" class="panel">
-        <div class="stat-row"><span>OPERATIVE</span><span>SES LIBERTY</span></div>
-        <div class="bar-bg"><div id="hp-bar"></div></div>
-        <div class="stat-row"><span>MAGAZINE</span><span id="ammo-txt">30/30</span></div>
-        <div class="bar-bg"><div id="ammo-bar"></div></div>
-        <div id="log">>> DROP SUCCESSFUL<br>>> MISSION: EXTERMINATION</div>
+    <div id="mission-panel" class="glass-panel">
+        <div class="stat-line"><span>MISSION TIME</span><span id="timer">40:00</span></div>
+        <div class="stat-line"><span>SAMPLES</span><span style="color:var(--cyan)">02 / 15</span></div>
+        <div id="health-container"></div>
+        <div id="weapon-card">
+            <div style="font-weight: bold; font-size: 14px;">AR-23 LIBERATOR</div>
+            <div style="display: flex; justify-content: space-between;"><span>AMMO</span><span id="ammo-val">45 / 45</span></div>
+        </div>
+        <div id="feed">>> WELCOME BACK, HERO OF SUPER EARTH.<br>>> SCANNING FOR TERMINID SCUM...</div>
     </div>
 
-    <div id="score-msg">STIM PACK USED!</div>
+    <div id="crosshair"></div>
 
-    <div id="move-joy" class="joy"><div id="move-knob" class="knob"></div></div>
-    <div id="aim-joy" class="joy"><div id="aim-knob" class="knob"></div></div>
+    <div id="move-base" class="stick-base"><div id="move-head" class="stick-head"></div></div>
+    <div id="aim-base" class="stick-base"><div id="aim-head" class="stick-head"></div></div>
 </div>
 
-<script type="importmap">
-    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
-</script>
+<script type="importmap"> { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } } </script>
 
 <script type="module">
     import * as THREE from 'three';
 
-    // --- GAME DATA ---
-    const STRATS = {
-        "UDRL":  { n: "500KG BOMB", c: "#00ffff", type: "bomb" },
-        "DDUUR": { n: "GATLING SENTRY", c: "#fbff00", type: "sentry" },
-        "RRLLD": { n: "ORBITAL LASER", c: "#ff0000", type: "laser" },
-        "UUDR":  { n: "STIM PACK", c: "#00ff00", type: "heal" },
-        "DDLL":  { n: "RESUPPLY", c: "#ffffff", type: "ammo" }
+    // --- GAME CONSTANTS ---
+    const GAME = {
+        SENSITIVITY: 0.22,
+        FIRE_RATE: 100,
+        BULLET_LIFE: 60,
+        MAX_ENEMIES: 30,
+        START_HP: 8
     };
 
-    const state = {
-        hp: 100, ammo: 30, reloading: false, score: 0,
-        move: { x: 0, y: 0 }, aim: { x: 0, y: 0, active: false },
-        buffer: "", lastFire: 0, shaking: 0
+    const CODES = {
+        "UDRL": { name: "500KG BOMB", color: 0xff4400, type: "nuke" },
+        "URUL": { name: "ORBITAL LASER", color: 0x00ffff, type: "laser" },
+        "LLRR": { name: "SHIELD PACK", color: 0x4444ff, type: "shield" },
+        "DDUU": { name: "TESLA TOWER", color: 0x8800ff, type: "turret" }
     };
 
-    // --- ENGINE SETUP ---
+    // --- CORE ENGINE ---
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x050a05, 0.04);
-    const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    scene.background = new THREE.Color(0x05080a);
+    scene.fog = new THREE.FogExp2(0x0a0d10, 0.035);
+
+    const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.5, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.VSMShadowMap;
     document.body.appendChild(renderer.domElement);
 
-    // --- LIGHTS ---
-    const sun = new THREE.DirectionalLight(0xffffff, 2.5);
-    sun.position.set(20, 50, 20);
+    // --- LIGHTING DESIGN ---
+    const sun = new THREE.DirectionalLight(0xffffff, 2.0);
+    sun.position.set(40, 80, 40);
     sun.castShadow = true;
+    sun.shadow.camera.left = sun.shadow.camera.bottom = -60;
+    sun.shadow.camera.right = sun.shadow.camera.top = 60;
+    sun.shadow.mapSize.set(2048, 2048);
     scene.add(sun);
-    scene.add(new THREE.AmbientLight(0x1a2a1a, 0.8));
+    scene.add(new THREE.AmbientLight(0x1a2a3a, 0.6));
 
-    // --- WORLD ---
+    // --- PROCEDURAL WORLD ---
     const ground = new THREE.Mesh(
-        new THREE.PlaneGeometry(400, 400),
-        new THREE.MeshStandardMaterial({ color: 0x111511, roughness: 1 })
+        new THREE.PlaneGeometry(500, 500, 40, 40),
+        new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 1, metalness: 0 })
     );
-    ground.rotation.x = -Math.PI/2;
+    ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = true;
+    
+    // Deform ground
+    const pos = ground.geometry.attributes.position;
+    for(let i=0; i<pos.count; i++) pos.setZ(i, Math.random() * 0.4);
     scene.add(ground);
 
-    // Decor: Cracks
-    for(let i=0; i<40; i++) {
-        const crack = new THREE.Mesh(new THREE.PlaneGeometry(2, 0.1), new THREE.MeshBasicMaterial({color: 0x221100}));
-        crack.position.set(Math.random()*200-100, 0.01, Math.random()*200-100);
-        crack.rotation.x = -Math.PI/2;
-        crack.rotation.z = Math.random()*Math.PI;
-        scene.add(crack);
+    // Add Spore Spewers (Objectives)
+    const spewers = [];
+    for(let i=0; i<8; i++) {
+        const s = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 2.5, 12, 6), new THREE.MeshStandardMaterial({color: 0x113311}));
+        s.position.set(Math.random()*200-100, 6, Math.random()*200-100);
+        s.castShadow = s.receiveShadow = true;
+        scene.add(s);
+        spewers.push(s);
     }
 
-    // --- PLAYER & ENTITIES ---
-    const player = new THREE.Group();
-    const pMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 0.8), new THREE.MeshStandardMaterial({color:0x111111, metalness:0.9}));
-    pMesh.castShadow = true;
-    const cape = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 1.3), new THREE.MeshStandardMaterial({color:0xfbff00, side:2}));
-    cape.position.set(0, 0.1, -0.3);
-    player.add(pMesh, cape);
-    player.position.y = 1;
-    scene.add(player);
+    // --- THE HELLDIVER (ADVANCED RIG) ---
+    const diver = new THREE.Group();
+    const armor = new THREE.Mesh(new THREE.CapsuleGeometry(0.45, 1, 8, 12), new THREE.MeshStandardMaterial({color: 0x0a0a0a, metalness: 0.9, roughness: 0.3}));
+    armor.castShadow = true;
+    
+    const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 12), new THREE.MeshStandardMaterial({color: 0x050505}));
+    helmet.position.y = 0.8;
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.1), new THREE.MeshBasicMaterial({color: 0xffff00}));
+    visor.position.set(0, 0.85, 0.3);
+    
+    // Physics-Cape Simulation Data
+    const capeGeo = new THREE.PlaneGeometry(0.8, 1.6, 4, 8);
+    const capeMat = new THREE.MeshStandardMaterial({color: 0xffff00, side: THREE.DoubleSide, roughness: 1});
+    const cape = new THREE.Mesh(capeGeo, capeMat);
+    cape.position.set(0, 0.4, -0.4);
+    cape.rotation.x = 0.2;
+    cape.castShadow = true;
 
-    const bugs = [];
+    diver.add(armor, helmet, visor, cape);
+    diver.position.set(0, 1.1, 0);
+    scene.add(diver);
+
+    // --- ENTITY SYSTEMS ---
     const bullets = [];
-    const sentries = [];
-    const particles = [];
-
-    function spawnBug(isHeavy = false) {
-        const size = isHeavy ? 1.5 : 0.6;
-        const bug = new THREE.Mesh(
-            new THREE.SphereGeometry(size, 8, 8),
-            new THREE.MeshStandardMaterial({ color: isHeavy ? 0xcc5500 : 0x44ff00 })
-        );
-        const a = Math.random()*6.28;
-        bug.position.set(Math.cos(a)*50, size, Math.sin(a)*50);
-        bug.hp = isHeavy ? 15 : 3;
-        bug.isHeavy = isHeavy;
+    const enemies = [];
+    const vfx = [];
+    
+    function spawnEnemy() {
+        const bug = new THREE.Group();
+        const body = new THREE.Mesh(new THREE.IcosahedronGeometry(0.8, 0), new THREE.MeshStandardMaterial({color: 0x33ff00}));
+        body.castShadow = true;
+        bug.add(body);
+        const angle = Math.random() * Math.PI * 2;
+        const d = 40 + Math.random() * 30;
+        bug.position.set(Math.cos(angle)*d, 0.8, Math.sin(angle)*d);
+        bug.userData = { hp: 4, speed: 0.05 + Math.random()*0.05 };
         scene.add(bug);
-        bugs.push(bug);
+        enemies.push(bug);
     }
-    for(let i=0; i<20; i++) spawnBug(i > 17);
+    for(let i=0; i<GAME.MAX_ENEMIES; i++) spawnEnemy();
 
-    // --- INPUT LOGIC ---
-    function setupJoy(id, data) {
-        const el = document.getElementById(id);
-        const knob = el.querySelector('.knob');
-        const rect = el.getBoundingClientRect();
+    // --- UI & TOUCH LOGIC ---
+    let playerHP = GAME.START_HP;
+    let ammo = 45;
+    let inputBuf = "";
+    let isFiring = false;
+    let shieldActive = false;
+    const mStick = { x:0, y:0, active: false };
+    const aStick = { x:0, y:0, active: false };
+
+    function initHP() {
+        const container = document.getElementById('health-container');
+        container.innerHTML = '';
+        for(let i=0; i<GAME.START_HP; i++) {
+            const pip = document.createElement('div');
+            pip.className = 'hp-segment';
+            container.appendChild(pip);
+        }
+    }
+
+    function updateLog(msg) {
+        const feed = document.getElementById('feed');
+        feed.innerHTML = `>> ${msg}<br>${feed.innerHTML}`;
+    }
+
+    function setupJoy(baseId, headId, data) {
+        const base = document.getElementById(baseId);
+        const head = document.getElementById(headId);
+        const rect = base.getBoundingClientRect();
         const center = { x: rect.left + 80, y: rect.top + 80 };
 
         const move = (e) => {
@@ -168,213 +223,161 @@
             const dy = t.clientY - center.y;
             const dist = Math.min(Math.sqrt(dx*dx + dy*dy), 60);
             const ang = Math.atan2(dy, dx);
-            data.x = (Math.cos(ang)*dist)/60;
-            data.y = (Math.sin(ang)*dist)/60;
+            data.x = (Math.cos(ang) * dist) / 60;
+            data.y = (Math.sin(ang) * dist) / 60;
+            head.style.transform = `translate(${data.x * 60}px, ${data.y * 60}px)`;
             data.active = true;
-            knob.style.transform = `translate(${data.x*60}px, ${data.y*60}px)`;
         };
-        const end = () => { data.x = 0; data.y = 0; data.active = false; knob.style.transform = `translate(0,0)`; };
-        el.addEventListener('touchstart', move); el.addEventListener('touchmove', move); el.addEventListener('touchend', end);
-    }
-    setupJoy('move-joy', state.move);
-    setupJoy('aim-joy', state.aim);
 
-    window.input = (dir) => {
-        state.buffer += dir;
-        document.getElementById('combo-view').innerText = state.buffer;
-        if(STRATS[state.buffer]) {
-            exec(STRATS[state.buffer]);
-            state.buffer = "";
-        } else if(state.buffer.length > 5) state.buffer = "";
+        base.addEventListener('touchstart', move, {passive:false});
+        base.addEventListener('touchmove', move, {passive:false});
+        base.addEventListener('touchend', () => {
+            head.style.transform = `translate(0,0)`;
+            data.x = 0; data.y = 0; data.active = false;
+        });
+    }
+    setupJoy('move-base', 'move-head', mStick);
+    setupJoy('aim-base', 'aim-head', aStick);
+
+    window.inputS = (dir) => {
+        inputBuf += dir;
+        document.getElementById('input-track').innerText = inputBuf;
+        if(CODES[inputBuf]) {
+            triggerStrat(CODES[inputBuf]);
+            inputBuf = "";
+        } else if(inputBuf.length >= 5) {
+            inputBuf = "";
+            document.getElementById('input-track').innerText = "FAIL";
+        }
     };
 
-    function log(m) {
-        const l = document.getElementById('log');
-        l.innerHTML = ">> " + m + "<br>" + l.innerHTML;
-    }
+    function triggerStrat(s) {
+        updateLog(`STRATAGEM: ${s.name} DEPLOYED`);
+        const pos = new THREE.Vector3().copy(diver.position).add(new THREE.Vector3(Math.sin(diver.rotation.y)*8, 0, Math.cos(diver.rotation.y)*8));
 
-    // --- ACTIONS ---
-    function exec(s) {
-        log("CALLED: " + s.n);
-        document.getElementById('active-strat').innerText = s.n;
-        const target = player.position.clone().add(new THREE.Vector3(Math.sin(player.rotation.y)*6, 0, Math.cos(player.rotation.y)*6));
-
-        if(s.type === "bomb") {
-            const beam = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 300), new THREE.MeshBasicMaterial({color:0x00ffff, transparent:true, opacity:0.6}));
-            beam.position.set(target.x, 150, target.z);
+        if(s.type === 'nuke') {
+            const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 300), new THREE.MeshBasicMaterial({color: 0x00ffff, transparent:true, opacity:0.7}));
+            beam.position.set(pos.x, 150, pos.z);
             scene.add(beam);
-            setTimeout(() => { scene.remove(beam); explode(target, 15, 20); }, 1200);
-        } 
-        else if(s.type === "sentry") {
-            const turret = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), new THREE.MeshStandardMaterial({color:0x444444}));
-            turret.position.set(target.x, 0.6, target.z);
-            turret.lastFire = 0;
-            scene.add(turret);
-            sentries.push(turret);
-            log("SENTRY DEPLOYED");
-        }
-        else if(s.type === "laser") {
-            orbitalLaser(target);
-        }
-        else if(s.type === "heal") {
-            state.hp = Math.min(100, state.hp + 50);
-            flashMsg("STIM PACK USED!");
-        }
-        else if(s.type === "ammo") {
-            state.ammo = 30;
-            log("RESUPPLIED");
+            setTimeout(() => {
+                scene.remove(beam);
+                createExplosion(pos, 15);
+            }, 1000);
+        } else if(s.type === 'shield') {
+            shieldActive = true;
+            updateLog("SHIELD CAPACITORS AT 100%");
+            setTimeout(() => shieldActive = false, 15000);
+        } else if(s.type === 'laser') {
+            createLaser(pos);
         }
     }
 
-    function orbitalLaser(pos) {
-        const laser = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 400), new THREE.MeshBasicMaterial({color:0xff0000}));
-        laser.position.set(pos.x, 200, pos.z);
-        scene.add(laser);
-        let life = 300;
-        const interval = setInterval(() => {
-            const closest = findClosest(laser.position, 20);
-            if(closest) {
-                const dir = new THREE.Vector3().subVectors(closest.position, laser.position).normalize();
-                laser.position.x += dir.x * 0.2;
-                laser.position.z += dir.z * 0.2;
-                closest.hp -= 0.5;
-            }
-            life--;
-            if(life <= 0) { scene.remove(laser); clearInterval(interval); }
-        }, 16);
-    }
-
-    function explode(pos, rad, dmg) {
-        state.shaking = 20;
-        log("DETONATION SUCCESS");
-        bugs.forEach(b => {
-            if(b.position.distanceTo(pos) < rad) b.hp -= dmg;
-        });
+    function createExplosion(pos, radius) {
         for(let i=0; i<40; i++) {
-            const p = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.5,0.5), new THREE.MeshBasicMaterial({color:0xff6600, transparent:true}));
+            const p = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshBasicMaterial({color: 0xff6600, transparent:true}));
             p.position.copy(pos);
-            p.vel = new THREE.Vector3(Math.random()-0.5, Math.random(), Math.random()-0.5).multiplyScalar(0.8);
-            p.life = 1.0;
-            scene.add(p);
-            particles.push(p);
+            p.userData = { vel: new THREE.Vector3(Math.random()-0.5, Math.random(), Math.random()-0.5).multiplyScalar(0.8), life: 1.0 };
+            vfx.push(p); scene.add(p);
         }
+        enemies.forEach(e => { if(e.position.distanceTo(pos) < radius) e.userData.hp = -1; });
     }
 
-    function flashMsg(t) {
-        const m = document.getElementById('score-msg');
-        m.innerText = t; m.style.opacity = 1;
-        setTimeout(() => m.style.opacity = 0, 1000);
+    function createLaser(pos) {
+        const l = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 500), new THREE.MeshBasicMaterial({color: 0x00ffff}));
+        l.position.set(pos.x, 250, pos.z);
+        scene.add(l);
+        let duration = 200;
+        const interval = setInterval(() => {
+            duration--;
+            const target = enemies[0]; 
+            if(target) l.position.lerp(new THREE.Vector3(target.position.x, 250, target.position.z), 0.1);
+            enemies.forEach(e => { if(e.position.distanceTo(new THREE.Vector3(l.position.x, 0, l.position.z)) < 3) e.userData.hp -= 0.5; });
+            if(duration <= 0) { scene.remove(l); clearInterval(interval); }
+        }, 30);
     }
 
-    function findClosest(pos, range) {
-        let nearest = null, d = range;
-        bugs.forEach(b => {
-            const dist = b.position.distanceTo(pos);
-            if(dist < d) { d = dist; nearest = b; }
-        });
-        return nearest;
-    }
-
-    // --- MAIN LOOP ---
-    function loop(now) {
+    // --- GAME LOOP ---
+    let frame = 0;
+    function loop() {
         requestAnimationFrame(loop);
+        frame++;
 
-        // Movement
-        player.position.x += state.move.x * 0.2;
-        player.position.z += state.move.y * 0.2;
-        if(state.aim.active) {
-            player.rotation.y = -Math.atan2(state.aim.y, state.aim.x) + Math.PI/2;
-            if(now - state.lastFire > 120 && state.ammo > 0 && !state.reloading) {
-                fire(player.position, player.rotation.y);
-                state.lastFire = now;
+        // 1. Movement & Camera
+        if(mStick.active) {
+            diver.position.x += mStick.x * GAME.SENSITIVITY;
+            diver.position.z += mStick.y * GAME.SENSITIVITY;
+            // Cape Animation
+            const capePos = cape.geometry.attributes.position;
+            for(let i=0; i<capePos.count; i++) {
+                const z = Math.sin(frame*0.2 + i)*0.1;
+                capePos.setZ(i, z);
             }
+            capePos.needsUpdate = true;
         }
 
-        // Camera & Shake
-        const camPos = new THREE.Vector3(player.position.x, 22, player.position.z + 18);
-        if(state.shaking > 0) {
-            camPos.x += (Math.random()-0.5);
-            camPos.z += (Math.random()-0.5);
-            state.shaking--;
-        }
-        camera.position.lerp(camPos, 0.1);
-        camera.lookAt(player.position);
-
-        // Sentries
-        sentries.forEach(s => {
-            const target = findClosest(s.position, 25);
-            if(target && now - s.lastFire > 200) {
-                fire(s.position, Math.atan2(target.position.x - s.position.x, target.position.z - s.position.z));
-                s.lastFire = now;
+        if(aStick.active) {
+            diver.rotation.y = Math.atan2(aStick.x, aStick.y);
+            if(frame % 5 === 0 && ammo > 0) {
+                ammo--;
+                document.getElementById('ammo-val').innerText = `${ammo} / 45`;
+                const b = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.6), new THREE.MeshBasicMaterial({color:0xffff00}));
+                b.position.copy(diver.position);
+                b.rotation.y = diver.rotation.y;
+                b.userData = { vel: new THREE.Vector3(Math.sin(diver.rotation.y), 0, Math.cos(diver.rotation.y)).multiplyScalar(1.2), life: GAME.BULLET_LIFE };
+                bullets.push(b); scene.add(b);
             }
-        });
+            if(ammo <= 0 && frame % 100 === 0) ammo = 45; // Auto-reload
+        }
 
-        // Bullets
-        for(let i=bullets.length-1; i>=0; i--) {
-            const b = bullets[i];
-            b.position.add(b.vel);
-            if(b.position.distanceTo(player.position) > 60) { scene.remove(b); bullets.splice(i,1); continue; }
-            bugs.forEach(bug => {
-                if(bug.position.distanceTo(b.position) < 1.5) {
-                    bug.hp -= 1;
-                    bug.scale.setScalar(1.2);
-                    setTimeout(() => bug.scale.setScalar(1), 50);
-                    scene.remove(b); bullets.splice(i,1);
+        // 2. Systems Update
+        bullets.forEach((b, i) => {
+            b.position.add(b.userData.vel);
+            b.userData.life--;
+            enemies.forEach(e => {
+                if(e.position.distanceTo(b.position) < 1.2) {
+                    e.userData.hp--; b.userData.life = 0;
                 }
             });
-        }
+            if(b.userData.life <= 0) { scene.remove(b); bullets.splice(i, 1); }
+        });
 
-        // Bugs
-        bugs.forEach(bug => {
-            if(bug.hp <= 0) {
-                state.score++;
-                spawnBug(state.score % 10 === 0);
-                bug.position.set(1000,0,0); // Out of bounds
-                return;
+        enemies.forEach((e, i) => {
+            const dir = new THREE.Vector3().subVectors(diver.position, e.position).normalize();
+            e.position.addScaledVector(dir, e.userData.speed);
+            if(e.userData.hp <= 0) {
+                e.position.set(Math.random()*100-50, 0.8, Math.random()*100-50);
+                e.userData.hp = 4;
             }
-            const d = new THREE.Vector3().subVectors(player.position, bug.position).normalize();
-            bug.position.addScaledVector(d, bug.isHeavy ? 0.04 : 0.08);
-            if(bug.position.distanceTo(player.position) < 1.2) {
-                state.hp -= 0.3;
-                if(state.hp <= 0) { log("REINFORCING..."); state.hp = 100; player.position.set(0,1,0); }
+            if(e.position.distanceTo(diver.position) < 1.5 && frame % 30 === 0) {
+                if(!shieldActive) {
+                    playerHP--;
+                    const pips = document.querySelectorAll('.hp-segment');
+                    if(pips[playerHP]) pips[playerHP].classList.add('hp-off');
+                }
             }
         });
 
-        // Particles
-        for(let i=particles.length-1; i>=0; i--) {
-            const p = particles[i];
-            p.position.add(p.vel); p.life -= 0.02;
-            p.material.opacity = p.life;
-            if(p.life <= 0) { scene.remove(p); particles.splice(i,1); }
-        }
+        vfx.forEach((p, i) => {
+            p.position.add(p.userData.vel);
+            p.userData.life -= 0.02;
+            p.scale.setScalar(p.userData.life);
+            if(p.userData.life <= 0) { scene.remove(p); vfx.splice(i, 1); }
+        });
 
-        // UI
-        document.getElementById('hp-bar').style.width = state.hp + "%";
-        document.getElementById('ammo-bar').style.width = (state.ammo/30)*100 + "%";
-        document.getElementById('ammo-txt').innerText = state.ammo + "/30";
+        camera.position.lerp(new THREE.Vector3(diver.position.x, 22, diver.position.z + 20), 0.1);
+        camera.lookAt(diver.position);
 
         renderer.render(scene, camera);
     }
 
-    function fire(pos, rot) {
-        if(pos === player.position) state.ammo--;
-        const b = new THREE.Mesh(new THREE.SphereGeometry(0.15), new THREE.MeshBasicMaterial({color:0xffff00}));
-        b.position.copy(pos);
-        b.vel = new THREE.Vector3(Math.sin(rot), 0, Math.cos(rot)).multiplyScalar(1.2);
-        scene.add(b);
-        bullets.push(b);
-        if(state.ammo <= 0 && pos === player.position) {
-            state.reloading = true;
-            setTimeout(() => { state.ammo = 30; state.reloading = false; }, 1500);
-        }
-    }
-
-    loop(0);
+    initHP();
+    loop();
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
+
 </script>
 </body>
 </html>
