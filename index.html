@@ -3,153 +3,68 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mini Gemini AI</title>
+    <title>The Reproducing Box</title>
     <style>
-        /* Modern Dark Theme Styling */
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #131314;
-            color: #e3e3e3;
             display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-        }
-
-        #chat-container {
-            width: 100%;
-            max-width: 600px;
-            height: 80vh;
-            background: #1e1f20;
-            border-radius: 16px;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-        }
-
-        #messages {
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
+            flex-wrap: wrap;
             gap: 15px;
-        }
-
-        .message {
-            max-width: 80%;
-            padding: 12px 16px;
-            border-radius: 20px;
-            line-height: 1.5;
-        }
-
-        .user-msg {
-            align-self: flex-end;
-            background-color: #37393b;
-            color: white;
-            border-bottom-right-radius: 4px;
-        }
-
-        .ai-msg {
-            align-self: flex-start;
-            background-color: #282a2c;
-            color: #e3e3e3;
-            border-bottom-left-radius: 4px;
-            border: 1px solid #444746;
-        }
-
-        #input-area {
             padding: 20px;
-            background: #1e1f20;
-            display: flex;
-            gap: 10px;
-            border-top: 1px solid #444746;
+            background-color: #f0f2f5;
+            font-family: sans-serif;
         }
 
-        input {
-            flex: 1;
-            background: #282a2c;
-            border: 1px solid #444746;
-            border-radius: 25px;
-            padding: 12px 20px;
-            color: white;
-            outline: none;
-        }
-
-        button {
-            background: #4285f4;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 25px;
+        .box {
+            width: 100px;
+            height: 100px;
+            background-color: #ff6b6b;
+            border-radius: 8px;
             cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
             font-weight: bold;
+            user-select: none;
+            transition: transform 0.1s ease, background-color 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
 
-        button:hover {
-            background: #357abd;
+        .box:hover {
+            background-color: #ee5253;
+            transform: scale(1.05);
+        }
+
+        .box:active {
+            transform: scale(0.95);
         }
     </style>
 </head>
 <body>
 
-<div id="chat-container">
-    <div id="messages">
-        <div class="message ai-msg">Hello! I'm your local AI clone. How can I help you today?</div>
-    </div>
-    <div id="input-area">
-        <input type="text" id="user-input" placeholder="Type a message..." onkeypress="handleKeyPress(event)">
-        <button onclick="sendMessage()">Send</button>
-    </div>
-</div>
+    <div class="box" onclick="reproduce(this)">Click Me</div>
 
-<script>
-    const messagesDiv = document.getElementById('messages');
-    const inputField = document.getElementById('user-input');
+    <script>
+        function reproduce(element) {
+            // 1. Create a new div element
+            const newBox = document.createElement('div');
+            
+            // 2. Give it the same class and text
+            newBox.className = 'box';
+            newBox.innerText = 'Click Me';
+            
+            // 3. Make sure the new box can also reproduce
+            newBox.onclick = function() {
+                reproduce(newBox);
+            };
 
-    function sendMessage() {
-        const text = inputField.value.trim();
-        if (!text) return;
+            // 4. Add a random color just for fun
+            const randomHue = Math.floor(Math.random() * 360);
+            newBox.style.backgroundColor = `hsl(${randomHue}, 70%, 60%)`;
 
-        // Add User Message
-        addMessage(text, 'user-msg');
-        inputField.value = '';
-
-        // Simulate "AI" thinking
-        setTimeout(() => {
-            const response = getAIResponse(text);
-            addMessage(response, 'ai-msg');
-        }, 600);
-    }
-
-    function addMessage(text, className) {
-        const msgDiv = document.createElement('div');
-        msgDiv.className = `message ${className}`;
-        msgDiv.innerText = text;
-        messagesDiv.appendChild(msgDiv);
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    }
-
-    function handleKeyPress(e) {
-        if (e.key === 'Enter') sendMessage();
-    }
-
-    // Logic for the "AI" personality
-    function getAIResponse(input) {
-        const lowerInput = input.toLowerCase();
-        if (lowerInput.includes("hello") || lowerInput.includes("hi")) {
-            return "Hey there! Ready to build something amazing?";
-        } else if (lowerInput.includes("who are you")) {
-            return "I'm a lightweight HTML/JS simulation of an AI assistant!";
-        } else if (lowerInput.includes("pookie")) {
-            return "Aw, that's sweet! Let's get back to work, shall we?";
-        } else {
-            return "That's interesting! Since I'm just a simple script, my knowledge is a bit limited compared to the real Gemini, but I'm here to look cool!";
+            // 5. Place it into the body
+            document.body.appendChild(newBox);
         }
-    }
-</script>
-
+    </script>
 </body>
 </html>
