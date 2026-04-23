@@ -1,237 +1,143 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Infinite Desert Nomad</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
-  * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { width:100%; height:100%; overflow:hidden; background:#0d0a08; touch-action:none; }
-  canvas { display:block; position:fixed; top:0; left:0; width: 100vw; height: 100vh; }
-  
-  #ui-layer { position: fixed; inset: 0; pointer-events: none; z-index: 10; font-family:'Share Tech Mono',monospace; }
-  #joy-bound {
-    position: fixed; bottom: 50px; left: 50px; width: 150px; height: 150px;
-    background: rgba(220,180,100,0.08); border: 2px solid rgba(220,180,100,0.2);
-    border-radius: 50%; pointer-events: auto;
-  }
-  #joy-stick {
-    position: absolute; top: 50%; left: 50%; width: 60px; height: 60px;
-    margin: -30px 0 0 -30px; background: rgba(220,180,100,0.3);
-    border: 2px solid rgba(220,180,100,0.6); border-radius: 50%;
-    pointer-events: none;
-  }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultra-Realistic WebGL Water</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; }
+        canvas { display: block; }
+    </style>
 </head>
 <body>
-<canvas id="c"></canvas>
-<div id="ui-layer">
-    <div id="joy-bound"><div id="joy-stick"></div></div>
-</div>
 
-<script>
-'use strict';
+<script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+</script>
 
-const canvas = document.getElementById('c');
-const joyStick = document.getElementById('joy-stick');
-const DPR = Math.min(window.devicePixelRatio || 1, 2);
-const S = 512; // Resolution
+<script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { Water } from 'three/addons/objects/Water.js';
+    import { Sky } from 'three/addons/objects/Sky.js';
 
-let W, H, CW, CH;
-const car = { x: 0.5, y: 0.5, angle: 0, v: 0, inputX: 0, inputY: 0 };
+    let container;
+    let camera, scene, renderer, controls, water, sun, mesh;
 
-function resize(){
-    CW = window.innerWidth; CH = window.innerHeight;
-    W = Math.round(CW * DPR); H = Math.round(CH * DPR);
-    canvas.width = W; canvas.height = H;
-}
-resize(); window.addEventListener('resize', resize);
+    init();
+    animate();
 
-const gl = canvas.getContext('webgl', {antialias:false, alpha:false, depth: false});
-let FTYPE = gl.UNSIGNED_BYTE, UINT8 = true;
+    function init() {
+        container = document.createElement('div');
+        document.body.appendChild(container);
 
-// Compatibility check
-const hf = gl.getExtension('OES_texture_half_float');
-if(hf) { FTYPE = hf.HALF_FLOAT_OES; UINT8 = false; }
+        // Renderer Setup
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 0.5;
+        container.appendChild(renderer.domElement);
 
-const VERT = `attribute vec2 aPos; varying vec2 vUV; void main(){ vUV = aPos*.5+.5; gl_Position = vec4(aPos,0.,1.); }`;
+        // Scene & Camera
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 1, 20000);
+        camera.position.set(30, 30, 100);
 
-const INIT_SRC = (UINT8 ? '#define U8\n' : '') + `
-precision highp float;
-varying vec2 vUV;
-float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
-void main(){
-    float h = 0.5 + 0.1 * sin(vUV.x*10.0) + 0.1 * cos(vUV.y*10.0) + 0.05 * hash(vUV);
-    #ifdef U8
-      float t = h*255.; gl_FragColor = vec4(floor(t)/255., fract(t), 0, 1);
-    #else
-      gl_FragColor = vec4(h, 0, 0, 1);
-    #endif
-}`;
+        // Sun Direction
+        sun = new THREE.Vector3();
 
-const SIM_SRC = (UINT8 ? '#define U8\n' : '') + `
-precision highp float;
-varying vec2 vUV;
-uniform sampler2D uS;
-uniform vec2 uTx, uW1, uW2, uW3, uW4;
-uniform float uStr;
-#ifdef U8
-  float H(vec2 u){ vec4 s=texture2D(uS,fract(u)); return s.r+s.g/255.; }
-  vec2 enc(float v){ float t=clamp(v,0.,.99999)*255.; return vec2(floor(t)/255.,fract(t)); }
-#else
-  float H(vec2 u){ return texture2D(uS,fract(u)).r; }
-#endif
-void main(){
-    float h = H(vUV);
-    vec2 tx = vec2(uTx.x, 0.0), ty = vec2(0.0, uTx.y);
-    float hN = H(vUV+ty), hS = H(vUV-ty), hE = H(vUV+tx), hW = H(vUV-tx);
-    
-    // Smooth the sand (Avalanche)
-    float flow = ((hN+hS+hE+hW)-4.0*h)*0.18;
-    
-    // Tire interaction - increased radius and strength
-    float track = 0.0;
-    track += smoothstep(0.022, 0.0, length(vUV - uW1));
-    track += smoothstep(0.022, 0.0, length(vUV - uW2));
-    track += smoothstep(0.022, 0.0, length(vUV - uW3));
-    track += smoothstep(0.022, 0.0, length(vUV - uW4));
-    
-    float newH = clamp(h + flow - track * uStr, 0.0, 1.0);
-    gl_FragColor = UINT8 ? vec4(enc(newH),0,1) : vec4(newH,0,0,1);
-}`;
+        // Water Geometry
+        const waterGeometry = new THREE.PlaneGeometry(10000, 10000);
 
-const REN_SRC = (UINT8 ? '#define U8\n' : '') + `
-precision highp float;
-varying vec2 vUV;
-uniform sampler2D uS;
-uniform vec2 uTx, uOffset;
-uniform float uAspect;
-#ifdef U8
-  float H(vec2 u){ vec4 s=texture2D(uS, fract(u)); return s.r+s.g/255.; }
-#else
-  float H(vec2 u){ return texture2D(uS, fract(u)).r; }
-#endif
-void main(){
-    vec2 worldUV = vUV + uOffset;
-    float h = H(worldUV);
-    float hL = H(worldUV-vec2(uTx.x,0)), hR = H(worldUV+vec2(uTx.x,0));
-    float hU = H(worldUV+vec2(0,uTx.y)), hD = H(worldUV-vec2(0,uTx.y));
-    
-    vec3 N = normalize(vec3(hL-hR, hD-hU, 0.1));
-    float diff = max(dot(N, normalize(vec3(0.5,0.7,0.3))), 0.0);
-    vec3 sand = mix(vec3(0.35, 0.22, 0.1), vec3(0.9, 0.75, 0.5), h);
-    vec3 col = sand * (diff + 0.25);
-    
-    // Draw Car
-    float dCar = length((vUV - 0.5) * vec2(uAspect, 1.0));
-    if(dCar < 0.015) col = vec3(0.05);
-    
-    gl_FragColor = vec4(pow(col, vec3(1.0/2.2)), 1.0);
-}`;
+        water = new Water(
+            waterGeometry,
+            {
+                textureWidth: 512,
+                textureHeight: 512,
+                waterNormals: new THREE.TextureLoader().load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/waternormals.jpg', function (texture) {
+                    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+                }),
+                sunDirection: new THREE.Vector3(),
+                sunColor: 0xffffff,
+                waterColor: 0x001e0f,
+                distortionScale: 3.7,
+                fog: scene.fog !== undefined
+            }
+        );
 
-// --- COMPILER ---
-function mkProg(vs, fs){
-    const p = gl.createProgram();
-    const s1 = gl.createShader(gl.VERTEX_SHADER), s2 = gl.createShader(gl.FRAGMENT_SHADER);
-    gl.shaderSource(s1, vs); gl.compileShader(s1);
-    gl.shaderSource(s2, fs); gl.compileShader(s2);
-    gl.attachShader(p, s1); gl.attachShader(p, s2); gl.linkProgram(p);
-    const u = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
-    for(let i=0; i<n; i++){ const x=gl.getActiveUniform(p,i); u[x.name]=gl.getUniformLocation(p,x.name); }
-    return {p, u};
-}
+        water.rotation.x = -Math.PI / 2;
+        scene.add(water);
 
-const initP = mkProg(VERT, INIT_SRC), simP = mkProg(VERT, SIM_SRC), renP = mkProg(VERT, REN_SRC);
-const qb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, qb);
-gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
+        // Skybox Implementation
+        const sky = new Sky();
+        sky.scale.setScalar(10000);
+        scene.add(sky);
 
-function mkFBO(){
-    const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, S, S, 0, gl.RGBA, FTYPE, null);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-    const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
-    return {t, f};
-}
-let fA = mkFBO(), fB = mkFBO();
+        const skyUniforms = sky.material.uniforms;
+        skyUniforms['turbidity'].value = 10;
+        skyUniforms['rayleigh'].value = 2;
+        skyUniforms['mieCoefficient'].value = 0.005;
+        skyUniforms['mieDirectionalG'].value = 0.8;
 
-// Initial dunes
-gl.bindFramebuffer(gl.FRAMEBUFFER, fA.f);
-gl.viewport(0,0,S,S); gl.useProgram(initP.p);
-const iLoc = gl.getAttribLocation(initP.p, 'aPos');
-gl.enableVertexAttribArray(iLoc); gl.vertexAttribPointer(iLoc, 2, gl.FLOAT, false, 0, 0);
-gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        const parameters = {
+            elevation: 2,
+            azimuth: 180
+        };
 
-// --- INPUTS (Optimized for iPad) ---
-function handleJoy(e){
-    e.preventDefault();
-    const b = document.getElementById('joy-bound').getBoundingClientRect();
-    const t = e.touches ? e.touches[0] : e;
-    const dx = t.clientX - (b.left + b.width/2), dy = t.clientY - (b.top + b.height/2);
-    const dist = Math.min(75, Math.hypot(dx, dy)), ang = Math.atan2(dy, dx);
-    joyStick.style.transform = `translate(${Math.cos(ang)*dist}px, ${Math.sin(ang)*dist}px)`;
-    car.inputX = (Math.cos(ang)*dist)/75; car.inputY = (Math.sin(ang)*dist)/75;
-}
-const jb = document.getElementById('joy-bound');
-jb.addEventListener('touchstart', handleJoy, {passive: false});
-jb.addEventListener('touchmove', handleJoy, {passive: false});
-window.addEventListener('touchend', () => { 
-    joyStick.style.transform = `translate(0,0)`; car.inputX = 0; car.inputY = 0; 
-});
+        const pmremGenerator = new THREE.PMREMGenerator(renderer);
+        let renderTarget;
 
-// --- FRAME LOOP ---
-function frame(now){
-    requestAnimationFrame(frame);
-    
-    // Faster car physics
-    car.v = car.v * 0.96 + (-car.inputY * 0.006);
-    car.angle += car.inputX * car.v * 3.5;
-    car.x += Math.cos(car.angle) * car.v; 
-    car.y -= Math.sin(car.angle) * car.v;
+        function updateSun() {
+            const phi = THREE.MathUtils.degToRad(90 - parameters.elevation);
+            const theta = THREE.MathUtils.degToRad(parameters.azimuth);
 
-    // Simulation Step
-    gl.useProgram(simP.p);
-    const sLoc = gl.getAttribLocation(simP.p, 'aPos');
-    gl.enableVertexAttribArray(sLoc); gl.vertexAttribPointer(sLoc, 2, gl.FLOAT, false, 0, 0);
-    
-    const fx = v => ((v % 1) + 1) % 1;
-    const wX = Math.cos(car.angle)*0.018, wY = Math.sin(car.angle)*0.018;
-    const sX = Math.cos(car.angle+1.57)*0.012, sY = Math.sin(car.angle+1.57)*0.012;
+            sun.setFromSphericalCoords(1, phi, theta);
 
-    // Run 2 steps per frame for smoother sand
-    for(let i=0; i<2; i++){
-        gl.bindFramebuffer(gl.FRAMEBUFFER, fB.f);
-        gl.viewport(0,0,S,S);
-        gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fA.t);
-        gl.uniform1i(simP.u.uS, 0);
-        gl.uniform2f(simP.u.uTx, 1/S, 1/S);
-        // Base strength + velocity strength
-        gl.uniform1f(simP.u.uStr, 0.01 + Math.abs(car.v)*25.0);
-        
-        gl.uniform2f(simP.u.uW1, fx(car.x+wX+sX), fx(car.y+wY+sY));
-        gl.uniform2f(simP.u.uW2, fx(car.x+wX-sX), fx(car.y+wY-sY));
-        gl.uniform2f(simP.u.uW3, fx(car.x-wX+sX), fx(car.y-wY+sY));
-        gl.uniform2f(simP.u.uW4, fx(car.x-wX-sX), fx(car.y-wY-sY));
-        
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-        let t = fA; fA = fB; fB = t;
+            sky.material.uniforms['sunPosition'].value.copy(sun);
+            water.material.uniforms['sunDirection'].value.copy(sun).normalize();
+
+            if (renderTarget !== undefined) renderTarget.dispose();
+
+            renderTarget = pmremGenerator.fromScene(sky);
+            scene.environment = renderTarget.texture;
+        }
+
+        updateSun();
+
+        // Controls
+        controls = new OrbitControls(camera, renderer.domElement);
+        controls.maxPolarAngle = Math.PI * 0.495;
+        controls.target.set(0, 10, 0);
+        controls.minDistance = 40.0;
+        controls.maxDistance = 200.0;
+        controls.update();
+
+        window.addEventListener('resize', onWindowResize);
     }
 
-    // Render Step
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0,0,W,H);
-    gl.useProgram(renP.p);
-    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fA.t);
-    gl.uniform2f(renP.u.uOffset, car.x - 0.5, car.y - 0.5);
-    gl.uniform2f(renP.u.uTx, 1/S, 1/S);
-    gl.uniform1f(renP.u.uAspect, CW/CH);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-}
-requestAnimationFrame(frame);
+    function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        render();
+    }
+
+    function render() {
+        const time = performance.now() * 0.001;
+        // Animates the "flow" of the water normals
+        water.material.uniforms['time'].value += 1.0 / 60.0;
+        renderer.render(scene, camera);
+    }
 </script>
 </body>
 </html>
