@@ -3,202 +3,228 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultra High-Res Anime Spirit Tree</title>
+    <title>Property of [REDACTED]</title>
     <style>
-        body { margin: 0; overflow: hidden; background: radial-gradient(circle, #1a2a6c, #b21f1f, #fdbb2d); }
-        #ui {
-            position: absolute;
-            top: 20px;
-            width: 100%;
-            text-align: center;
-            color: white;
-            font-family: 'Courier New', monospace;
-            letter-spacing: 5px;
-            text-transform: uppercase;
-            pointer-events: none;
-            text-shadow: 0 0 15px rgba(255,255,255,0.8);
+        :root {
+            --terminal-green: #1aff80;
+            --dark-bg: #050505;
+            --monitor-frame: #2a2a2a;
         }
+
+        body, html {
+            margin: 0; padding: 0;
+            background: var(--dark-bg);
+            color: var(--terminal-green);
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            height: 100%;
+        }
+
+        /* --- 3D INTRO SCENE --- */
+        #intro-scene {
+            perspective: 1200px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 1.5s ease-in-out;
+        }
+
+        .room-ambient {
+            position: absolute;
+            width: 100%; height: 100%;
+            background: radial-gradient(circle, #111 0%, #000 70%);
+            z-index: -1;
+        }
+
+        #computer-setup {
+            transform: rotateX(15deg) rotateY(-15deg);
+            transform-style: preserve-3d;
+            cursor: pointer;
+            transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        #computer-setup:hover {
+            transform: rotateX(5deg) rotateY(-5deg) scale(1.1);
+        }
+
+        .monitor-body {
+            width: 350px; height: 280px;
+            background: var(--monitor-frame);
+            border: 12px solid #333;
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 20px 20px 50px rgba(0,0,0,0.5);
+            position: relative;
+        }
+
+        .screen-off {
+            width: 90%; height: 85%;
+            background: #111;
+            border-radius: 5px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .click-prompt {
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            animation: blink 2s infinite;
+            color: #444;
+            text-align: center;
+        }
+
+        /* --- OS INTERFACE --- */
+        #os-interface {
+            height: 100vh;
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            background: #020502;
+            opacity: 0;
+            transition: opacity 2s;
+        }
+
+        .sidebar {
+            border-right: 1px solid rgba(26, 255, 128, 0.2);
+            padding: 20px;
+            background: rgba(0, 20, 0, 0.3);
+        }
+
+        .sidebar h3 { font-size: 0.9rem; border-bottom: 1px solid var(--terminal-green); padding-bottom: 10px; }
+        
+        .file-list { list-style: none; padding: 0; }
+        .file-list li {
+            padding: 10px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: background 0.2s;
+        }
+        .file-list li:hover { background: rgba(26, 255, 128, 0.1); }
+
+        #chat-window {
+            padding: 40px;
+            max-width: 700px;
+            margin: 0 auto;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .chat-bubble {
+            margin-bottom: 20px;
+            line-height: 1.4;
+            max-width: 80%;
+        }
+
+        .sender-name { font-weight: bold; margin-bottom: 4px; display: block; font-size: 0.7rem; opacity: 0.7; }
+
+        /* --- VISUAL EFFECTS --- */
+        .crt-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), 
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            background-size: 100% 3px, 2px 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        @keyframes blink { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+        
+        .hidden { display: none !important; }
+        .visible { opacity: 1 !important; }
+
     </style>
 </head>
 <body>
 
-<div id="ui"><h1>The Eternal Bloom</h1></div>
+    <div class="crt-overlay"></div>
 
-<script type="importmap">
-  {
-    "imports": {
-      "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
-    }
-  }
-</script>
+    <div id="intro-scene">
+        <div class="room-ambient"></div>
+        <div id="computer-setup" onclick="bootSystem()">
+            <div class="monitor-body">
+                <div class="screen-off">
+                    <div class="click-prompt">SYSTEM OFFLINE<br>[ CLICK MONITOR TO INITIALIZE ]</div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-<script type="module">
-    import * as THREE from 'three';
+    <div id="os-interface">
+        <div class="sidebar">
+            <h3>USER_ARCHIVE_042</h3>
+            <ul class="file-list">
+                <li onclick="startStory()">💬 logs_04_july.db</li>
+                <li style="opacity: 0.3">📁 encrypted_photos</li>
+                <li style="opacity: 0.3">📄 medical_debt.pdf</li>
+            </ul>
+        </div>
+        <div id="chat-window">
+            <div id="chat-content">
+                <p style="opacity: 0.5;">Select a file from the left to begin recovery...</p>
+            </div>
+        </div>
+    </div>
 
-    // --- SCENE SETUP ---
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 8, 20);
+    <script>
+        const story = [
+            { name: "S_Sampson", text: "Is the machine still on?" },
+            { name: "The_Void", text: "Yeah. I'm just watching the cursor blink." },
+            { name: "S_Sampson", text: "The doctors called again. They said the insurance stopped the payments." },
+            { name: "The_Void", text: "I know. I saw the email." },
+            { name: "S_Sampson", text: "We have to sell the house, don't we?" },
+            { name: "The_Void", text: "It's okay. As long as we're together." },
+            { name: "S_Sampson", text: "But you're not here. You've been in that room for three days." },
+            { name: "The_Void", text: "I'm just trying to finish the code. If I finish it, we'll have the money." },
+            { name: "S_Sampson", text: "It's too late for the money. Please. Just come out and say goodbye while he's still awake." },
+            { name: "SYSTEM", text: "[ CONNECTION LOST: TIMEOUT ]" },
+            { name: "The_Void", text: "I'm sorry. I almost had it." }
+        ];
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.toneMapping = THREE.ReinhardToneMapping;
-    document.body.appendChild(renderer.domElement);
-
-    // --- MAGICAL LIGHTING ---
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-    scene.add(ambientLight);
-
-    const sun = new THREE.DirectionalLight(0xffeebb, 2);
-    sun.position.set(10, 20, 10);
-    scene.add(sun);
-
-    const pointLight = new THREE.PointLight(0x00ff88, 5, 50);
-    pointLight.position.set(0, 5, 0);
-    scene.add(pointLight);
-
-    // --- SHADERS (The "Secret Sauce") ---
-    // Custom shader to make leaves flutter in the wind
-    const leafShaderMaterial = new THREE.MeshToonMaterial({
-        color: 0xff69b4, // Cherry Blossom Pink
-        side: THREE.DoubleSide,
-    });
-
-    leafShaderMaterial.onBeforeCompile = (shader) => {
-        shader.uniforms.uTime = { value: 0 };
-        shader.vertexShader = `
-            uniform float uTime;
-        ` + shader.vertexShader;
-        shader.vertexShader = shader.vertexShader.replace(
-            '#include <begin_vertex>',
-            `
-            vec3 transformed = vec3(position);
-            float spread = 0.5;
-            transformed.x += sin(uTime * 2.0 + position.y * spread) * 0.2;
-            transformed.z += cos(uTime * 1.5 + position.x * spread) * 0.2;
-            `
-        );
-        leafShaderMaterial.userData.shader = shader;
-    };
-
-    // --- TREE CONSTRUCTION ---
-    const trunkMat = new THREE.MeshToonMaterial({ color: 0x2d1b0d });
-    const masterGroup = new THREE.Group();
-    scene.add(masterGroup);
-
-    function createDetailedBranch(parent, startPos, dir, length, radius, depth) {
-        if (depth > 8) return;
-
-        // Tapered geometry for "realistic" feel
-        const segments = Math.max(3, 10 - depth);
-        const geo = new THREE.CylinderGeometry(radius * 0.65, radius, length, segments);
-        geo.translate(0, length / 2, 0);
-        
-        const branch = new THREE.Mesh(geo, trunkMat);
-        branch.position.copy(startPos);
-        
-        // Direction alignment
-        const axis = new THREE.Vector3(0, 1, 0);
-        branch.quaternion.setFromUnitVectors(axis, dir.clone().normalize());
-        
-        branch.scale.set(0, 0, 0); // Start tiny for growth animation
-        parent.add(branch);
-
-        // Recursive spawning
-        const subBranches = 2 + Math.floor(Math.random() * 2);
-        for (let i = 0; i < subBranches; i++) {
-            const nextDir = dir.clone()
-                .applyAxisAngle(new THREE.Vector3(1, 0, 0), (Math.random() - 0.5) * 1.8)
-                .applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * Math.PI * 2)
-                .lerp(new THREE.Vector3(0, 1, 0), 0.3); // Encourage upward growth
+        function bootSystem() {
+            const intro = document.getElementById('intro-scene');
+            const os = document.getElementById('os-interface');
             
+            // Audio cue (optional browser-safe beep)
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = audioCtx.createOscillator();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+            osc.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.1);
+
+            intro.style.opacity = '0';
             setTimeout(() => {
-                createDetailedBranch(branch, new THREE.Vector3(0, length, 0), nextDir, length * 0.78, radius * 0.6, depth + 1);
-            }, 400 + (depth * 150));
+                intro.classList.add('hidden');
+                os.classList.add('visible');
+            }, 1500);
         }
 
-        // Bloom/Leaves - High Density
-        if (depth > 5) {
-            const leafCount = 5;
-            for(let j=0; j<leafCount; j++) {
-                const leafGeo = new THREE.IcosahedronGeometry(0.4, 0);
-                const leaf = new THREE.Mesh(leafGeo, leafShaderMaterial);
-                leaf.position.set(
-                    (Math.random()-0.5) * 1,
-                    length + (Math.random()*0.5),
-                    (Math.random()-0.5) * 1
-                );
-                leaf.scale.set(0,0,0);
-                branch.add(leaf);
+        let isRunning = false;
+        async function startStory() {
+            if (isRunning) return;
+            isRunning = true;
+            
+            const content = document.getElementById('chat-content');
+            content.innerHTML = "";
+
+            for (let msg of story) {
+                const div = document.createElement('div');
+                div.className = 'chat-bubble';
+                div.innerHTML = `<span class="sender-name">${msg.name}</span> <span class="text">${msg.text}</span>`;
+                content.appendChild(div);
                 
-                // Animate leaf growth
-                setTimeout(() => { leaf.userData.growing = true; }, 2000 + (depth * 200));
+                // Auto-scroll
+                window.scrollTo(0, document.body.scrollHeight);
+                
+                // Slow typing/reveal effect
+                await new Promise(r => setTimeout(r, 2000));
             }
         }
-
-        branch.userData.growing = true;
-    }
-
-    // Initialize Growth
-    createDetailedBranch(masterGroup, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 1, 0), 5, 0.6, 0);
-
-    // --- GROUND & PARTICLES ---
-    const ground = new THREE.Mesh(
-        new THREE.PlaneGeometry(100, 100),
-        new THREE.MeshToonMaterial({ color: 0x112211 })
-    );
-    ground.rotation.x = -Math.PI / 2;
-    scene.add(ground);
-
-    // Floating Ember/Petal Particles
-    const pCount = 200;
-    const pGeo = new THREE.BufferGeometry();
-    const pPos = new Float32Array(pCount * 3);
-    for(let i=0; i<pCount*3; i++) pPos[i] = (Math.random()-0.5) * 40;
-    pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
-    const pMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.1, transparent: true, opacity: 0.6 });
-    const particles = new THREE.Points(pGeo, pMat);
-    scene.add(particles);
-
-    // --- ANIMATION LOOP ---
-    let time = 0;
-    function animate() {
-        requestAnimationFrame(animate);
-        time += 0.01;
-
-        if (leafShaderMaterial.userData.shader) {
-            leafShaderMaterial.userData.shader.uniforms.uTime.value = time;
-        }
-
-        // Update growth for all meshes
-        scene.traverse((obj) => {
-            if (obj.userData.growing && obj.scale.x < 1) {
-                obj.scale.x += 0.005;
-                obj.scale.y += 0.005;
-                obj.scale.z += 0.005;
-            }
-            // Gentle trunk sway
-            if (obj.isMesh && obj !== ground) {
-                obj.rotation.z += Math.sin(time + obj.position.y) * 0.0002;
-            }
-        });
-
-        // Rotate camera slightly for "Cinematic" feel
-        masterGroup.rotation.y += 0.001;
-        particles.position.y -= 0.02;
-        if (particles.position.y < -10) particles.position.y = 10;
-
-        renderer.render(scene, camera);
-    }
-
-    window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-
-    animate();
-</script>
+    </script>
 </body>
 </html>
