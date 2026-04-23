@@ -1,594 +1,390 @@
-// graphics.js — Ultra Realistic Renderer
-// PBR materials · Motion Blur · SSAO · Bloom · God Rays · HDR Tonemapping
-// Requires Three.js r128+ and postprocessing (via CDN or npm)
-
-import * as THREE from 'three';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { SSAOPass } from 'three/examples/jsm/postprocessing/SSAOPass.js';
-import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
-import { GammaCorrectionShader } from 'three/examples/jsm/shaders/GammaCorrectionShader.js';
-
-
-// ─────────────────────────────────────────────
-// 1. RENDERER — HDR, PBR, Physical Lighting
-// ─────────────────────────────────────────────
 const scene = new THREE.Scene();
 
-const renderer = new THREE.WebGLRenderer({ antialias: false }); // SMAA handles AA
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;   // Cinematic tonemapping
-renderer.toneMappingExposure = 1.2;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
 renderer.outputEncoding = THREE.sRGBEncoding;
-renderer.physicallyCorrectLights = true;              // Energy-conserving lighting
+renderer.physicallyCorrectLights = true;
 document.body.appendChild(renderer.domElement);
 
-const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 2000);
+const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 2000);
+camera.position.set(0, 6, 0);
 
+const SUN_DIR = new THREE.Vector3(0.45, 0.82, 0.28).normalize();
 
-// ─────────────────────────────────────────────
-// 2. SKY & FOG — Atmospheric Scattering
-// ─────────────────────────────────────────────
-const SkyShader = {
+const skyMat = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    depthWrite: false,
     uniforms: {
-        uSunDir: { value: new THREE.Vector3(0.4, 0.8, 0.2).normalize() },
-        uRayleigh: { value: 2.0 },
-        uMie: { value: 0.005 },
-        uMieDirectional: { value: 0.8 },
-        uSunIntensity: { value: 20.0 },
+        uSunDir:       { value: SUN_DIR },
+        uSunIntensity: { value: 18.0 },
+        uRayleigh:     { value: 2.0 },
+        uMie:          { value: 0.005 },
+        uMieG:         { value: 0.82 },
     },
     vertexShader: `
-        varying vec3 vWorldPos;
-        void main() {
-            vec4 worldPos = modelMatrix * vec4(position, 1.0);
-            vWorldPos = worldPos.xyz;
-            gl_Position = projectionMatrix * viewMatrix * worldPos;
-        }
-    `,
+        varying vec3 vDir;
+        void main(){
+            vDir=(modelMatrix*vec4(position,1.0)).xyz;
+            gl_Position=projectionMatrix*viewMatrix*modelMatrix*vec4(position,1.0);
+        }`,
     fragmentShader: `
         uniform vec3 uSunDir;
-        uniform float uRayleigh;
-        uniform float uMie;
-        uniform float uMieDirectional;
-        uniform float uSunIntensity;
-        varying vec3 vWorldPos;
+        uniform float uSunIntensity,uRayleigh,uMie,uMieG;
+        varying vec3 vDir;
+        const float PI=3.14159265;
+        const vec3 rB=vec3(5.8e-6,1.35e-5,3.31e-5);
+        float ray(float c){return(3.0/(16.0*PI))*(1.0+c*c);}
+        float mie(float c){float g2=uMieG*uMieG;return(1.0/(4.0*PI))*((1.0-g2)/pow(1.0-2.0*uMieG*c+g2,1.5));}
+        void main(){
+            vec3 d=normalize(vDir);
+            float ca=dot(d,uSunDir);
+            float sc=exp(-max(d.y,0.0)*6.0);
+            vec3 sky=uSunIntensity*(uRayleigh*rB*ray(ca)+uMie*vec3(2.1e-3)*mie(ca))*sc;
+            sky+=pow(max(0.0,ca),200.0)*vec3(12.0,10.0,7.0);
+            sky=max(sky,vec3(0.08,0.12,0.22)*max(0.0,-d.y+0.3));
+            gl_FragColor=vec4(sky,1.0);
+        }`,
+});
+scene.add(new THREE.Mesh(new THREE.SphereGeometry(1400, 24, 24), skyMat));
+scene.fog = new THREE.FogExp2(0x9ecfdf, 0.0009);
 
-        const float PI = 3.14159265358979;
-        const vec3 lambda = vec3(680e-9, 550e-9, 450e-9);
-        const vec3 totalRayleigh = vec3(5.804542996e-6, 1.3562911419e-5, 3.0265902468e-5);
-
-        float rayleighPhase(float cosTheta) {
-            return (3.0 / (16.0 * PI)) * (1.0 + pow(cosTheta, 2.0));
-        }
-
-        float hgPhase(float cosTheta, float g) {
-            float g2 = pow(g, 2.0);
-            float inv = 1.0 / pow(1.0 - 2.0 * g * cosTheta + g2, 1.5);
-            return (1.0 / (4.0 * PI)) * ((1.0 - g2) * inv);
-        }
-
-        void main() {
-            vec3 dir = normalize(vWorldPos);
-            float cosTheta = dot(dir, uSunDir);
-
-            float rPhase = rayleighPhase(cosTheta);
-            float mPhase = hgPhase(cosTheta, uMieDirectional);
-
-            vec3 rayleigh = uRayleigh * totalRayleigh * rPhase;
-            vec3 mie = uMie * vec3(2.1e-3) * mPhase;
-
-            float scatter = exp(-max(dir.y, 0.0) * 8.0);
-            vec3 color = uSunIntensity * (rayleigh + mie) * scatter;
-            color += pow(max(0.0, cosTheta), 128.0) * vec3(10.0, 9.0, 7.0); // Sun disc
-
-            gl_FragColor = vec4(color, 1.0);
-        }
-    `,
-};
-
-const skyGeo = new THREE.SphereGeometry(900, 32, 32);
-const skyMat = new THREE.ShaderMaterial({ ...SkyShader, side: THREE.BackSide, depthWrite: false });
-scene.add(new THREE.Mesh(skyGeo, skyMat));
-
-scene.fog = new THREE.FogExp2(0x8ec7e8, 0.0012);
-
-
-// ─────────────────────────────────────────────
-// 3. LIGHTING — PBR Sun + Sky + Fill
-// ─────────────────────────────────────────────
-const SUN_DIR = new THREE.Vector3(80, 200, 50).normalize();
-
-const sunLight = new THREE.DirectionalLight(0xfff4d6, 80000); // Physically-correct lux
-sunLight.position.copy(SUN_DIR.clone().multiplyScalar(200));
+const sunLight = new THREE.DirectionalLight(0xfff4d6, 3.2);
+sunLight.position.copy(SUN_DIR.clone().multiplyScalar(300));
 sunLight.castShadow = true;
-sunLight.shadow.mapSize.set(4096, 4096);
+sunLight.shadow.mapSize.set(2048, 2048);
 sunLight.shadow.camera.near = 1;
-sunLight.shadow.camera.far = 800;
-sunLight.shadow.camera.left = -200;
-sunLight.shadow.camera.right = 200;
-sunLight.shadow.camera.top = 200;
-sunLight.shadow.camera.bottom = -200;
-sunLight.shadow.bias = -0.0003;
-sunLight.shadow.normalBias = 0.05;
+sunLight.shadow.camera.far = 700;
+sunLight.shadow.camera.left = sunLight.shadow.camera.bottom = -200;
+sunLight.shadow.camera.right = sunLight.shadow.camera.top   =  200;
+sunLight.shadow.bias = -0.0004;
+sunLight.shadow.normalBias = 0.04;
 scene.add(sunLight);
+scene.add(new THREE.HemisphereLight(0x88ccee, 0x3a5e28, 0.9));
+const fill = new THREE.DirectionalLight(0xb0d8ff, 0.4);
+fill.position.set(-120, 60, -80);
+scene.add(fill);
 
-const skyHemi = new THREE.HemisphereLight(0x87ceeb, 0x4a6741, 8000); // Sky/ground hemi
-scene.add(skyHemi);
+const ocean   = IslandModels.createOcean();
+const ground  = IslandModels.createGround();
+const rocks   = IslandModels.createRocks(180);
+const ferns   = IslandModels.createFerns(350);
+const flowers = IslandModels.createFlowers(600);
+const grass   = IslandModels.createGrass(800);
+const drift   = IslandModels.createDriftwood(30);
+const cliffs  = IslandModels.createCliffs(40);
+const forest  = IslandModels.createTrees(500);
+scene.add(ground, ocean, rocks, ferns, flowers, grass, drift, cliffs);
+scene.add(forest.trunks, forest.leavesA, forest.leavesB, forest.leavesC);
 
-const fillLight = new THREE.DirectionalLight(0xb0d8ff, 3000); // Soft blue fill
-fillLight.position.set(-100, 80, -60);
-scene.add(fillLight);
-
-
-// ─────────────────────────────────────────────
-// 4. WORLD GEOMETRY (PBR Materials)
-// ─────────────────────────────────────────────
-scene.add(IslandModels.createGround());   // assumes models.js returns MeshStandardMaterial meshes
-scene.add(IslandModels.createOcean());
-
-const forest = IslandModels.createTrees(600);
-scene.add(forest.trunks);
-scene.add(forest.leaves);
-
-// Upgrade all loaded mesh materials to full PBR
-scene.traverse((obj) => {
-    if (obj.isMesh) {
-        const m = obj.material;
-        if (m && m.isMeshStandardMaterial) {
-            m.envMapIntensity = 1.2;
-            m.roughness = m.roughness ?? 0.85;
-            m.metalness = m.metalness ?? 0.0;
-        }
-        obj.castShadow = true;
-        obj.receiveShadow = true;
-    }
+scene.traverse(o => {
+    if (!o.isMesh) return;
+    o.castShadow = true;
+    o.receiveShadow = true;
+    if (o.material && o.material.isMeshStandardMaterial) o.material.envMapIntensity = 1.0;
 });
 
+const quadVS = `varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`;
 
-// ─────────────────────────────────────────────
-// 5. POST-PROCESSING STACK
-// ─────────────────────────────────────────────
-const composer = new EffectComposer(renderer);
-
-// Base render
-composer.addPass(new RenderPass(scene, camera));
-
-// SSAO — ambient occlusion for contact shadows
-const ssaoPass = new SSAOPass(scene, camera, window.innerWidth, window.innerHeight);
-ssaoPass.kernelRadius = 12;
-ssaoPass.minDistance = 0.001;
-ssaoPass.maxDistance = 0.08;
-ssaoPass.output = SSAOPass.OUTPUT.Default;
-composer.addPass(ssaoPass);
-
-// HDR Bloom — physically-based glow on bright areas
-const bloomPass = new UnrealBloomPass(
-    new THREE.Vector2(window.innerWidth, window.innerHeight),
-    0.35,   // strength
-    0.55,   // radius
-    0.88    // threshold (only very bright areas bloom)
-);
-composer.addPass(bloomPass);
-
-// Velocity-based Motion Blur (custom shader)
-const MotionBlurShader = {
-    uniforms: {
-        tDiffuse:        { value: null },
-        tVelocity:       { value: null },
-        uBlurScale:      { value: 0.5 },
-        uSamples:        { value: 16 },
-    },
-    vertexShader: `
-        varying vec2 vUv;
-        void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
-    `,
+const bloomMat = new THREE.ShaderMaterial({
+    uniforms: { tDiffuse: { value: null }, uStrength: { value: 0.26 }, uThresh: { value: 0.82 } },
+    vertexShader: quadVS,
     fragmentShader: `
         uniform sampler2D tDiffuse;
-        uniform sampler2D tVelocity;
-        uniform float uBlurScale;
-        uniform int uSamples;
+        uniform float uStrength,uThresh;
         varying vec2 vUv;
-
-        void main() {
-            vec2 vel = texture2D(tVelocity, vUv).rg * 2.0 - 1.0;
-            vel *= uBlurScale;
-
-            vec4 color = texture2D(tDiffuse, vUv);
-            if (length(vel) < 0.0002) { gl_FragColor = color; return; }
-
-            float w = 1.0;
-            for (int i = 1; i < 16; i++) {
-                if (i >= uSamples) break;
-                float t = float(i) / float(uSamples - 1);
-                color += texture2D(tDiffuse, vUv + vel * (t - 0.5));
-                w += 1.0;
+        void main(){
+            vec4 base=texture2D(tDiffuse,vUv);
+            float br=dot(base.rgb,vec3(0.2126,0.7152,0.0722));
+            vec2 p=vec2(1.0/1280.0,1.0/720.0);
+            vec3 b=vec3(0.0);
+            float w[5];w[0]=0.227;w[1]=0.194;w[2]=0.121;w[3]=0.054;w[4]=0.016;
+            b+=texture2D(tDiffuse,vUv).rgb*w[0];
+            for(int i=1;i<5;i++){
+                b+=texture2D(tDiffuse,vUv+vec2(p.x*float(i),0.0)).rgb*w[i];
+                b+=texture2D(tDiffuse,vUv-vec2(p.x*float(i),0.0)).rgb*w[i];
+                b+=texture2D(tDiffuse,vUv+vec2(0.0,p.y*float(i))).rgb*w[i];
+                b+=texture2D(tDiffuse,vUv-vec2(0.0,p.y*float(i))).rgb*w[i];
             }
-            gl_FragColor = color / w;
-        }
-    `,
-};
-
-// Velocity render target
-const velocityRT = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
-    minFilter: THREE.LinearFilter,
-    magFilter: THREE.LinearFilter,
-    format: THREE.RGBAFormat,
-    type: THREE.HalfFloatType,
+            float mask=smoothstep(uThresh,uThresh+0.12,br);
+            gl_FragColor=vec4(base.rgb+b*mask*uStrength,base.a);
+        }`,
 });
 
-// Velocity material — encodes screen-space motion
-const VelocityMaterial = new THREE.ShaderMaterial({
+const godMat = new THREE.ShaderMaterial({
     uniforms: {
-        uPrevMVP: { value: new THREE.Matrix4() },
-        uCurrMVP: { value: new THREE.Matrix4() },
+        tDiffuse: { value: null },
+        uSunPos:  { value: new THREE.Vector2(0.62, 0.78) },
+        uDecay:   { value: 0.965 },
+        uWeight:  { value: 0.36 },
+        uExp:     { value: 0.26 },
+        uDensity: { value: 0.97 },
     },
-    vertexShader: `
-        uniform mat4 uPrevMVP;
-        uniform mat4 uCurrMVP;
-        varying vec4 vCurrPos;
-        varying vec4 vPrevPos;
-        void main() {
-            vCurrPos = uCurrMVP * vec4(position, 1.0);
-            vPrevPos = uPrevMVP * vec4(position, 1.0);
-            gl_Position = vCurrPos;
-        }
-    `,
-    fragmentShader: `
-        varying vec4 vCurrPos;
-        varying vec4 vPrevPos;
-        void main() {
-            vec2 curr = (vCurrPos.xy / vCurrPos.w) * 0.5 + 0.5;
-            vec2 prev = (vPrevPos.xy / vPrevPos.w) * 0.5 + 0.5;
-            vec2 vel = (curr - prev) * 0.5 + 0.5; // Pack into [0,1]
-            gl_FragColor = vec4(vel, 0.0, 1.0);
-        }
-    `,
-});
-
-const motionBlurPass = new ShaderPass(MotionBlurShader);
-motionBlurPass.uniforms.tVelocity.value = velocityRT.texture;
-motionBlurPass.uniforms.uBlurScale.value = 0.6;
-motionBlurPass.uniforms.uSamples.value = 16;
-composer.addPass(motionBlurPass);
-
-// God Rays / Light Shafts (screen-space radial blur toward sun)
-const GodRaysShader = {
-    uniforms: {
-        tDiffuse:    { value: null },
-        uSunPos:     { value: new THREE.Vector2(0.5, 0.8) },
-        uDecay:      { value: 0.96 },
-        uDensity:    { value: 0.96 },
-        uWeight:     { value: 0.4 },
-        uExposure:   { value: 0.35 },
-        uSamples:    { value: 100 },
-    },
-    vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+    vertexShader: quadVS,
     fragmentShader: `
         uniform sampler2D tDiffuse;
         uniform vec2 uSunPos;
-        uniform float uDecay, uDensity, uWeight, uExposure;
-        uniform int uSamples;
+        uniform float uDecay,uWeight,uExp,uDensity;
         varying vec2 vUv;
-
         void main(){
-            vec2 texCoord = vUv;
-            vec2 deltaTexCoord = texCoord - uSunPos;
-            deltaTexCoord *= 1.0 / float(uSamples) * uDensity;
-            float illuminationDecay = 1.0;
-            vec4 color = vec4(0.0);
-
-            for(int i=0; i<100; i++){
-                if(i >= uSamples) break;
-                texCoord -= deltaTexCoord;
-                vec4 s = texture2D(tDiffuse, texCoord);
-                s.rgb = max(s.rgb - 0.3, 0.0); // Only bright areas contribute
-                s *= illuminationDecay * uWeight;
-                color += s;
-                illuminationDecay *= uDecay;
+            vec2 uv=vUv;
+            vec2 dv=(uv-uSunPos)*(1.0/64.0)*uDensity;
+            float ill=1.0; vec4 acc=vec4(0.0);
+            for(int i=0;i<64;i++){
+                uv-=dv;
+                vec4 s=texture2D(tDiffuse,uv);
+                s.rgb=max(s.rgb-0.55,0.0);
+                acc+=s*ill*uWeight;
+                ill*=uDecay;
             }
-            vec4 orig = texture2D(tDiffuse, vUv);
-            gl_FragColor = orig + color * uExposure;
-        }
-    `,
-};
-
-const godRaysPass = new ShaderPass(GodRaysShader);
-composer.addPass(godRaysPass);
-
-// Depth of Field — Bokeh blur (thin lens model)
-const DoFShader = {
-    uniforms: {
-        tDiffuse:   { value: null },
-        tDepth:     { value: null },
-        uFocus:     { value: 0.15 },    // Focus depth (0-1, NDC)
-        uAperture:  { value: 0.00015 },
-        uMaxBlur:   { value: 0.004 },
-        uNear:      { value: 0.1 },
-        uFar:       { value: 2000.0 },
-    },
-    vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
-    fragmentShader: `
-        #include <packing>
-        uniform sampler2D tDiffuse;
-        uniform sampler2D tDepth;
-        uniform float uFocus, uAperture, uMaxBlur, uNear, uFar;
-        varying vec2 vUv;
-
-        float readDepth(vec2 uv){
-            float frag = texture2D(tDepth, uv).x;
-            return perspectiveDepthToViewZ(frag, uNear, uFar);
-        }
-
-        void main(){
-            vec2 aspect = vec2(1.0, float(textureSize(tDiffuse, 0).y) / float(textureSize(tDiffuse, 0).x));
-            float depth = -readDepth(vUv);
-            float focusDist = uFocus * uFar;
-            float coc = clamp(uAperture * abs(depth - focusDist) / depth, -uMaxBlur, uMaxBlur);
-
-            vec4 color = vec4(0.0);
-            float total = 0.0;
-            for(float t = -4.0; t <= 4.0; t += 1.0){
-                for(float s = -4.0; s <= 4.0; s += 1.0){
-                    vec2 offset = vec2(t, s) * aspect * coc;
-                    color += texture2D(tDiffuse, vUv + offset);
-                    total += 1.0;
-                }
-            }
-            gl_FragColor = color / total;
-        }
-    `,
-};
-
-const depthRT = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
-    depthBuffer: true,
-    depthTexture: new THREE.DepthTexture(),
+            gl_FragColor=texture2D(tDiffuse,vUv)+acc*uExp;
+        }`,
 });
 
-const dofPass = new ShaderPass(DoFShader);
-dofPass.uniforms.tDepth.value = depthRT.depthTexture;
-dofPass.uniforms.uNear.value = camera.near;
-dofPass.uniforms.uFar.value = camera.far;
-composer.addPass(dofPass);
+const velMat = new THREE.ShaderMaterial({
+    uniforms: { uPrevVP: { value: new THREE.Matrix4() }, uCurrVP: { value: new THREE.Matrix4() } },
+    vertexShader: `
+        uniform mat4 uPrevVP,uCurrVP;
+        varying vec4 vC,vP;
+        void main(){
+            vC=uCurrVP*modelMatrix*vec4(position,1.0);
+            vP=uPrevVP*modelMatrix*vec4(position,1.0);
+            gl_Position=vC;
+        }`,
+    fragmentShader: `
+        varying vec4 vC,vP;
+        void main(){
+            vec2 c=vC.xy/vC.w*0.5+0.5;
+            vec2 p=vP.xy/vP.w*0.5+0.5;
+            gl_FragColor=vec4((c-p)*0.5+0.5,0.0,1.0);
+        }`,
+});
 
-// Chromatic Aberration + Film Grain + Vignette (combined cinematic LUT pass)
-const CinematicPass = new ShaderPass({
+const velRT = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
+    minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
+});
+
+const mblurMat = new THREE.ShaderMaterial({
+    uniforms: { tDiffuse: { value: null }, tVelocity: { value: velRT.texture }, uScale: { value: 0.55 } },
+    vertexShader: quadVS,
+    fragmentShader: `
+        uniform sampler2D tDiffuse,tVelocity;
+        uniform float uScale;
+        varying vec2 vUv;
+        void main(){
+            vec2 vel=(texture2D(tVelocity,vUv).rg*2.0-1.0)*uScale;
+            if(length(vel)<0.0003){gl_FragColor=texture2D(tDiffuse,vUv);return;}
+            vec4 col=vec4(0.0);
+            for(int i=0;i<12;i++){
+                float t=float(i)/11.0-0.5;
+                col+=texture2D(tDiffuse,vUv+vel*t);
+            }
+            gl_FragColor=col/12.0;
+        }`,
+});
+
+const cinemaMat = new THREE.ShaderMaterial({
     uniforms: {
         tDiffuse:    { value: null },
         uTime:       { value: 0.0 },
-        uGrain:      { value: 0.04 },
-        uVignette:   { value: 0.45 },
-        uAberration: { value: 0.0012 },
-        uSaturation: { value: 1.12 },
-        uContrast:   { value: 1.05 },
+        uGrain:      { value: 0.030 },
+        uVignette:   { value: 0.42 },
+        uAberration: { value: 0.0009 },
+        uSaturation: { value: 1.15 },
+        uContrast:   { value: 1.04 },
     },
-    vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+    vertexShader: quadVS,
     fragmentShader: `
         uniform sampler2D tDiffuse;
-        uniform float uTime, uGrain, uVignette, uAberration, uSaturation, uContrast;
+        uniform float uTime,uGrain,uVignette,uAberration,uSaturation,uContrast;
         varying vec2 vUv;
-
-        float rand(vec2 co){ return fract(sin(dot(co, vec2(12.9898,78.233))) * 43758.5453); }
-
-        vec3 saturation(vec3 c, float s){
-            float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
-            return mix(vec3(l), c, s);
-        }
-
+        float rand(vec2 c){return fract(sin(dot(c,vec2(12.9898,78.233)))*43758.5453);}
         void main(){
-            // Chromatic aberration
-            vec2 d = (vUv - 0.5) * uAberration;
-            float r = texture2D(tDiffuse, vUv + d * 1.0).r;
-            float g = texture2D(tDiffuse, vUv        ).g;
-            float b = texture2D(tDiffuse, vUv - d * 1.0).b;
-            vec3 color = vec3(r, g, b);
-
-            // Contrast
-            color = (color - 0.5) * uContrast + 0.5;
-
-            // Saturation
-            color = saturation(color, uSaturation);
-
-            // Film grain
-            float grain = (rand(vUv + fract(uTime * 0.1)) - 0.5) * uGrain;
-            color += grain;
-
-            // Vignette
-            float dist = length(vUv - 0.5) * 1.5;
-            color *= 1.0 - smoothstep(0.5, 1.2, dist) * uVignette;
-
-            gl_FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
-        }
-    `,
+            vec2 d=(vUv-0.5)*uAberration;
+            float r=texture2D(tDiffuse,vUv+d).r;
+            float g=texture2D(tDiffuse,vUv).g;
+            float b=texture2D(tDiffuse,vUv-d).b;
+            vec3 col=vec3(r,g,b);
+            col=(col-0.5)*uContrast+0.5;
+            float lum=dot(col,vec3(0.2126,0.7152,0.0722));
+            col=mix(vec3(lum),col,uSaturation);
+            col+=(rand(vUv+fract(uTime*0.07))-0.5)*uGrain;
+            float vd=length(vUv-0.5)*1.6;
+            col*=1.0-smoothstep(0.45,1.25,vd)*uVignette;
+            gl_FragColor=vec4(clamp(col,0.0,1.0),1.0);
+        }`,
 });
-composer.addPass(CinematicPass);
 
-// SMAA anti-aliasing (last pass)
-const smaaPass = new SMAAPass(window.innerWidth * renderer.getPixelRatio(), window.innerHeight * renderer.getPixelRatio());
-composer.addPass(smaaPass);
+const gammaMat = new THREE.ShaderMaterial({
+    uniforms: { tDiffuse: { value: null } },
+    vertexShader: quadVS,
+    fragmentShader: `
+        uniform sampler2D tDiffuse; varying vec2 vUv;
+        void main(){vec4 c=texture2D(tDiffuse,vUv);gl_FragColor=vec4(pow(clamp(c.rgb,0.0,1.0),vec3(1.0/2.2)),c.a);}`,
+});
 
-// Gamma correction (final output)
-composer.addPass(new ShaderPass(GammaCorrectionShader));
+const quadGeo  = new THREE.PlaneGeometry(2, 2);
+const quadCam  = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const quadScene= new THREE.Scene();
 
+function makeQuadMesh(mat) {
+    const m = new THREE.Mesh(quadGeo, mat);
+    return m;
+}
+const qBloom   = makeQuadMesh(bloomMat);
+const qGod     = makeQuadMesh(godMat);
+const qMblur   = makeQuadMesh(mblurMat);
+const qCinema  = makeQuadMesh(cinemaMat);
+const qGamma   = makeQuadMesh(gammaMat);
 
-// ─────────────────────────────────────────────
-// 6. INPUT — Dual-Zone Touch Controls
-// ─────────────────────────────────────────────
-let moveTouch = { id: null, startX: 0, startY: 0, deltaX: 0, deltaY: 0 };
+const rtA = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
+    minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
+    format: THREE.RGBAFormat, type: THREE.HalfFloatType,
+});
+const rtB = rtA.clone();
+
+function blit(srcTex, dstRT, quadMesh) {
+    quadScene.children.length = 0;
+    quadScene.add(quadMesh);
+    quadMesh.material.uniforms.tDiffuse.value = srcTex;
+    renderer.setRenderTarget(dstRT);
+    renderer.render(quadScene, quadCam);
+    renderer.setRenderTarget(null);
+}
+
+let prevVP = new THREE.Matrix4();
+
+function renderVelocity() {
+    const vp = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    velMat.uniforms.uCurrVP.value.copy(vp);
+    velMat.uniforms.uPrevVP.value.copy(prevVP);
+    scene.overrideMaterial = velMat;
+    renderer.setRenderTarget(velRT);
+    renderer.render(scene, camera);
+    renderer.setRenderTarget(null);
+    scene.overrideMaterial = null;
+    prevVP.copy(vp);
+}
+
+let moveTouch = { id: null, startX: 0, startY: 0, curX: 0, curY: 0 };
 let lookTouch = { id: null, lastX: 0, lastY: 0 };
-let pitch = 0, yaw = 0;
-const MOVE_SPEED = 0.2;
-const LOOK_SPEED = 0.004;
+let yaw = 0, pitch = 0;
+let vx = 0, vz = 0;
+const keys = {};
+const LOOK_S = 0.0030;
+const MAX_V  = 0.30;
+const ACCEL  = 0.13;
+const FRIC   = 0.80;
+const DEAD   = 10;
+const RANGE  = 75;
 
-window.addEventListener('touchstart', (e) => {
-    for (const touch of e.changedTouches) {
-        if (touch.clientX < window.innerWidth / 2) {
-            if (moveTouch.id === null) {
-                moveTouch = { id: touch.identifier, startX: touch.clientX, startY: touch.clientY, deltaX: 0, deltaY: 0 };
-            }
-        } else {
-            if (lookTouch.id === null) {
-                lookTouch = { id: touch.identifier, lastX: touch.clientX, lastY: touch.clientY };
-            }
+window.addEventListener('touchstart', e => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+        if (t.clientX < window.innerWidth / 2 && moveTouch.id === null) {
+            moveTouch = { id: t.identifier, startX: t.clientX, startY: t.clientY, curX: t.clientX, curY: t.clientY };
+        } else if (t.clientX >= window.innerWidth / 2 && lookTouch.id === null) {
+            lookTouch = { id: t.identifier, lastX: t.clientX, lastY: t.clientY };
         }
     }
-});
+}, { passive: false });
 
-window.addEventListener('touchmove', (e) => {
-    for (const touch of e.changedTouches) {
-        if (touch.identifier === moveTouch.id) {
-            moveTouch.deltaX = touch.clientX - moveTouch.startX;
-            moveTouch.deltaY = touch.clientY - moveTouch.startY;
-        } else if (touch.identifier === lookTouch.id) {
-            yaw   -= (touch.clientX - lookTouch.lastX) * LOOK_SPEED;
-            pitch -= (touch.clientY - lookTouch.lastY) * LOOK_SPEED;
-            pitch  = Math.max(-Math.PI / 2.1, Math.min(Math.PI / 2.1, pitch));
-            lookTouch.lastX = touch.clientX;
-            lookTouch.lastY = touch.clientY;
+window.addEventListener('touchmove', e => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+        if (t.identifier === moveTouch.id) { moveTouch.curX = t.clientX; moveTouch.curY = t.clientY; }
+        else if (t.identifier === lookTouch.id) {
+            yaw   -= (t.clientX - lookTouch.lastX) * LOOK_S;
+            pitch -= (t.clientY - lookTouch.lastY) * LOOK_S;
+            pitch  = Math.max(-1.28, Math.min(1.28, pitch));
+            lookTouch.lastX = t.clientX; lookTouch.lastY = t.clientY;
         }
     }
-});
+}, { passive: false });
 
-const endTouch = (e) => {
-    for (const touch of e.changedTouches) {
-        if (touch.identifier === moveTouch.id) moveTouch = { id: null, startX: 0, startY: 0, deltaX: 0, deltaY: 0 };
-        else if (touch.identifier === lookTouch.id) lookTouch.id = null;
+const endT = e => {
+    for (const t of e.changedTouches) {
+        if (t.identifier === moveTouch.id) moveTouch = { id: null, startX: 0, startY: 0, curX: 0, curY: 0 };
+        if (t.identifier === lookTouch.id) lookTouch.id = null;
     }
 };
-window.addEventListener('touchend', endTouch);
-window.addEventListener('touchcancel', endTouch);
+window.addEventListener('touchend',    endT, { passive: false });
+window.addEventListener('touchcancel', endT, { passive: false });
+window.addEventListener('keydown', e => { keys[e.code] = true;  e.preventDefault(); });
+window.addEventListener('keyup',   e => { keys[e.code] = false; });
 
 window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
+    const w = window.innerWidth, h = window.innerHeight;
+    camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    composer.setSize(window.innerWidth, window.innerHeight);
-    velocityRT.setSize(window.innerWidth, window.innerHeight);
-    depthRT.setSize(window.innerWidth, window.innerHeight);
-    ssaoPass.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(w, h);
+    rtA.setSize(w, h); rtB.setSize(w, h); velRT.setSize(w, h);
 });
 
-
-// ─────────────────────────────────────────────
-// 7. VELOCITY PASS HELPERS
-// ─────────────────────────────────────────────
-const prevMVP = new THREE.Matrix4();
-const currMVP = new THREE.Matrix4();
-let prevViewProj = new THREE.Matrix4();
-
-function renderVelocityBuffer() {
-    const vp = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-
-    scene.traverse((obj) => {
-        if (!obj.isMesh) return;
-        const curr = new THREE.Matrix4().multiplyMatrices(vp, obj.matrixWorld);
-        const prev = new THREE.Matrix4().multiplyMatrices(prevViewProj, obj.matrixWorld);
-        const origMat = obj.material;
-        obj.material = VelocityMaterial;
-        VelocityMaterial.uniforms.uCurrMVP.value.copy(curr);
-        VelocityMaterial.uniforms.uPrevMVP.value.copy(prev);
-        obj.material = origMat;
-    });
-
-    renderer.setRenderTarget(velocityRT);
-    scene.overrideMaterial = VelocityMaterial;
-    renderer.render(scene, camera);
-    scene.overrideMaterial = null;
-    renderer.setRenderTarget(null);
-
-    prevViewProj.copy(vp);
-}
-
-function renderDepthBuffer() {
-    renderer.setRenderTarget(depthRT);
-    renderer.render(scene, camera);
-    renderer.setRenderTarget(null);
-}
-
-function updateSunScreenPos() {
-    const sunWorld = sunLight.position.clone();
-    const sunNDC = sunWorld.project(camera);
-    godRaysPass.uniforms.uSunPos.value.set(
-        (sunNDC.x * 0.5 + 0.5),
-        (sunNDC.y * 0.5 + 0.5)
-    );
-    const visible = sunNDC.z < 1.0;
-    godRaysPass.enabled = visible;
-}
-
-
-// ─────────────────────────────────────────────
-// 8. GAME LOOP
-// ─────────────────────────────────────────────
-const clock = new THREE.Clock();
-const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+const clock   = new THREE.Clock();
+const euler   = new THREE.Euler(0, 0, 0, 'YXZ');
+const fwd     = new THREE.Vector3();
+const right   = new THREE.Vector3();
 
 function animate() {
     requestAnimationFrame(animate);
-    const delta = clock.getDelta();
-    const elapsed = clock.getElapsedTime();
+    const dt = Math.min(clock.getDelta(), 0.05);
+    const t  = clock.getElapsedTime();
 
-    // Update cinematic uniforms
-    CinematicPass.uniforms.uTime.value = elapsed;
-    skyMat.uniforms.uSunDir.value.copy(SUN_DIR);
-
-    // Camera rotation
-    euler.x = pitch;
-    euler.y = yaw;
+    euler.x = pitch; euler.y = yaw;
     camera.quaternion.setFromEuler(euler);
 
-    // Camera movement
+    let ix = 0, iz = 0;
     if (moveTouch.id !== null) {
-        const dir = new THREE.Vector3();
-        camera.getWorldDirection(dir);
-        dir.y = 0;
-        dir.normalize();
-
-        const right = new THREE.Vector3().crossVectors(camera.up, dir).normalize();
-        camera.position.addScaledVector(dir,   (-moveTouch.deltaY / 50) * MOVE_SPEED);
-        camera.position.addScaledVector(right,  (moveTouch.deltaX / 50) * MOVE_SPEED);
-    }
-
-    // Terrain lock
-    const groundHeight = IslandModels.getGroundHeight(camera.position.x, camera.position.z);
-    camera.position.y = groundHeight + 4;
-
-    // Animate ocean (gentle UV scroll if material supports it)
-    scene.traverse((obj) => {
-        if (obj.isMesh && obj.material?.name === 'ocean') {
-            if (obj.material.map) {
-                obj.material.map.offset.x += delta * 0.01;
-                obj.material.map.offset.y += delta * 0.007;
-            }
-            // Subtle wave normal animation
-            if (obj.material.normalMap) {
-                obj.material.normalMap.offset.x = Math.sin(elapsed * 0.3) * 0.05;
-                obj.material.normalMap.offset.y = elapsed * 0.02;
-            }
+        const dx = moveTouch.curX - moveTouch.startX;
+        const dy = moveTouch.curY - moveTouch.startY;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist > DEAD) {
+            const n = Math.min(dist, RANGE) / RANGE;
+            ix = (dx / dist) * n;
+            iz = (dy / dist) * n;
         }
-    });
+    }
+    if (keys['KeyW'] || keys['ArrowUp'])    iz -= 1;
+    if (keys['KeyS'] || keys['ArrowDown'])  iz += 1;
+    if (keys['KeyA'] || keys['ArrowLeft'])  ix -= 1;
+    if (keys['KeyD'] || keys['ArrowRight']) ix += 1;
 
-    // Update sun screen pos for god rays
-    updateSunScreenPos();
+    camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
+    right.crossVectors(fwd, camera.up).normalize();
 
-    // DoF focus: auto-focus on terrain under camera
-    const focusDist = Math.abs(groundHeight - camera.position.y) + 20;
-    dofPass.uniforms.uFocus.value = THREE.MathUtils.lerp(
-        dofPass.uniforms.uFocus.value,
-        focusDist / camera.far,
-        delta * 2
-    );
+    vx = vx * FRIC + ix * ACCEL * MAX_V;
+    vz = vz * FRIC + iz * ACCEL * MAX_V;
+    const spd = Math.sqrt(vx*vx + vz*vz);
+    if (spd > MAX_V) { vx = (vx/spd)*MAX_V; vz = (vz/spd)*MAX_V; }
 
-    // Render velocity and depth buffers first
-    renderVelocityBuffer();
-    renderDepthBuffer();
+    camera.position.addScaledVector(right,  vx);
+    camera.position.addScaledVector(fwd,   -vz);
 
-    // Full post-processing chain
-    composer.render(delta);
+    const gh = IslandModels.getGroundHeight(camera.position.x, camera.position.z);
+    camera.position.y = THREE.MathUtils.lerp(camera.position.y, gh + 1.72, 0.16);
+
+    IslandModels.tickOcean(ocean, t);
+
+    const sn = sunLight.position.clone().project(camera);
+    godMat.uniforms.uSunPos.value.set(sn.x * 0.5 + 0.5, sn.y * 0.5 + 0.5);
+    cinemaMat.uniforms.uTime.value = t;
+
+    renderVelocity();
+
+    renderer.setRenderTarget(rtA);
+    renderer.render(scene, camera);
+    renderer.setRenderTarget(null);
+
+    blit(rtA.texture, rtB, qBloom);
+    blit(rtB.texture, rtA, qGod);
+    blit(rtA.texture, rtB, qMblur);
+    blit(rtB.texture, rtA, qCinema);
+    blit(rtA.texture, null, qGamma);
 }
 
 animate();
