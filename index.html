@@ -2,204 +2,197 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Low-Poly Pro Physics</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Last Stand - Cinematic</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #ffbe0b; touch-action: none; }
-        #joystick-container {
-            position: absolute; bottom: 40px; left: 40px; width: 120px; height: 120px;
-            background: rgba(0,0,0,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center;
+        body { margin: 0; background: #050505; color: white; overflow: hidden; font-family: 'Courier New', Courier, monospace; }
+        #canvas { display: block; }
+        #overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+            background: rgba(0,0,0,0.9); transition: opacity 1s; z-index: 10;
         }
-        #joystick-knob { width: 50px; height: 50px; background: #fb5607; border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-        #ui { position: absolute; top: 20px; left: 20px; color: white; font-family: sans-serif; pointer-events: none; text-shadow: 1px 1px 2px black; }
+        button {
+            padding: 20px 40px; font-size: 24px; background: transparent;
+            color: #ff4444; border: 2px solid #ff4444; cursor: pointer;
+            text-transform: uppercase; letter-spacing: 5px; transition: 0.3s;
+        }
+        button:hover { background: #ff4444; color: black; box-shadow: 0 0 20px #ff4444; }
+        #subtitles {
+            position: absolute; bottom: 15%; width: 100%; text-align: center;
+            font-size: 18px; color: rgba(255,255,255,0.7); pointer-events: none;
+        }
     </style>
 </head>
 <body>
-    <div id="ui"><strong>Low-Poly Physics Rig</strong><br>Physics-based Wheels & Suspension</div>
-    <div id="joystick-container"><div id="joystick-knob"></div></div>
 
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "cannon": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
-            }
-        }
-    </script>
+    <div id="overlay">
+        <button onclick="startMovie()">Play Movie</button>
+    </div>
+    <div id="subtitles"></div>
+    <canvas id="canvas"></canvas>
 
-    <script type="module">
-        import * as THREE from 'three';
-        import * as CANNON from 'cannon';
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const subtitleEl = document.getElementById('subtitles');
+        let width, height, startTime;
+        let isPlaying = false;
+        let frame = 0;
 
-        // --- PHYSICS WORLD SETUP ---
-        const world = new CANNON.World();
-        world.gravity.set(0, -9.82, 0);
-        world.broadphase = new CANNON.SAPBroadphase(world);
-        world.defaultContactMaterial.friction = 0.4;
-
-        // --- THREE.JS SETUP ---
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0xffe066);
-        scene.fog = new THREE.Fog(0xffe066, 20, 150);
-
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        document.body.appendChild(renderer.domElement);
-
-        const ambient = new THREE.AmbientLight(0xffffff, 0.6);
-        scene.add(ambient);
-
-        const sun = new THREE.DirectionalLight(0xffffff, 1.2);
-        sun.position.set(50, 100, 50);
-        sun.castShadow = true;
-        sun.shadow.camera.left = -50; sun.shadow.camera.right = 50;
-        sun.shadow.camera.top = 50; sun.shadow.camera.bottom = -50;
-        scene.add(sun);
-
-        // --- TERRAIN ---
-        const groundSize = 100;
-        const groundGeo = new THREE.PlaneGeometry(groundSize, groundSize, 40, 40);
-        groundGeo.rotateX(-Math.PI / 2);
-        
-        const vertices = groundGeo.attributes.position.array;
-        const matrix = [];
-        for (let i = 0; i <= 40; i++) {
-            matrix[i] = [];
-            for (let j = 0; j <= 40; j++) {
-                const index = (i * 41 + j) * 3;
-                const height = Math.sin(i * 0.3) * Math.cos(j * 0.3) * 1.5;
-                vertices[index + 1] = height;
-                matrix[i][j] = height;
-            }
-        }
-        groundGeo.computeVertexNormals();
-
-        const groundMat = new THREE.MeshStandardMaterial({ color: 0x8338ec, flatShading: true });
-        const groundMesh = new THREE.Mesh(groundGeo, groundMat);
-        groundMesh.receiveShadow = true;
-        scene.add(groundMesh);
-
-        const groundBody = new CANNON.Body({ mass: 0, shape: new CANNON.Heightfield(matrix, { elementSize: groundSize / 40 }) });
-        groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-        groundBody.position.set(-groundSize/2, 0, groundSize/2);
-        world.addBody(groundBody);
-
-        // --- VEHICLE PHYSICS ---
-        const chassisShape = new CANNON.Box(new CANNON.Vec3(1, 0.4, 2));
-        const chassisBody = new CANNON.Body({ mass: 150 });
-        chassisBody.addShape(chassisShape);
-        chassisBody.position.set(0, 5, 0);
-        
-        const vehicle = new CANNON.RaycastVehicle({ chassisBody });
-
-        // Wheel Settings
-        const wheelOptions = {
-            radius: 0.5,
-            directionLocal: new CANNON.Vec3(0, -1, 0),
-            suspensionStiffness: 30,
-            suspensionRestLength: 0.3,
-            frictionSlip: 1.4,
-            dampingRelaxation: 2.3,
-            dampingCompression: 4.4,
-            axleLocal: new CANNON.Vec3(-1, 0, 0),
-            chassisConnectionPointLocal: new CANNON.Vec3()
+        // Cinematic State
+        let camera = { x: 0, y: 0, zoom: 1, shake: 0 };
+        let particles = [];
+        let actors = {
+            hero: { x: -100, y: 0, health: 100, pose: 'idle', direction: 1 },
+            enemies: []
         };
 
-        // Front Left
-        wheelOptions.chassisConnectionPointLocal.set(-1, 0, 1.5);
-        vehicle.addWheel(wheelOptions);
-        // Front Right
-        wheelOptions.chassisConnectionPointLocal.set(1, 0, 1.5);
-        vehicle.addWheel(wheelOptions);
-        // Rear Left
-        wheelOptions.chassisConnectionPointLocal.set(-1, 0, -1.5);
-        vehicle.addWheel(wheelOptions);
-        // Rear Right
-        wheelOptions.chassisConnectionPointLocal.set(1, 0, -1.5);
-        vehicle.addWheel(wheelOptions);
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
 
-        vehicle.addToWorld(world);
+        function startMovie() {
+            document.getElementById('overlay').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('overlay').style.display = 'none';
+                isPlaying = true;
+                startTime = Date.now();
+                requestAnimationFrame(update);
+            }, 1000);
+        }
 
-        // --- VISUAL CAR ---
-        const carGroup = new THREE.Group();
-        const bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(2, 0.8, 4), new THREE.MeshStandardMaterial({color: 0x3a86ff, flatShading: true}));
-        bodyMesh.castShadow = true;
-        carGroup.add(bodyMesh);
-        scene.add(carGroup);
+        function createBlood(x, y, count) {
+            for(let i=0; i<count; i++) {
+                particles.push({
+                    x, y, 
+                    vx: (Math.random() - 0.5) * 10, 
+                    vy: (Math.random() - 0.5) * 10,
+                    life: 1, color: '#ff0000'
+                });
+            }
+        }
 
-        const wheelMeshes = [];
-        const wheelGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.4, 12);
-        wheelGeo.rotateZ(Math.PI / 2);
-        const wheelMat = new THREE.MeshStandardMaterial({ color: 0x333 });
+        function drawStickman(x, y, scale, color, pose, dir) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3 * scale;
+            ctx.lineCap = 'round';
 
-        vehicle.wheelInfos.forEach(() => {
-            const mesh = new THREE.Mesh(wheelGeo, wheelMat);
-            wheelMeshes.push(mesh);
-            scene.add(mesh);
-        });
+            // Head
+            ctx.beginPath();
+            ctx.arc(x, y - 50*scale, 10*scale, 0, Math.PI*2);
+            ctx.stroke();
 
-        // --- CONTROLS ---
-        let inputX = 0, inputY = 0;
-        const knob = document.getElementById('joystick-knob');
-        const container = document.getElementById('joystick-container');
-
-        const updateInput = (clientX, clientY) => {
-            const rect = container.getBoundingClientRect();
-            const dx = clientX - (rect.left + 60);
-            const dy = clientY - (rect.top + 60);
-            const dist = Math.min(Math.sqrt(dx*dx + dy*dy), 50);
-            const angle = Math.atan2(dy, dx);
-            knob.style.transform = `translate(${Math.cos(angle)*dist}px, ${Math.sin(angle)*dist}px)`;
-            inputX = (Math.cos(angle)*dist) / 50;
-            inputY = -(Math.sin(angle)*dist) / 50;
-        };
-
-        container.addEventListener('touchstart', e => updateInput(e.touches[0].clientX, e.touches[0].clientY));
-        window.addEventListener('touchmove', e => updateInput(e.touches[0].clientX, e.touches[0].clientY));
-        window.addEventListener('touchend', () => { inputX = 0; inputY = 0; knob.style.transform = `translate(0,0)`; });
-
-        // --- ANIMATION LOOP ---
-        function animate() {
-            requestAnimationFrame(animate);
-            world.step(1/60);
-
-            // Apply Engine & Steering
-            const engineForce = inputY * 1000;
-            const steerVal = -inputX * 0.5;
-
-            vehicle.applyEngineForce(engineForce, 2);
-            vehicle.applyEngineForce(engineForce, 3);
-            vehicle.setSteeringValue(steerVal, 0);
-            vehicle.setSteeringValue(steerVal, 1);
-
-            // Sync Visuals
-            carGroup.position.copy(chassisBody.position);
-            carGroup.quaternion.copy(chassisBody.quaternion);
-
-            for (let i = 0; i < vehicle.wheelInfos.length; i++) {
-                vehicle.updateWheelTransform(i);
-                const t = vehicle.wheelInfos[i].worldTransform;
-                wheelMeshes[i].position.copy(t.position);
-                wheelMeshes[i].quaternion.copy(t.quaternion);
+            // Body
+            ctx.beginPath();
+            ctx.moveTo(x, y - 40*scale);
+            ctx.lineTo(x, y - 10*scale);
+            
+            // Legs (dynamic based on pose)
+            let legOffset = Math.sin(frame * 0.1) * 10;
+            if(pose === 'dead') {
+                ctx.moveTo(x, y-10*scale); ctx.lineTo(x + 20*scale, y);
+                ctx.moveTo(x, y-10*scale); ctx.lineTo(x + 25*scale, y - 5*scale);
+            } else {
+                ctx.moveTo(x, y - 10*scale); ctx.lineTo(x - 15*scale, y + 10*scale);
+                ctx.moveTo(x, y - 10*scale); ctx.lineTo(x + 15*scale, y + 10*scale);
             }
 
-            // Smooth Follow Camera
-            const camOffset = new THREE.Vector3(0, 5, -10).applyQuaternion(carGroup.quaternion);
-            camera.position.lerp(carGroup.position.clone().add(camOffset), 0.1);
-            camera.lookAt(carGroup.position);
-
-            renderer.render(scene, camera);
+            // Arms / Gun
+            ctx.moveTo(x, y - 30*scale);
+            if(pose === 'aim') {
+                ctx.lineTo(x + 30*scale * dir, y - 30*scale); // Arm pointing
+                // Gun
+                ctx.fillStyle = '#444';
+                ctx.fillRect(x + 25*scale * dir, y - 35*scale, 15*scale * dir, 8*scale);
+            } else {
+                ctx.lineTo(x - 15*scale, y - 15*scale);
+                ctx.lineTo(x + 15*scale, y - 15*scale);
+            }
+            ctx.stroke();
         }
-        animate();
 
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
+        function update() {
+            if(!isPlaying) return;
+            ctx.clearRect(0, 0, width, height);
+            frame++;
+
+            let elapsed = (Date.now() - startTime) / 1000;
+
+            // --- THE DIRECTOR (Scripted Events) ---
+            ctx.save();
+            // Apply Camera
+            if(camera.shake > 0) {
+                ctx.translate(Math.random()*camera.shake, Math.random()*camera.shake);
+                camera.shake *= 0.9;
+            }
+            ctx.translate(width/2 + camera.x, height/2 + camera.y);
+            ctx.scale(camera.zoom, camera.zoom);
+
+            // Ground
+            ctx.strokeStyle = '#222';
+            ctx.beginPath();
+            ctx.moveTo(-2000, 10); ctx.lineTo(2000, 10);
+            ctx.stroke();
+
+            // Sequence 1: The Entrance (0-5s)
+            if(elapsed < 5) {
+                actors.hero.x += 1;
+                subtitleEl.innerText = "I didn't want this...";
+            } 
+            // Sequence 2: The Ambush (5-10s)
+            else if (elapsed < 10) {
+                if(actors.enemies.length === 0) {
+                    actors.enemies.push({x: 300, y: 0, status: 'alive'});
+                    camera.shake = 10;
+                }
+                subtitleEl.innerText = "They gave me no choice.";
+                actors.hero.pose = 'aim';
+            }
+            // Sequence 3: The Gunfight (10s+)
+            else {
+                if(frame % 60 === 0 && elapsed < 15) {
+                    camera.shake = 15;
+                    createBlood(300, -30, 20);
+                    actors.enemies[0].status = 'dead';
+                    subtitleEl.innerText = "BANG.";
+                }
+                if(elapsed > 16) {
+                    subtitleEl.innerText = "It's a long way down for us stickmen.";
+                    camera.zoom += 0.001; // Dramatic slow zoom
+                }
+            }
+
+            // Draw Actors
+            drawStickman(actors.hero.x, actors.hero.y, 1.5, '#fff', actors.hero.pose, 1);
+            actors.enemies.forEach(en => {
+                drawStickman(en.x, en.y, 1.5, '#ff4444', en.status === 'dead' ? 'dead' : 'aim', -1);
+            });
+
+            // Particles
+            particles.forEach((p, i) => {
+                p.x += p.vx; p.y += p.vy;
+                p.vy += 0.2; // Gravity
+                p.life -= 0.01;
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life;
+                ctx.fillRect(p.x, p.y, 3, 3);
+                if(p.life <= 0) particles.splice(i, 1);
+            });
+            ctx.globalAlpha = 1;
+
+            ctx.restore();
+
+            // Cinematic Bars
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, width, 100);
+            ctx.fillRect(0, height - 100, width, 100);
+
+            requestAnimationFrame(update);
+        }
     </script>
 </body>
 </html>
