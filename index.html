@@ -3,58 +3,123 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HELLDIVERS: MOBILE COMMAND</title>
+    <title>HELLDIVERS: DEMOCRACY SIM V3</title>
     <style>
-        :root { --super-yellow: #fbff00; --ui-bg: rgba(0, 20, 0, 0.85); }
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', monospace; touch-action: none; -webkit-user-select: none; }
-        
-        /* OVERLAY UI */
-        #hud { position: absolute; width: 100%; height: 100%; pointer-events: none; }
-        .panel { position: absolute; background: var(--ui-bg); border: 2px solid var(--super-yellow); color: var(--super-yellow); padding: 15px; pointer-events: auto; box-shadow: 0 0 15px rgba(251, 255, 0, 0.2); }
-        
-        /* STRATAGEM CONSOLE */
-        #stratagem-ui { top: 20px; left: 20px; width: 180px; }
-        .arrow-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 10px; }
-        .s-btn { background: none; border: 1px solid var(--super-yellow); color: var(--super-yellow); height: 45px; font-size: 20px; transition: 0.1s; }
-        .s-btn:active { background: var(--super-yellow); color: #000; }
-        
-        /* VIRTUAL STICKS */
-        .joystick { position: absolute; width: 140px; height: 140px; background: rgba(255,255,255,0.1); border: 2px solid var(--super-yellow); border-radius: 50%; bottom: 50px; pointer-events: auto; }
-        #move-stick { left: 50px; }
-        #aim-stick { right: 50px; }
-        .knob { position: absolute; width: 60px; height: 60px; background: var(--super-yellow); border-radius: 50%; top: 40px; left: 40px; transition: transform 0.05s linear; }
+        :root {
+            --super-yellow: #fbff00;
+            --super-cyan: #00ffff;
+            --super-red: #ff3300;
+            --ui-bg: rgba(0, 5, 0, 0.9);
+            --ui-border: 2px solid #334433;
+            --font-main: 'Courier New', monospace;
+        }
 
-        /* VITAL STATS */
-        #vitals { top: 20px; right: 20px; text-align: right; min-width: 200px; }
-        .bar-container { width: 100%; height: 10px; border: 1px solid var(--super-yellow); margin-top: 5px; }
-        #hp-fill { height: 100%; background: #ff0000; width: 100%; transition: 0.3s; }
+        body {
+            margin: 0; padding: 0; overflow: hidden;
+            background-color: #050505; color: var(--super-yellow);
+            font-family: var(--font-main);
+            touch-action: none; -webkit-user-select: none; user-select: none;
+        }
+
+        /* --- MODERNIZED HUD --- */
+        #hud { position: absolute; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+
+        .ui-panel {
+            position: absolute; background: var(--ui-bg); border: var(--ui-border);
+            pointer-events: auto; box-shadow: 0 0 20px rgba(0, 255, 0, 0.1);
+            backdrop-filter: blur(5px);
+        }
+
+        /* Top Left: Stratagem Console */
+        #stratagem-console { top: 20px; left: 20px; width: 220px; padding: 15px; }
+        #console-header { border-bottom: 1px solid var(--super-yellow); padding-bottom: 5px; font-size: 12px; }
+        #combo-display {
+            font-size: 28px; padding: 15px 0; height: 35px; text-align: center;
+            letter-spacing: 5px; text-shadow: 0 0 10px var(--super-yellow);
+        }
+        .arrow-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .s-btn {
+            background: rgba(251, 255, 0, 0.05); border: 1px solid var(--super-yellow);
+            color: var(--super-yellow); height: 50px; font-size: 24px;
+            transition: all 0.1s ease;
+        }
+        .s-btn:active { background: var(--super-yellow); color: #000; transform: scale(0.95); }
+
+        /* Top Right: Vital Signs */
+        #vitals-panel { top: 20px; right: 20px; width: 250px; padding: 15px; text-align: right; }
+        .vital-row { display: flex; justify-content: space-between; margin-bottom: 8px; }
+        .vital-label { color: #88aa88; font-size: 12px; }
         
-        #ticker { position: absolute; bottom: 210px; width: 100%; text-align: center; color: var(--super-yellow); font-weight: bold; font-size: 1.2rem; text-shadow: 2px 2px #000; }
-        #log { font-size: 10px; height: 60px; overflow-y: hidden; margin-top: 10px; border-top: 1px solid var(--super-yellow); }
+        /* Health Pips */
+        #health-pips { display: flex; gap: 4px; justify-content: flex-end; }
+        .pip { width: 15px; height: 15px; background: var(--super-red); border: 1px solid #ff6666; }
+        .pip.empty { background: #331100; border: 1px solid #553333; }
+
+        #weapon-status { margin-top: 15px; font-size: 14px; color: var(--super-cyan); }
+        
+        /* Tactical Event Log */
+        #log-display {
+            margin-top: 10px; height: 80px; font-size: 10px; color: #88aa88;
+            overflow-y: hidden; text-align: left; border-top: 1px solid #334433; padding-top: 5px;
+        }
+
+        /* Bottom Center: Ticker */
+        #ticker-display {
+            position: absolute; bottom: 180px; width: 100%; text-align: center;
+            font-size: 18px; font-weight: bold; text-shadow: 2px 2px #000;
+        }
+
+        /* --- VIRTUAL JOYSTICKS --- */
+        .joystick {
+            position: absolute; width: 150px; height: 150px;
+            background: rgba(255, 255, 255, 0.03); border: 3px solid rgba(251, 255, 0, 0.3);
+            border-radius: 50%; bottom: 40px; pointer-events: auto;
+        }
+        #move-stick { left: 40px; }
+        #aim-stick { right: 40px; }
+        .knob {
+            position: absolute; width: 70px; height: 70px;
+            background: var(--super-yellow); border-radius: 50%;
+            top: 40px; left: 40px;
+            box-shadow: 0 0 15px var(--super-yellow);
+            transition: transform 0.05s linear;
+        }
     </style>
 </head>
 <body>
 
 <div id="hud">
-    <div id="stratagem-ui" class="panel">
-        <div style="font-size: 12px; border-bottom: 1px solid var(--super-yellow)">STRATAGEM INPUT</div>
-        <div id="combo-display" style="font-size: 24px; padding: 10px 0; height: 30px; text-align: center;">----</div>
+    <div id="stratagem-console" class="ui-panel">
+        <div id="console-header">STRATAGEM UPLINK: ACTIVE</div>
+        <div id="combo-display">----</div>
         <div class="arrow-grid">
-            <div></div><button class="s-btn" onpointerdown="tapCode('U')">▲</button><div></div>
-            <button class="s-btn" onpointerdown="tapCode('L')">◀</button>
-            <button class="s-btn" onpointerdown="tapCode('D')">▼</button>
-            <button class="s-btn" onpointerdown="tapCode('R')">▶</button>
+            <div></div><button class="s-btn" onpointerdown="tapCombo('U')">▲</button><div></div>
+            <button class="s-btn" onpointerdown="tapCombo('L')">◀</button>
+            <button class="s-btn" onpointerdown="tapCombo('D')">▼</button>
+            <button class="s-btn" onpointerdown="tapCombo('R')">▶</button>
         </div>
     </div>
 
-    <div id="vitals" class="panel">
-        <div>CITIZEN STATUS: ACTIVE</div>
-        <div>STAMINA</div><div class="bar-container"><div id="hp-fill"></div></div>
-        <div style="margin-top:10px">AMMO: <span id="ammo">30</span>/∞</div>
-        <div id="log">>> INITIALIZING HELLPOD...<br>>> BRINGING LIBERTY TO SECTOR 7...</div>
+    <div id="vitals-panel" class="ui-panel">
+        <div class="vital-row">
+            <span class="vital-label">STATUS</span>
+            <span>CITIZEN-ACTIVE</span>
+        </div>
+        <div class="vital-row">
+            <span class="vital-label">HEALTH</span>
+            <div id="health-pips">
+                <div class="pip"></div><div class="pip"></div><div class="pip"></div><div class="pip"></div><div class="pip"></div>
+            </div>
+        </div>
+        <div id="weapon-status">LIBERATOR AR: <span id="ammo-count">30</span>/∞</div>
+        <div id="log-display">
+            >> SYSTEM INITIALIZED.<br>
+            >> HELLPOD DEPLOYMENT SUCCESSFUL.<br>
+            >> AWAITING ORDERS.
+        </div>
     </div>
 
-    <div id="ticker">HOLD RIGHT STICK TO FIRE</div>
+    <div id="ticker-display">HOLD AIM STICK TO FIRE LIBERTY</div>
 
     <div id="move-stick" class="joystick"><div id="move-knob" class="knob"></div></div>
     <div id="aim-stick" class="joystick"><div id="aim-knob" class="knob"></div></div>
@@ -67,265 +132,433 @@
 <script type="module">
     import * as THREE from 'three';
 
-    // --- GAME CONSTANTS ---
+    // --- GAME CONFIGURATION ---
     const CONFIG = {
-        SENSITIVITY: 0.15,
-        MAX_BUGS: 20,
-        RELOAD_TIME: 1500,
-        STRATAGEM: "UDRL" // Up, Down, Right, Left
+        SENSITIVITY: 0.18,
+        BULLET_SPEED: 1.2,
+        FIRE_RATE: 130, // ms between shots
+        MAX_BUGS: 25,
+        BUG_SPEED: 0.06,
+        RELOAD_TIME: 1800
+    };
+
+    // Stratagem Database
+    const STRATAGEMS = {
+        "UDRL": { name: "500KG BOMB", type: "orbital", code: "UDRL" },
+        "DDLLD": { name: "RESUPPLY", type: "supply", code: "DDLLD" },
+        "URDUL": { name: "SOS BEACON", type: "utility", code: "URDUL" }
     };
 
     // --- ENGINE CORE ---
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0a0f);
-    scene.fog = new THREE.FogExp2(0x0a0a0f, 0.04);
-    
-    const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
+    scene.background = new THREE.Color(0x020205);
+    scene.fog = new THREE.FogExp2(0x0a1015, 0.03); // Gritty, hazy atmosphere
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Limit for iPad perf
     renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Softer shadows
     document.body.appendChild(renderer.domElement);
 
-    // --- LIGHTS ---
-    const mainLight = new THREE.DirectionalLight(0xffffff, 2);
-    mainLight.position.set(20, 50, 10);
-    mainLight.castShadow = true;
-    scene.add(mainLight);
-    scene.add(new THREE.AmbientLight(0x111122));
+    // --- GRITTY GRAPHICS: LIGHTING ---
+    const sun = new THREE.DirectionalLight(0xffffff, 2.5);
+    sun.position.set(30, 60, 20);
+    sun.castShadow = true;
+    // Optimize shadow map
+    sun.shadow.mapSize.width = 1024;
+    sun.shadow.mapSize.height = 1024;
+    sun.shadow.camera.near = 10;
+    sun.shadow.camera.far = 200;
+    sun.shadow.camera.left = -50;
+    sun.shadow.camera.right = 50;
+    sun.shadow.camera.top = 50;
+    sun.shadow.camera.bottom = -50;
+    scene.add(sun);
 
-    // --- ASSETS ---
-    const floor = new THREE.Mesh(
-        new THREE.PlaneGeometry(300, 300),
-        new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 })
-    );
+    // Subtle blue ambient light for sci-fi mood
+    scene.add(new THREE.AmbientLight(0x203050, 0.8));
+
+    // --- GRITTY GRAPHICS: WORLD ---
+    // Terrain with noise to simulate rocks/dust
+    const groundGeo = new THREE.PlaneGeometry(300, 300, 20, 20);
+    const groundMat = new THREE.MeshStandardMaterial({
+        color: 0x1a1510, // Dusty Brown
+        roughness: 0.9,
+        metalness: 0.1,
+        wireframe: false
+    });
+    
+    // Add simple vertex displacement for visual noise
+    const posAttribute = groundGeo.getAttribute('position');
+    for (let i = 0; i < posAttribute.count; i++) {
+        const x = posAttribute.getX(i);
+        const y = posAttribute.getY(i);
+        const z = (Math.random() - 0.5) * 0.5; // Small random height
+        posAttribute.setZ(i, z);
+    }
+    groundGeo.computeVertexNormals();
+
+    const floor = new THREE.Mesh(groundGeo, groundMat);
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     scene.add(floor);
 
-    // Player (Helldiver)
+    // --- ASSETS: UNLOCKING DEMOCRACY ---
+    // 1. Particle System for Explosions (Pre-allocated)
+    const particlePool = [];
+    const particleGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+    const particleMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffaa00,
+        transparent: true,
+        blending: THREE.AdditiveBlending // Glow effect
+    });
+
+    for(let i=0; i<100; i++) {
+        const p = new THREE.Mesh(particleGeometry, particleMaterial.clone());
+        p.visible = false;
+        scene.add(p);
+        particlePool.push({ mesh: p, velocity: new THREE.Vector3(), life: 0 });
+    }
+
+    // 2. Helldiver (Advanced Material Workflow)
     const player = new THREE.Group();
-    const pBody = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 0.8, 4, 8), new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.7 }));
-    const pVisor = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.1), new THREE.MeshBasicMaterial({ color: 0xffee00 }));
-    pVisor.position.set(0, 0.6, 0.3);
-    const pCape = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 1.2), new THREE.MeshStandardMaterial({ color: 0xffff00, side: THREE.DoubleSide }));
-    pCape.position.set(0, 0.1, -0.3);
-    pCape.rotation.x = 0.1;
+    // Armor: Matte black metal
+    const pBodyMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.6, metalness: 0.8 });
+    const pBody = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 0.8, 8, 12), pBodyMat);
+    pBody.castShadow = true;
+    
+    // Visor: Glowing Yellow
+    const pVisor = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.15, 0.15), new THREE.MeshBasicMaterial({ color: 0xffff00 }));
+    pVisor.position.set(0, 0.65, 0.35);
+
+    // Cape: The symbol of Freedom
+    const pCape = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 1.3), new THREE.MeshStandardMaterial({ color: 0xffff00, side: THREE.DoubleSide, roughness: 1 }));
+    pCape.position.set(0, 0.1, -0.35);
+    pCape.rotation.x = 0.15;
+    pCape.castShadow = true;
+
     player.add(pBody, pVisor, pCape);
     player.position.y = 0.9;
     scene.add(player);
 
-    // Enemies (Terminids)
+    // 3. Bugs (Dynamic Spawning)
     const enemies = [];
-    const bugGeo = new THREE.IcosahedronGeometry(0.6, 0);
-    const bugMat = new THREE.MeshStandardMaterial({ color: 0x44ff00 });
+    const bugGeo = new THREE.IcosahedronGeometry(0.7, 1);
+    const bugMat = new THREE.MeshStandardMaterial({ color: 0x22ff00, roughness: 0.8 });
 
     function spawnBug() {
-        const bug = new THREE.Mesh(bugGeo, bugMat);
+        const bug = new THREE.Mesh(bugGeo, bugMat.clone());
         const angle = Math.random() * Math.PI * 2;
-        const dist = 30 + Math.random() * 20;
-        bug.position.set(Math.cos(angle)*dist, 0.6, Math.sin(angle)*dist);
-        bug.hp = 3;
+        const dist = 35 + Math.random() * 15;
+        bug.position.set(Math.cos(angle)*dist, 0.7, Math.sin(angle)*dist);
+        bug.castShadow = true;
+        bug.userData = { hp: 4, state: "idle" };
         scene.add(bug);
         enemies.push(bug);
     }
     for(let i=0; i<CONFIG.MAX_BUGS; i++) spawnBug();
 
-    // Bullets & Particles
+    // 4. Bullets
     const bullets = [];
-    const bulletGeo = new THREE.SphereGeometry(0.1, 4, 4);
-    const bulletMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+    const bulletGeo = new THREE.CylinderGeometry(0.05, 0.05, 1, 4);
+    const bulletMat = new THREE.MeshBasicMaterial({ color: 0xffeeaa });
 
-    const particles = [];
-
-    // --- INPUT SYSTEMS ---
-    const moveData = { x: 0, y: 0, active: false };
-    const aimData = { x: 0, y: 0, active: false };
-    let inputBuffer = "";
-    let playerHP = 100;
+    // --- INPUT SYSTEMS: IPAD OPTIMIZED ---
+    const moveStick = { x: 0, y: 0, active: false };
+    const aimStick = { x: 0, y: 0, active: false };
+    let playerHP = 5; // Pips
     let ammoCount = 30;
     let isReloading = false;
+    let inputBuffer = "";
 
-    function bindJoystick(id, store) {
+    function setupJoystick(id, dataObj) {
         const el = document.getElementById(id);
         const knob = el.querySelector('.knob');
         const rect = el.getBoundingClientRect();
-        const center = { x: rect.left + 70, y: rect.top + 70 };
+        const center = { x: rect.left + rect.width/2, y: rect.top + rect.height/2 };
+        const limit = 55; // Pixels
 
-        const handle = (e) => {
+        const handleMove = (e) => {
             e.preventDefault();
             const t = e.touches ? e.touches[0] : e;
             const dx = t.clientX - center.x;
             const dy = t.clientY - center.y;
-            const dist = Math.min(Math.sqrt(dx*dx + dy*dy), 50);
+            const dist = Math.min(Math.sqrt(dx*dx + dy*dy), limit);
             const angle = Math.atan2(dy, dx);
             
-            const ux = (Math.cos(angle) * dist) / 50;
-            const uy = (Math.sin(angle) * dist) / 50;
+            const normalizedX = (Math.cos(angle) * dist) / limit;
+            const normalizedY = (Math.sin(angle) * dist) / limit;
             
-            knob.style.transform = `translate(${ux * 50}px, ${uy * 50}px)`;
-            store.x = ux; store.y = uy;
-            store.active = true;
+            knob.style.transform = `translate(${normalizedX * limit}px, ${normalizedY * limit}px)`;
+            dataObj.x = normalizedX; dataObj.y = normalizedY;
+            dataObj.active = true;
         };
 
-        const reset = () => {
+        const handleEnd = () => {
             knob.style.transform = `translate(0,0)`;
-            store.x = 0; store.y = 0;
-            store.active = false;
+            dataObj.x = 0; dataObj.y = 0;
+            dataObj.active = false;
         };
 
-        el.addEventListener('touchstart', handle);
-        el.addEventListener('touchmove', handle);
-        el.addEventListener('touchend', reset);
+        el.addEventListener('touchstart', handleMove, {passive: false});
+        el.addEventListener('touchmove', handleMove, {passive: false});
+        el.addEventListener('touchend', handleEnd);
     }
-    bindJoystick('move-stick', moveData);
-    bindJoystick('aim-stick', aimData);
+    setupJoystick('move-stick', moveStick);
+    setupJoystick('aim-stick', aimStick);
 
-    // --- COMBAT LOGIC ---
-    window.tapCode = (dir) => {
+    // --- GAME LOGIC: STRATAGEMS & COMBAT ---
+    
+    // Tap handler for UI buttons
+    window.tapCombo = (dir) => {
         inputBuffer += dir;
-        updateLog("INPUT: " + dir);
+        postLog("UPLINK INPUT: " + dir);
         document.getElementById('combo-display').innerText = inputBuffer;
-        if(inputBuffer === CONFIG.STRATAGEM) {
-            orbitalStrike();
+        
+        // Check if input matches any Stratagem
+        if(STRATAGEMS[inputBuffer]) {
+            executeStratagem(STRATAGEMS[inputBuffer]);
             inputBuffer = "";
-        } else if (inputBuffer.length >= 4) {
+            document.getElementById('combo-display').innerText = "CALLED";
+            setTimeout(()=> document.getElementById('combo-display').innerText = "----", 1000);
+        } else if (inputBuffer.length >= 5) {
+            // Maximum length reached without match
             inputBuffer = "";
-            document.getElementById('combo-display').innerText = "ERROR";
+            document.getElementById('combo-display').innerText = "FAIL";
+            setTimeout(()=> document.getElementById('combo-display').innerText = "----", 1000);
         }
     };
 
-    function updateLog(msg) {
-        const log = document.getElementById('log');
+    function postLog(msg) {
+        const log = document.getElementById('log-display');
         log.innerHTML = ">> " + msg + "<br>" + log.innerHTML;
     }
 
-    function shoot() {
+    function executeStratagem(strat) {
+        postLog("AUTHENTICATED: " + strat.name);
+        
+        const targetPos = new THREE.Vector3().copy(player.position);
+        // Offset slightly in facing direction
+        targetPos.x += Math.sin(player.rotation.y) * 4;
+        targetPos.z += Math.cos(player.rotation.y) * 4;
+
+        if(strat.type === "orbital") {
+            callOrbitalStrike(targetPos);
+        } else if (strat.type === "supply") {
+            postLog("RESUPPLY INCOMING.");
+            setTimeout(() => { ammoCount = 30; updateHUD(); postLog("AMMO RESTORED."); }, 2500);
+        } else if (strat.type === "utility") {
+            postLog("SOS BEACON DEPLOYED.");
+            // Utility: Clear nearest bugs
+            enemies.forEach(bug => {
+                if(bug.position.distanceTo(targetPos) < 15) {
+                    bug.userData.hp = -10; // Instakill
+                }
+            });
+        }
+    }
+
+    function callOrbitalStrike(pos) {
+        postLog("ORBITAL BEAM LOCKED.");
+        // Visual indicator
+        const beamGeo = new THREE.CylinderGeometry(0.8, 0.8, 200, 16);
+        const beamMat = new THREE.MeshBasicMaterial({color: 0x00ffff, transparent: true, opacity: 0.6});
+        const beam = new THREE.Mesh(beamGeo, beamMat);
+        beam.position.set(pos.x, 100, pos.z);
+        scene.add(beam);
+
+        // Boom timing
+        setTimeout(() => {
+            scene.remove(beam);
+            triggerExplosion(pos, 10, 8); // pos, radius, damage
+        }, 1500);
+    }
+
+    function triggerExplosion(pos, radius, damage) {
+        postLog("BOMB DELIVERED.");
+        // 1. Damage Enemies
+        enemies.forEach(bug => {
+            if(bug.position.distanceTo(pos) < radius) {
+                bug.userData.hp -= damage;
+            }
+        });
+
+        // 2. VFX: Get particles from pool
+        let particlesTriggered = 0;
+        particlePool.forEach(p => {
+            if(p.life <= 0 && particlesTriggered < 30) {
+                p.mesh.visible = true;
+                p.mesh.position.set(pos.x + (Math.random()-0.5)*2, 0.5, pos.z + (Math.random()-0.5)*2);
+                // Explosive velocity
+                p.velocity.set(Math.random()-0.5, Math.random()*1.2, Math.random()-0.5).multiplyScalar(0.7);
+                p.life = 1.0;
+                particlesTriggered++;
+            }
+        });
+    }
+
+    function shootLiberator() {
         if(isReloading || ammoCount <= 0) return;
         
         ammoCount--;
-        document.getElementById('ammo').innerText = ammoCount;
+        updateHUD();
         
+        // Bullet Visual
         const b = new THREE.Mesh(bulletGeo, bulletMat);
         b.position.copy(player.position);
-        const angle = -Math.atan2(aimData.y, aimData.x) + Math.PI/2;
-        b.velocity = new THREE.Vector3(Math.sin(angle), 0, Math.cos(angle)).multiplyScalar(0.8);
+        b.rotation.y = player.rotation.y;
+        b.rotation.x = Math.PI / 2; // Lie flat
+        
+        const bVel = new THREE.Vector3(Math.sin(player.rotation.y), 0, Math.cos(player.rotation.y)).multiplyScalar(CONFIG.BULLET_SPEED);
+        bullets.push({ mesh: b, velocity: bVel, age: 0 });
         scene.add(b);
-        bullets.push(b);
 
         if(ammoCount <= 0) reload();
     }
 
     function reload() {
         isReloading = true;
-        updateLog("RELOADING...");
+        postLog("RELOADING Liberator...");
         setTimeout(() => {
             ammoCount = 30;
             isReloading = false;
-            document.getElementById('ammo').innerText = ammoCount;
+            updateHUD();
         }, CONFIG.RELOAD_TIME);
     }
 
-    function orbitalStrike() {
-        updateLog("STRATAGEM AUTHENTICATED: 500KG BOMB");
-        const targetX = player.position.x + (Math.sin(player.rotation.y) * 5);
-        const targetZ = player.position.z + (Math.cos(player.rotation.y) * 5);
-
-        const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 200), new THREE.MeshBasicMaterial({color: 0x00ffff, transparent: true, opacity: 0.5}));
-        beam.position.set(targetX, 100, targetZ);
-        scene.add(beam);
-
-        setTimeout(() => {
-            scene.remove(beam);
-            createExplosion(targetX, targetZ);
-            enemies.forEach(bug => {
-                if(bug.position.distanceTo(new THREE.Vector3(targetX, 0, targetZ)) < 8) {
-                    bug.hp = -1;
-                }
-            });
-        }, 1200);
+    function updateHUD() {
+        document.getElementById('ammo-count').innerText = ammoCount;
+        
+        // Update Health Pips
+        const pips = document.querySelectorAll('.pip');
+        pips.forEach((pip, index) => {
+            if(index < playerHP) {
+                pip.classList.remove('empty');
+            } else {
+                pip.classList.add('empty');
+            }
+        });
     }
 
-    function createExplosion(x, z) {
-        for(let i=0; i<30; i++) {
-            const p = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshBasicMaterial({color: 0xffaa00}));
-            p.position.set(x, 0.5, z);
-            p.velocity = new THREE.Vector3(Math.random()-0.5, Math.random(), Math.random()-0.5).multiplyScalar(0.5);
-            p.life = 1.0;
-            scene.add(p);
-            particles.push(p);
-        }
-    }
+    // --- GAME LOOP ---
+    let lastFireTime = 0;
+    let invulnerableTime = 0;
 
-    // --- LOOP ---
-    let lastShoot = 0;
     function animate(now) {
         requestAnimationFrame(animate);
 
-        // Player Move
-        player.position.x += moveData.x * CONFIG.SENSITIVITY;
-        player.position.z += moveData.y * CONFIG.SENSITIVITY;
+        // 1. Player Physics & Movement
+        if(moveStick.active) {
+            player.position.x += moveStick.x * CONFIG.SENSITIVITY;
+            player.position.z += moveStick.y * CONFIG.SENSITIVITY;
+            
+            // Subtle cape flap when moving
+            pCape.rotation.x = 0.15 + (Math.sin(now * 0.01) * 0.1);
+        } else {
+            pCape.rotation.x = 0.15;
+        }
         
-        // Player Aim
-        if(aimData.active) {
-            player.rotation.y = -Math.atan2(aimData.y, aimData.x) + Math.PI/2;
-            if(now - lastShoot > 150) { shoot(); lastShoot = now; }
+        // 2. Aim & Combat Loop
+        if(aimStick.active) {
+            // Rotate player to face aim direction
+            const targetAngle = Math.atan2(aimStick.x, aimStick.y);
+            player.rotation.y = targetAngle;
+            
+            // Auto-fire
+            if(now - lastFireTime > CONFIG.FIRE_RATE) {
+                shootLiberator();
+                lastFireTime = now;
+            }
         }
 
-        // Bullet Physics
-        for(let i = bullets.length-1; i>=0; i--) {
+        // 3. Bullet Physics & Hit Detection
+        for(let i = bullets.length - 1; i >= 0; i--) {
             const b = bullets[i];
-            b.position.add(b.velocity);
-            if(b.position.length() > 100) { scene.remove(b); bullets.splice(i, 1); continue; }
+            b.mesh.position.add(b.velocity);
+            b.age++;
             
-            // Hit Detection
+            // Range limit or Hit
+            let hit = false;
             enemies.forEach(bug => {
-                if(bug.position.distanceTo(b.position) < 1) {
-                    bug.hp--;
+                if(!hit && bug.position.distanceTo(b.mesh.position) < 1.2) {
+                    bug.userData.hp -= 1;
+                    // Visual Hit Flash
                     bug.material.color.set(0xffffff);
-                    setTimeout(() => bug.material.color.set(0x44ff00), 50);
-                    scene.remove(b); bullets.splice(i, 1);
+                    setTimeout(()=> bug.material.color.set(0x22ff00), 40);
+                    hit = true;
                 }
             });
+
+            if(hit || b.age > 100) {
+                scene.remove(b.mesh);
+                bullets.splice(i, 1);
+            }
         }
 
-        // Bug AI
+        // 4. Enemy AI & Spawning
         enemies.forEach((bug, i) => {
-            const dist = bug.position.distanceTo(player.position);
-            if(bug.hp <= 0) {
-                bug.position.set(Math.random()*60-30, 0.6, Math.random()*60-30);
-                bug.hp = 3;
+            if(bug.userData.hp <= 0) {
+                // Respawn bug at distance
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 35 + Math.random() * 10;
+                bug.position.set(Math.cos(angle)*dist, 0.7, Math.sin(angle)*dist);
+                bug.userData.hp = 4;
             }
-            const dir = new THREE.Vector3().subVectors(player.position, bug.position).normalize();
-            bug.position.addScaledVector(dir, 0.05);
             
-            if(dist < 1) {
-                playerHP -= 0.5;
-                document.getElementById('hp-fill').style.width = playerHP + "%";
+            // Chase player
+            const dir = new THREE.Vector3().subVectors(player.position, bug.position).normalize();
+            dir.y = 0; // Stay on ground
+            bug.position.addScaledVector(dir, CONFIG.BUG_SPEED);
+            
+            // Collision with player
+            if(invulnerableTime <= 0 && bug.position.distanceTo(player.position) < 1.1) {
+                playerHP -= 1;
+                invulnerableTime = 100; // Frames of invulnerability
+                updateHUD();
+                postLog("INJURY! NEED STIM!");
+                
                 if(playerHP <= 0) {
-                    updateLog("YOU DIED FOR FREEDOM.");
-                    playerHP = 100;
+                    postLog("FREEDOM REQUIRES SACRIFICE.");
+                    // Reset Sim
+                    playerHP = 5;
                     player.position.set(0, 0.9, 0);
+                    updateHUD();
                 }
             }
         });
+        if(invulnerableTime > 0) invulnerableTime--;
 
-        // Particles
-        particles.forEach((p, i) => {
-            p.position.add(p.velocity);
-            p.life -= 0.02;
-            p.scale.setScalar(p.life);
-            if(p.life <= 0) { scene.remove(p); particles.splice(i, 1); }
+        // 5. Particle Physics (Explosions)
+        particlePool.forEach(p => {
+            if(p.life > 0) {
+                p.mesh.position.add(p.velocity);
+                p.velocity.y -= 0.02; // Gravity
+                p.life -= 0.015; // Age
+                p.mesh.material.opacity = p.life;
+                p.mesh.scale.setScalar(p.life * 1.5);
+                
+                if(p.life <= 0) p.mesh.visible = false;
+            }
         });
 
-        // Camera
-        camera.position.lerp(new THREE.Vector3(player.position.x, 20, player.position.z + 15), 0.05);
-        camera.lookAt(player.position);
+        // 6. Gritty Third-Person Camera
+        const camTarget = new THREE.Vector3(
+            player.position.x,
+            player.position.y + 16, // Height
+            player.position.z + 18 // Distance behind
+        );
+        camera.position.lerp(camTarget, 0.08); // Smooth follow
+        camera.lookAt(player.position.x, player.position.y, player.position.z);
 
         renderer.render(scene, camera);
     }
 
+    // --- INITIALIZATION & RESIZE ---
+    updateHUD();
     animate(0);
+
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
