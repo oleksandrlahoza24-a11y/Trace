@@ -2,400 +2,186 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>HELLDIVERS: OMNI-COMMAND PRO</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Survival Horror Engine</title>
     <style>
         :root {
-            --yellow: #fbff00; --cyan: #00ffff; --red: #ff3300; --green: #44ff44;
-            --bg: rgba(2, 5, 2, 0.95); --border: 2px solid #334433;
-        }
-        body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: 'Arial Black', sans-serif; touch-action: none; user-select: none; -webkit-user-select: none; }
-        
-        #ui-root { position: absolute; inset: 0; pointer-events: none; z-index: 100; border: 4px solid rgba(251, 255, 0, 0.1); }
-        
-        /* STRATAGEM CONSOLE */
-        #stratagem-deck { 
-            position: absolute; top: 20px; left: 20px; width: 280px; 
-            background: var(--bg); border: var(--border); padding: 15px; 
-            pointer-events: auto; backdrop-filter: blur(10px); border-radius: 10px;
-        }
-        #combo-input { 
-            font-size: 34px; height: 50px; text-align: center; background: #000; 
-            color: var(--cyan); border: 1px solid var(--cyan); margin-bottom: 10px;
-            text-shadow: 0 0 10px var(--cyan); line-height: 50px;
-        }
-        .dpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-        .d-btn { 
-            background: rgba(255,255,255,0.05); border: 2px solid var(--yellow); 
-            color: var(--yellow); height: 60px; font-size: 30px; border-radius: 12px;
-        }
-        .d-btn:active { background: var(--yellow); color: #000; transform: scale(0.9); }
-        
-        /* VITAL STATUS */
-        #vitals-deck { 
-            position: absolute; top: 20px; right: 20px; width: 300px; 
-            background: var(--bg); border: var(--border); padding: 15px; 
-            pointer-events: auto; text-align: right; border-radius: 10px;
-        }
-        .bar { width: 100%; height: 14px; background: #111; border: 1px solid #444; margin: 4px 0 12px 0; overflow: hidden; }
-        #hp-fill { height: 100%; background: linear-gradient(90deg, #800, #f30); width: 100%; transition: 0.2s; }
-        #stamina-fill { height: 100%; background: linear-gradient(90deg, #06a, #0cf); width: 100%; }
-        
-        /* COMMS LOG */
-        #comms-log { 
-            position: absolute; left: 20px; bottom: 240px; width: 320px; height: 140px; 
-            font-size: 11px; color: var(--green); overflow: hidden; font-family: monospace;
-            text-shadow: 1px 1px #000;
+            --bg-color: #050505;
+            --ui-green: #00ff41;
         }
 
-        /* JOYSTICKS */
-        .stick-base { 
-            position: absolute; width: 180px; height: 180px; 
-            background: radial-gradient(circle, rgba(251,255,0,0.15) 0%, rgba(0,0,0,0) 75%);
-            border: 3px solid rgba(251,255,0,0.2); border-radius: 50%; 
-            bottom: 40px; pointer-events: auto;
-        }
-        #stick-left { left: 40px; }
-        #stick-right { right: 40px; }
-        .stick-knob { 
-            position: absolute; width: 80px; height: 80px; background: var(--yellow); 
-            border-radius: 50%; top: 50px; left: 50px; box-shadow: 0 0 25px var(--yellow);
+        body {
+            margin: 0;
+            background: var(--bg-color);
+            color: var(--ui-green);
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
         }
 
-        /* STRATAGEM LISTING */
-        .strat-help { font-size: 9px; color: #777; margin-top: 10px; border-top: 1px solid #333; padding-top: 5px; }
-        .strat-help span { color: var(--yellow); }
+        #game-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            border: 2px solid #333;
+            background: #111;
+            overflow: hidden;
+        }
 
-        #objective-marker {
-            position: absolute; top: 50%; left: 50%; width: 40px; height: 40px;
-            border: 2px solid var(--yellow); transform: translate(-50%, -50%);
-            border-radius: 50%; opacity: 0.5;
+        /* Office View */
+        #office {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, #1a1a1a, #000);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: 0.3s;
+        }
+
+        /* UI Elements */
+        .hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+        }
+
+        #cam-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 50, 0, 0.2);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 5;
+        }
+
+        .scanline {
+            width: 100%;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.1);
+            position: absolute;
+            animation: move 4s linear infinite;
+        }
+
+        @keyframes move {
+            from { top: 0; }
+            to { top: 100%; }
+        }
+
+        .btn-panel {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        button {
+            background: #222;
+            color: var(--ui-green);
+            border: 1px solid var(--ui-green);
+            padding: 10px 20px;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        button:hover {
+            background: var(--ui-green);
+            color: #000;
+        }
+
+        #static {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('https://media.giphy.com/media/oEI9uWU9zOQ48/giphy.gif');
+            opacity: 0.05;
+            pointer-events: none;
         }
     </style>
 </head>
 <body>
 
-<div id="ui-root">
-    <div id="stratagem-deck">
-        <div id="combo-input">READY</div>
-        <div class="dpad">
-            <div></div><button class="d-btn" onpointerdown="inputD('U')">▲</button><div></div>
-            <button class="d-btn" onpointerdown="inputD('L')">◀</button>
-            <button class="d-btn" onpointerdown="inputD('D')">▼</button>
-            <button class="d-btn" onpointerdown="inputD('R')">▶</button>
-        </div>
-        <div class="strat-help">
-            500KG: <span>U R D D D</span> | EAGLE: <span>U R R</span> | TESLA: <span>D U R L U</span><br>
-            SHIELD: <span>D D U U L</span> | REINFORCE: <span>U D R L U</span>
-        </div>
+<div id="game-container">
+    <div id="static"></div>
+    <div class="scanline"></div>
+    
+    <div class="hud">
+        <div>POWER: <span id="power">100</span>%</div>
+        <div>TIME: <span id="time">12</span> AM</div>
     </div>
 
-    <div id="vitals-deck">
-        <div style="font-size: 16px; letter-spacing: 2px;">HELLDIVER V4.0</div>
-        <div style="font-size: 10px; margin-top: 8px;">INTEGRITY SYNC</div>
-        <div class="bar"><div id="hp-fill"></div></div>
-        <div style="font-size: 10px;">BIO-STAMINA</div>
-        <div class="bar"><div id="stamina-fill"></div></div>
-        <div id="ammo-status" style="color: var(--cyan); font-size: 14px;">LIBERATOR: 30/∞</div>
-        <div id="kill-meter" style="font-size: 12px; margin-top: 5px;">KILLS: 0</div>
+    <div id="office">
+        <h2>SECURITY OFFICE</h2>
+        <p>Watching the hallways...</p>
     </div>
 
-    <div id="comms-log"></div>
-    <div id="objective-marker"></div>
+    <div id="cam-overlay">
+        <h1 style="color: white; text-shadow: 2px 2px red;">CAM 01 - MAIN HALL</h1>
+    </div>
 
-    <div id="stick-left" class="stick-base"><div id="knob-left" class="stick-knob"></div></div>
-    <div id="stick-right" class="stick-base"><div id="knob-right" class="stick-knob"></div></div>
+    <div class="btn-panel">
+        <button onclick="toggleCams()">Toggle Cameras</button>
+        <button onclick="toggleLights()">Light</button>
+    </div>
 </div>
 
-<script type="importmap"> { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } } </script>
+<script>
+    let power = 100;
+    let time = 0;
+    let camOpen = false;
 
-<script type="module">
-import * as THREE from 'three';
+    // Power Drain Logic
+    setInterval(() => {
+        if (power > 0) {
+            power -= (camOpen ? 2 : 1);
+            document.getElementById('power').innerText = Math.max(0, power);
+        } else {
+            document.getElementById('office').style.background = "black";
+            document.getElementById('office').innerHTML = "<h1>POWER OUTAGE</h1>";
+        }
+    }, 3000);
 
-/** --- CONSTANTS & DATA --- **/
-const DB = {
-    "URDDD": { name: "500KG BOMB", type: "ORBITAL", color: 0xff4400, sound: "BOOM" },
-    "URR":   { name: "EAGLE AIRSTRIKE", type: "EAGLE", color: 0xffaa00 },
-    "DURLU": { name: "TESLA TOWER", type: "SENTRY", color: 0x00ffff },
-    "DDVVL": { name: "SHIELD RELAY", type: "SHIELD", color: 0x0088ff }, // V is Down
-    "DDUUL": { name: "SHIELD RELAY", type: "SHIELD", color: 0x0088ff },
-    "UDRLU": { name: "REINFORCE", type: "LIFE", color: 0xffffff }
-};
+    // Time Clock Logic
+    setInterval(() => {
+        time++;
+        if (time <= 6) {
+            document.getElementById('time').innerText = time;
+        }
+        if (time === 6) {
+            alert("6 AM - YOU SURVIVED");
+            location.reload();
+        }
+    }, 45000);
 
-const WORLD = {
-    SIZE: 400,
-    BUG_COUNT: 45,
-    PARTICLE_MAX: 150,
-    ROCK_COUNT: 25
-};
+    function toggleCams() {
+        if (power <= 0) return;
+        camOpen = !camOpen;
+        document.getElementById('cam-overlay').style.display = camOpen ? 'flex' : 'none';
+    }
 
-/** --- ENGINE SETUP --- **/
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x020302);
-scene.fog = new THREE.FogExp2(0x081008, 0.035);
-
-const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-document.body.appendChild(renderer.domElement);
-
-const sun = new THREE.DirectionalLight(0xffffff, 2.8);
-sun.position.set(50, 100, 50);
-sun.castShadow = true;
-sun.shadow.mapSize.set(1024, 1024);
-scene.add(sun);
-scene.add(new THREE.AmbientLight(0x1a2a1a, 0.7));
-
-/** --- ASSETS & WORLD GEN --- **/
-// Terrain with vertex noise
-const groundGeo = new THREE.PlaneGeometry(WORLD.SIZE, WORLD.SIZE, 50, 50);
-const posAttr = groundGeo.getAttribute('position');
-for(let i=0; i<posAttr.count; i++) {
-    posAttr.setZ(i, Math.random() * 0.4);
-}
-groundGeo.computeVertexNormals();
-const ground = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({ color: 0x111611, roughness: 1 }));
-ground.rotation.x = -Math.PI / 2;
-ground.receiveShadow = true;
-scene.add(ground);
-
-// Environment: Freedom Rocks
-for(let i=0; i<WORLD.ROCK_COUNT; i++) {
-    const rGeo = new THREE.DodecahedronGeometry(1 + Math.random()*2, 0);
-    const rMat = new THREE.MeshStandardMaterial({color: 0x222222});
-    const rock = new THREE.Mesh(rGeo, rMat);
-    rock.position.set(Math.random()*200-100, 0, Math.random()*200-100);
-    rock.rotation.set(Math.random(), Math.random(), Math.random());
-    rock.castShadow = rock.receiveShadow = true;
-    scene.add(rock);
-}
-
-// Player
-const player = new THREE.Group();
-const pBody = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 0.8, 8, 12), new THREE.MeshStandardMaterial({color: 0x050505, metalness: 0.8}));
-pBody.castShadow = true;
-const pCape = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 1.4), new THREE.MeshStandardMaterial({color: 0xffff00, side: 2}));
-pCape.position.set(0, 0.2, -0.35); pCape.rotation.x = 0.2;
-player.add(pBody, pCape);
-player.position.y = 1;
-scene.add(player);
-
-/** --- POOLS & SYSTEMS --- **/
-let enemies = [], bullets = [], sentries = [], particles = [], pods = [];
-let kills = 0, hp = 100, ammo = 30, combo = "", isReloading = false;
-
-function createParticle(pos, color, speed = 1) {
-    const p = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshBasicMaterial({color: color, transparent: true}));
-    p.position.copy(pos);
-    p.userData = { vel: new THREE.Vector3((Math.random()-0.5)*speed, Math.random()*speed, (Math.random()-0.5)*speed), life: 1.0 };
-    scene.add(p);
-    particles.push(p);
-}
-
-function spawnBug() {
-    const bug = new THREE.Group();
-    const bBody = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 8), new THREE.MeshStandardMaterial({color: 0x44ff00}));
-    bBody.castShadow = true;
-    bug.add(bBody);
-    const ang = Math.random() * Math.PI * 2;
-    const d = 50 + Math.random() * 30;
-    bug.position.set(Math.cos(ang)*d, 0.7, Math.sin(ang)*d);
-    bug.userData = { hp: 4, speed: 0.05 + Math.random()*0.05 };
-    scene.add(bug);
-    enemies.push(bug);
-}
-for(let i=0; i<WORLD.BUG_COUNT; i++) spawnBug();
-
-/** --- INPUT LOGIC --- **/
-const moveVal = { x: 0, y: 0, active: false };
-const aimVal = { x: 0, y: 0, active: false };
-
-function bindJoy(baseId, knobId, data) {
-    const base = document.getElementById(baseId);
-    const knob = document.getElementById(knobId);
-    const rect = base.getBoundingClientRect();
-    const ctr = { x: rect.left + 90, y: rect.top + 90 };
-    
-    const move = (e) => {
-        e.preventDefault();
-        const t = e.touches ? e.touches[0] : e;
-        const dx = t.clientX - ctr.x;
-        const dy = t.clientY - ctr.y;
-        const d = Math.min(Math.sqrt(dx*dx + dy*dy), 70);
-        const a = Math.atan2(dy, dx);
-        data.x = (Math.cos(a)*d)/70;
-        data.y = (Math.sin(a)*d)/70;
-        knob.style.transform = `translate(${data.x*70}px, ${data.y*70}px)`;
-        data.active = true;
-    };
-    base.addEventListener('touchstart', move);
-    base.addEventListener('touchmove', move);
-    base.addEventListener('touchend', () => { knob.style.transform = `translate(0,0)`; data.x = 0; data.y = 0; data.active = false; });
-}
-bindJoy('stick-left', 'knob-left', moveVal);
-bindJoy('stick-right', 'knob-right', aimVal);
-
-window.inputD = (dir) => {
-    combo += dir;
-    document.getElementById('combo-input').innerText = combo;
-    logMsg("KEY: " + dir);
-    if(DB[combo]) {
-        callPod(DB[combo]);
-        combo = "";
-        setTimeout(()=> document.getElementById('combo-input').innerText = "CALLED", 500);
-    } else if(combo.length > 5) { combo = ""; document.getElementById('combo-input').innerText = "FAIL"; }
-};
-
-function logMsg(m) {
-    const l = document.getElementById('comms-log');
-    l.innerHTML = `[${new Date().toLocaleTimeString().split(' ')[0]}] >> ${m}<br>` + l.innerHTML;
-}
-
-/** --- STRATAGEM DEPLOYMENT --- **/
-function callPod(strat) {
-    logMsg("STRATAGEM UPLINK: " + strat.name);
-    const target = player.position.clone().add(new THREE.Vector3(Math.sin(player.rotation.y)*8, 0, Math.cos(player.rotation.y)*8));
-    
-    // The physical Hellpod
-    const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.2, 2, 8), new THREE.MeshStandardMaterial({color: 0x333333, metalness: 1}));
-    pod.position.set(target.x, 60, target.z);
-    scene.add(pod);
-    pods.push({ mesh: pod, target: target, strat: strat, active: true });
-}
-
-function executeStrat(strat, pos) {
-    if(strat.type === "ORBITAL") {
-        const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 300), new THREE.MeshBasicMaterial({color: strat.color, transparent: true, opacity: 0.6}));
-        beam.position.set(pos.x, 150, pos.z);
-        scene.add(beam);
+    function toggleLights() {
+        if (power <= 0) return;
+        const office = document.getElementById('office');
+        office.style.background = office.style.background === 'white' ? 'linear-gradient(to bottom, #1a1a1a, #000)' : 'white';
         setTimeout(() => {
-            scene.remove(beam);
-            for(let i=0; i<40; i++) createParticle(pos, strat.color, 2);
-            enemies.forEach(b => { if(b.position.distanceTo(pos) < 15) b.userData.hp -= 20; });
-        }, 800);
+            office.style.background = 'linear-gradient(to bottom, #1a1a1a, #000)';
+        }, 500);
     }
-    if(strat.type === "EAGLE") {
-        for(let i=0; i<5; i++) {
-            setTimeout(() => {
-                const strikePos = pos.clone().add(new THREE.Vector3(i*4 - 8, 0, 0));
-                triggerExplosion(strikePos, 6);
-            }, i * 200);
-        }
-    }
-    if(strat.type === "SENTRY") {
-        const tower = new THREE.Mesh(new THREE.BoxGeometry(1, 4, 1), new THREE.MeshStandardMaterial({color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 2}));
-        tower.position.set(pos.x, 2, pos.z);
-        scene.add(tower);
-        sentries.push({ mesh: tower, type: "TESLA", lastFire: 0 });
-    }
-    if(strat.type === "LIFE") { hp = 100; updateHUD(); logMsg("VITAL RECOVERY COMPLETE."); }
-}
-
-function triggerExplosion(pos, rad) {
-    const s = new THREE.Mesh(new THREE.SphereGeometry(rad), new THREE.MeshBasicMaterial({color: 0xffaa00, wireframe: true}));
-    s.position.copy(pos);
-    scene.add(s);
-    setTimeout(()=>scene.remove(s), 200);
-    enemies.forEach(b => { if(b.position.distanceTo(pos) < rad) b.userData.hp -= 10; });
-    for(let i=0; i<15; i++) createParticle(pos, 0xff5500, 1.5);
-}
-
-/** --- MAIN LOOP --- **/
-function updateHUD() {
-    document.getElementById('hp-fill').style.width = hp + "%";
-    document.getElementById('ammo-status').innerText = `LIBERATOR: ${ammo}/∞`;
-    document.getElementById('kill-meter').innerText = `KILLS: ${kills}`;
-}
-
-function animate(time) {
-    requestAnimationFrame(animate);
-    
-    // Player
-    if(moveVal.active) {
-        player.position.x += moveVal.x * 0.18;
-        player.position.z += moveVal.y * 0.18;
-        pCape.rotation.x = 0.2 + Math.sin(time*0.01)*0.3;
-    }
-    if(aimVal.active) {
-        player.rotation.y = Math.atan2(aimVal.x, aimVal.y);
-        if(time % 140 < 20 && !isReloading && ammo > 0) {
-            ammo--;
-            const b = new THREE.Mesh(new THREE.SphereGeometry(0.15), new THREE.MeshBasicMaterial({color: 0xffff00}));
-            b.position.copy(player.position);
-            b.userData = { vel: new THREE.Vector3(Math.sin(player.rotation.y), 0, Math.cos(player.rotation.y)).multiplyScalar(1.4), age: 0 };
-            bullets.push(b); scene.add(b);
-            updateHUD();
-            if(ammo <= 0) { isReloading = true; setTimeout(()=>{ammo=30; isReloading=false; updateHUD();}, 1500); }
-        }
-    }
-
-    // Pods
-    pods.forEach((p, i) => {
-        if(p.mesh.position.y > 0.5) {
-            p.mesh.position.y -= 1.2;
-            createParticle(p.mesh.position, 0xffaa00, 0.2);
-        } else if(p.active) {
-            executeStrat(p.strat, p.target);
-            p.active = false;
-            setTimeout(()=> { scene.remove(p.mesh); pods.splice(i, 1); }, 2000);
-        }
-    });
-
-    // Enemies
-    enemies.forEach(b => {
-        const d = player.position.distanceTo(b.position);
-        const dir = new THREE.Vector3().subVectors(player.position, b.position).normalize();
-        b.position.addScaledVector(dir, b.userData.speed);
-        if(d < 1.2) { hp -= 0.3; updateHUD(); if(hp <= 0) { hp = 100; player.position.set(0,1,0); logMsg("REINFORCING..."); } }
-        if(b.userData.hp <= 0) {
-            for(let i=0; i<8; i++) createParticle(b.position, 0x44ff00, 0.5);
-            const ang = Math.random()*6.28; const dist = 60;
-            b.position.set(Math.cos(ang)*dist, 0.7, Math.sin(ang)*dist);
-            b.userData.hp = 4; kills++; updateHUD();
-        }
-    });
-
-    // Bullets
-    for(let i=bullets.length-1; i>=0; i--) {
-        const b = bullets[i]; b.position.add(b.userData.vel); b.userData.age++;
-        enemies.forEach(e => { if(e.position.distanceTo(b.position) < 1.5) { e.userData.hp -= 1; b.userData.age = 100; }});
-        if(b.userData.age > 60) { scene.remove(b); bullets.splice(i, 1); }
-    }
-
-    // Particles
-    for(let i=particles.length-1; i>=0; i--) {
-        const p = particles[i]; p.position.add(p.userData.vel); p.userData.life -= 0.02;
-        p.material.opacity = p.userData.life;
-        if(p.userData.life <= 0) { scene.remove(p); particles.splice(i, 1); }
-    }
-
-    // Sentries
-    sentries.forEach(s => {
-        if(s.type === "TESLA") {
-            enemies.forEach(e => {
-                if(e.position.distanceTo(s.mesh.position) < 12 && time - s.lastFire > 800) {
-                    e.userData.hp -= 5; s.lastFire = time;
-                    createParticle(e.position, 0x00ffff, 1);
-                }
-            });
-        }
-    });
-
-    camera.position.lerp(new THREE.Vector3(player.position.x, 28, player.position.z + 22), 0.1);
-    camera.lookAt(player.position);
-    renderer.render(scene, camera);
-}
-
-animate(0);
-updateHUD();
-window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-});
 </script>
+
 </body>
 </html>
