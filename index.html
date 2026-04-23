@@ -1,137 +1,378 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Procedural 3D Universe</title>
-    <style>
-        body { margin: 0; overflow: hidden; background-color: #000; }
-        canvas { display: block; }
-        #ui {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            color: white;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            pointer-events: none;
-            text-shadow: 1px 1px 2px black;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Island Drive</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #000; overflow: hidden; font-family: 'Courier New', monospace; }
+  #c { display: block; width: 100vw; height: 100vh; }
+
+  #hud {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 16px; align-items: flex-end; pointer-events: none; z-index: 10;
+  }
+  .hud-box {
+    background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 12px; padding: 10px 18px; color: #fff; text-align: center;
+    backdrop-filter: blur(6px);
+  }
+  .hud-label { font-size: 10px; letter-spacing: 2px; opacity: 0.6; text-transform: uppercase; }
+  .hud-value { font-size: 22px; font-weight: bold; margin-top: 2px; }
+  #speedometer .hud-value { color: #7effa0; }
+
+  /* Touch controls */
+  #controls {
+    position: fixed; bottom: 20px; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: flex-end;
+    padding: 0 28px; z-index: 20; pointer-events: none;
+  }
+  .ctrl-pad { display: grid; grid-template-columns: 60px 60px 60px; grid-template-rows: 60px 60px; gap: 8px; pointer-events: all; }
+  .ctrl-btn {
+    background: rgba(255,255,255,0.13); border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 14px; color: #fff; font-size: 22px; display: flex;
+    align-items: center; justify-content: center; cursor: pointer;
+    user-select: none; -webkit-user-select: none; touch-action: none;
+    transition: background 0.1s;
+  }
+  .ctrl-btn:active, .ctrl-btn.pressed { background: rgba(255,255,255,0.32); }
+  .ctrl-btn.empty { pointer-events: none; background: none; border: none; }
+
+  .gas-pad { display: flex; flex-direction: column; gap: 8px; pointer-events: all; }
+  .gas-btn {
+    width: 80px; height: 80px; background: rgba(126,255,160,0.18);
+    border: 2px solid rgba(126,255,160,0.5); border-radius: 50%;
+    color: #7effa0; font-size: 28px; display: flex; align-items: center;
+    justify-content: center; cursor: pointer; user-select: none;
+    -webkit-user-select: none; touch-action: none; transition: background 0.1s;
+  }
+  .gas-btn:active, .gas-btn.pressed { background: rgba(126,255,160,0.45); }
+  .brake-btn {
+    width: 70px; height: 70px; background: rgba(255,100,100,0.18);
+    border: 2px solid rgba(255,100,100,0.4); border-radius: 50%;
+    color: #ff8888; font-size: 24px; display: flex; align-items: center;
+    justify-content: center; cursor: pointer; user-select: none;
+    -webkit-user-select: none; touch-action: none; transition: background 0.1s;
+  }
+  .brake-btn:active, .brake-btn.pressed { background: rgba(255,100,100,0.4); }
+
+  /* Desktop hint */
+  #hint {
+    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.5); color: rgba(255,255,255,0.7);
+    padding: 7px 20px; border-radius: 20px; font-size: 12px;
+    letter-spacing: 1px; pointer-events: none; z-index: 10;
+    backdrop-filter: blur(4px);
+  }
+  @media (hover: none) { #hint { display: none; } }
+  @media (hover: hover) { #controls { display: none; } #hud { bottom: 24px; } }
+</style>
 </head>
 <body>
-    <div id="ui">
-        <h1>Procedural Universe</h1>
-        <p>Scroll to Zoom | Drag to Rotate</p>
-    </div>
+<canvas id="c"></canvas>
 
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
-        }
-    </script>
+<div id="hint">WASD / Arrow Keys to drive &nbsp;·&nbsp; Mouse to look</div>
 
-    <script type="module">
-        import * as THREE from 'three';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+<div id="hud">
+  <div class="hud-box" id="speedometer">
+    <div class="hud-label">Speed</div>
+    <div class="hud-value" id="spd">0</div>
+    <div class="hud-label">km/h</div>
+  </div>
+  <div class="hud-box">
+    <div class="hud-label">Gear</div>
+    <div class="hud-value" id="gear">N</div>
+  </div>
+</div>
 
-        // --- Scene Setup ---
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        document.body.appendChild(renderer.domElement);
+<!-- Touch controls (shown on touch devices) -->
+<div id="controls">
+  <!-- Steering (left side) -->
+  <div class="ctrl-pad">
+    <div class="ctrl-btn empty"></div>
+    <div class="ctrl-btn" id="btn-up">▲</div>
+    <div class="ctrl-btn empty"></div>
+    <div class="ctrl-btn" id="btn-left">◀</div>
+    <div class="ctrl-btn" id="btn-down">▼</div>
+    <div class="ctrl-btn" id="btn-right">▶</div>
+  </div>
+  <!-- Gas / Brake (right side) -->
+  <div style="display:flex;flex-direction:column;gap:10px;align-items:center;pointer-events:all;">
+    <div class="gas-btn" id="btn-gas">⛽</div>
+    <div class="brake-btn" id="btn-brake">🛑</div>
+  </div>
+</div>
 
-        const controls = new OrbitControls(camera, renderer.domElement);
-        camera.position.set(0, 50, 150);
-        controls.update();
+<!-- Three.js CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- Our island models -->
+<script src="models.js"></script>
 
-        // --- Lights ---
-        const sunLight = new THREE.PointLight(0xffffff, 2, 1000);
-        scene.add(sunLight);
-        const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
-        scene.add(ambientLight);
+<script>
+// ════════════════════════════════════════════
+//  RENDERER + SCENE
+// ════════════════════════════════════════════
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-        // --- Starfield (Background) ---
-        const starGeometry = new THREE.BufferGeometry();
-        const starMaterial = new THREE.PointsMaterial({ color: 0xffffff });
-        const starVertices = [];
-        for (let i = 0; i < 10000; i++) {
-            const x = (Math.random() - 0.5) * 2000;
-            const y = (Math.random() - 0.5) * 2000;
-            const z = (Math.random() - 0.5) * 2000;
-            starVertices.push(x, y, z);
-        }
-        starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
-        const stars = new THREE.Points(starGeometry, starMaterial);
-        scene.add(stars);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.5, 2000);
 
-        // --- The Sun ---
-        const sunGeo = new THREE.SphereGeometry(10, 32, 32);
-        const sunMat = new THREE.MeshBasicMaterial({ color: 0xffdd00 });
-        const sun = new THREE.Mesh(sunGeo, sunMat);
-        scene.add(sun);
+window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+});
 
-        // --- Procedural Planets ---
-        const planets = [];
-        const planetCount = 6 + Math.floor(Math.random() * 5); // 6 to 10 planets
+// Build the island via models.js
+IslandModels.build(scene);
 
-        for (let i = 0; i < planetCount; i++) {
-            // Randomize properties
-            const radius = Math.random() * 4 + 1;
-            const distance = (i + 1) * 25 + (Math.random() * 10);
-            const speed = (Math.random() * 0.02) + 0.005;
-            const color = new THREE.Color().setHSL(Math.random(), 0.7, 0.5);
+// ════════════════════════════════════════════
+//  CAR MODEL
+// ════════════════════════════════════════════
+function buildCar() {
+  const car = new THREE.Group();
 
-            // Create Planet Mesh
-            const geometry = new THREE.SphereGeometry(radius, 32, 32);
-            const material = new THREE.MeshStandardMaterial({ color: color, roughness: 0.8 });
-            const planet = new THREE.Mesh(geometry, material);
+  const bodyMat  = new THREE.MeshLambertMaterial({ color: 0xe53935 });
+  const glassMat = new THREE.MeshLambertMaterial({ color: 0x90caf9, transparent: true, opacity: 0.6 });
+  const tireMat  = new THREE.MeshLambertMaterial({ color: 0x111111 });
+  const rimMat   = new THREE.MeshLambertMaterial({ color: 0xcccccc });
+  const lightMat = new THREE.MeshLambertMaterial({ color: 0xfffde7 });
+  const lightBMat= new THREE.MeshLambertMaterial({ color: 0xff1744 });
 
-            // Orbit Group (to handle rotation easily)
-            const orbitGroup = new THREE.Group();
-            scene.add(orbitGroup);
-            orbitGroup.add(planet);
-            planet.position.set(distance, 0, 0);
+  // Body
+  const bodyGeo = new THREE.BoxGeometry(4, 1, 8.5);
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  body.position.y = 1.1;
+  body.castShadow = true;
+  car.add(body);
 
-            // Add an orbit ring
-            const ringGeo = new THREE.RingGeometry(distance - 0.1, distance + 0.1, 64);
-            const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.1 });
-            const ring = new THREE.Mesh(ringGeo, ringMat);
-            ring.rotation.x = Math.PI / 2;
-            scene.add(ring);
+  // Roof/cabin
+  const roofGeo = new THREE.BoxGeometry(3.2, 0.9, 4.2);
+  const roof = new THREE.Mesh(roofGeo, bodyMat);
+  roof.position.set(0, 2.0, 0.3);
+  roof.castShadow = true;
+  car.add(roof);
 
-            planets.push({ mesh: planet, group: orbitGroup, speed: speed });
-        }
+  // Windshield
+  const wsGeo = new THREE.BoxGeometry(3.0, 0.8, 0.12);
+  const ws = new THREE.Mesh(wsGeo, glassMat);
+  ws.position.set(0, 2.0, 2.2);
+  ws.rotation.x = -0.35;
+  car.add(ws);
 
-        // --- Animation Loop ---
-        function animate() {
-            requestAnimationFrame(animate);
+  // Rear window
+  const rwGeo = new THREE.BoxGeometry(3.0, 0.7, 0.12);
+  const rw = new THREE.Mesh(rwGeo, glassMat);
+  rw.position.set(0, 2.0, -1.7);
+  rw.rotation.x = 0.35;
+  car.add(rw);
 
-            // Rotate Sun
-            sun.rotation.y += 0.005;
+  // Wheels (4 positions)
+  const wheelPos = [
+    [ 2.2, 0.55,  2.8],
+    [-2.2, 0.55,  2.8],
+    [ 2.2, 0.55, -2.8],
+    [-2.2, 0.55, -2.8],
+  ];
+  const wheels = [];
+  wheelPos.forEach(([x,y,z]) => {
+    const wg = new THREE.Group();
+    const tg = new THREE.CylinderGeometry(0.7, 0.7, 0.55, 16);
+    const t = new THREE.Mesh(tg, tireMat);
+    t.rotation.z = Math.PI / 2;
+    wg.add(t);
+    const rg = new THREE.CylinderGeometry(0.35, 0.35, 0.6, 8);
+    const r = new THREE.Mesh(rg, rimMat);
+    r.rotation.z = Math.PI / 2;
+    wg.add(r);
+    wg.position.set(x, y, z);
+    wg.castShadow = true;
+    car.add(wg);
+    wheels.push(wg);
+  });
 
-            // Orbit Planets
-            planets.forEach(p => {
-                p.group.rotation.y += p.speed;
-                p.mesh.rotation.y += 0.01;
-            });
+  // Headlights
+  [[1.5,1.1,4.2],[-1.5,1.1,4.2]].forEach(([x,y,z])=>{
+    const lg = new THREE.SphereGeometry(0.28,8,8);
+    const l = new THREE.Mesh(lg, lightMat);
+    l.position.set(x,y,z);
+    car.add(l);
+  });
+  // Taillights
+  [[1.5,1.1,-4.2],[-1.5,1.1,-4.2]].forEach(([x,y,z])=>{
+    const lg = new THREE.SphereGeometry(0.24,8,8);
+    const l = new THREE.Mesh(lg, lightBMat);
+    l.position.set(x,y,z);
+    car.add(l);
+  });
 
-            controls.update();
-            renderer.render(scene, camera);
-        }
+  // Undercarriage
+  const ug = new THREE.BoxGeometry(3.6, 0.3, 8);
+  const um = new THREE.Mesh(ug, new THREE.MeshLambertMaterial({color:0x333333}));
+  um.position.y = 0.42;
+  car.add(um);
 
-        // Handle Window Resize
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
+  car.position.set(0, 0, 300);
+  scene.add(car);
+  return { group: car, wheels };
+}
 
-        animate();
-    </script>
+const { group: carGroup, wheels } = buildCar();
+
+// ════════════════════════════════════════════
+//  INPUT
+// ════════════════════════════════════════════
+const keys = {};
+document.addEventListener('keydown', e => keys[e.key] = true);
+document.addEventListener('keyup',   e => keys[e.key] = false);
+
+// Touch button bindings
+function bindBtn(id, keyName) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const press   = () => { keys[keyName] = true;  el.classList.add('pressed'); };
+  const release = () => { keys[keyName] = false; el.classList.remove('pressed'); };
+  el.addEventListener('touchstart', e => { e.preventDefault(); press(); },   { passive: false });
+  el.addEventListener('touchend',   e => { e.preventDefault(); release(); }, { passive: false });
+  el.addEventListener('mousedown', press);
+  el.addEventListener('mouseup',   release);
+}
+bindBtn('btn-up',    'ArrowUp');
+bindBtn('btn-down',  'ArrowDown');
+bindBtn('btn-left',  'ArrowLeft');
+bindBtn('btn-right', 'ArrowRight');
+bindBtn('btn-gas',   'ArrowUp');
+bindBtn('btn-brake', 'ArrowDown');
+
+// Mouse look
+let yaw = 0, pitch = 0.28;
+let pointerLocked = false;
+canvas.addEventListener('click', () => canvas.requestPointerLock && canvas.requestPointerLock());
+document.addEventListener('pointerlockchange', () => { pointerLocked = !!document.pointerLockElement; });
+document.addEventListener('mousemove', e => {
+  if (!pointerLocked) return;
+  yaw   -= e.movementX * 0.002;
+  pitch -= e.movementY * 0.002;
+  pitch  = Math.max(-0.1, Math.min(0.9, pitch));
+});
+
+// ════════════════════════════════════════════
+//  PHYSICS (arcade)
+// ════════════════════════════════════════════
+const carState = {
+  speed: 0,          // world units/s (negative = reverse)
+  heading: 0,        // radians
+  x: 0, z: 300,
+  steer: 0,
+};
+const MAX_SPEED_FWD = 55, MAX_SPEED_REV = 14;
+const ACCEL = 22, BRAKE = 40, FRICTION = 14, STEER_SPEED = 2.2;
+const WHEELBASE = 5.6;
+
+function updatePhysics(dt) {
+  const gas   = keys['ArrowUp']    || keys['w'] || keys['W'];
+  const brk   = keys['ArrowDown']  || keys['s'] || keys['S'];
+  const left  = keys['ArrowLeft']  || keys['a'] || keys['A'];
+  const right = keys['ArrowRight'] || keys['d'] || keys['D'];
+
+  // Acceleration
+  if (gas)  carState.speed += ACCEL * dt;
+  if (brk)  carState.speed -= (carState.speed > 0 ? BRAKE : ACCEL) * dt;
+
+  // Friction
+  const friction = FRICTION * dt;
+  if (!gas && !brk) {
+    if (carState.speed > 0) carState.speed = Math.max(0, carState.speed - friction);
+    else carState.speed = Math.min(0, carState.speed + friction);
+  }
+
+  // Clamp speed
+  carState.speed = Math.max(-MAX_SPEED_REV, Math.min(MAX_SPEED_FWD, carState.speed));
+
+  // Steering
+  const steerInput = (left ? -1 : 0) + (right ? 1 : 0);
+  const steerFactor = Math.min(1, Math.abs(carState.speed) / 8) * (carState.speed < 0 ? -1 : 1);
+  carState.heading += steerInput * STEER_SPEED * steerFactor * dt;
+
+  // Move car
+  carState.x += Math.sin(carState.heading) * carState.speed * dt;
+  carState.z += Math.cos(carState.heading) * carState.speed * dt;
+
+  // Spin wheels proportional to speed
+  wheels.forEach((w, i) => {
+    w.children[0].rotation.x += carState.speed * dt * 0.6;
+  });
+  // Steer front wheels visually
+  wheels[0].rotation.y = steerInput * 0.45;
+  wheels[1].rotation.y = steerInput * 0.45;
+
+  // Apply to mesh
+  carGroup.position.x = carState.x;
+  carGroup.position.z = carState.z;
+  carGroup.rotation.y = carState.heading;
+
+  // Keep car roughly on terrain (simple y lock)
+  carGroup.position.y = 0;
+}
+
+// ════════════════════════════════════════════
+//  CAMERA FOLLOW
+// ════════════════════════════════════════════
+const camOffset = new THREE.Vector3();
+const camTarget = new THREE.Vector3();
+const camLookAt = new THREE.Vector3();
+
+function updateCamera() {
+  const dist = 16, height = 5 + pitch * 12;
+  // Orbit around car using yaw + car heading
+  const totalYaw = carState.heading + yaw;
+  camOffset.set(
+    Math.sin(totalYaw) * -dist,
+    height,
+    Math.cos(totalYaw) * -dist
+  );
+  camTarget.set(carGroup.position.x + camOffset.x, carGroup.position.y + camOffset.y, carGroup.position.z + camOffset.z);
+  camera.position.lerp(camTarget, 0.1);
+  camLookAt.set(carGroup.position.x, carGroup.position.y + 1.5, carGroup.position.z);
+  camera.lookAt(camLookAt);
+}
+
+// ════════════════════════════════════════════
+//  HUD UPDATE
+// ════════════════════════════════════════════
+const spdEl  = document.getElementById('spd');
+const gearEl = document.getElementById('gear');
+function updateHUD() {
+  const kmh = Math.abs(carState.speed * 3.6).toFixed(0);
+  spdEl.textContent = kmh;
+  if (carState.speed > 0.5)       gearEl.textContent = carState.speed < 15 ? '1' : carState.speed < 28 ? '2' : carState.speed < 42 ? '3' : '4';
+  else if (carState.speed < -0.5) gearEl.textContent = 'R';
+  else                             gearEl.textContent = 'N';
+}
+
+// ════════════════════════════════════════════
+//  ANIMATE
+// ════════════════════════════════════════════
+let last = performance.now();
+function animate() {
+  requestAnimationFrame(animate);
+  const now = performance.now();
+  const dt  = Math.min((now - last) / 1000, 0.05);
+  last = now;
+
+  updatePhysics(dt);
+  updateCamera();
+  updateHUD();
+
+  renderer.render(scene, camera);
+}
+animate();
+</script>
 </body>
 </html>
