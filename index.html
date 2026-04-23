@@ -3,195 +3,212 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>The Last Stand - Cinematic</title>
+    <title>The Last Stand: Remastered</title>
     <style>
-        body { margin: 0; background: #050505; color: white; overflow: hidden; font-family: 'Courier New', Courier, monospace; }
-        #canvas { display: block; }
+        body { margin: 0; background: #0a0a0a; overflow: hidden; font-family: 'Georgia', serif; }
+        canvas { display: block; filter: contrast(1.2) saturate(1.1); }
         #overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            display: flex; justify-content: center; align-items: center;
-            background: rgba(0,0,0,0.9); transition: opacity 1s; z-index: 10;
+            position: absolute; inset: 0; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; background: radial-gradient(circle, #1a1a1a 0%, #000 100%);
+            z-index: 100; transition: opacity 2s;
         }
         button {
-            padding: 20px 40px; font-size: 24px; background: transparent;
-            color: #ff4444; border: 2px solid #ff4444; cursor: pointer;
-            text-transform: uppercase; letter-spacing: 5px; transition: 0.3s;
+            background: none; border: 1px solid #fff; color: #fff; padding: 15px 50px;
+            font-size: 1.2rem; cursor: pointer; letter-spacing: 10px; transition: 0.5s;
         }
-        button:hover { background: #ff4444; color: black; box-shadow: 0 0 20px #ff4444; }
+        button:hover { background: #fff; color: #000; box-shadow: 0 0 30px rgba(255,255,255,0.5); }
         #subtitles {
-            position: absolute; bottom: 15%; width: 100%; text-align: center;
-            font-size: 18px; color: rgba(255,255,255,0.7); pointer-events: none;
+            position: absolute; bottom: 8%; width: 100%; text-align: center;
+            color: #ddd; font-style: italic; font-size: 20px; text-shadow: 2px 2px 4px #000;
+            pointer-events: none; opacity: 0; transition: opacity 0.5s;
         }
     </style>
 </head>
 <body>
 
-    <div id="overlay">
-        <button onclick="startMovie()">Play Movie</button>
-    </div>
-    <div id="subtitles"></div>
-    <canvas id="canvas"></canvas>
+    <div id="overlay"><button onclick="play()">INITIATE</button></div>
+    <div id="subtitles" id="subs"></div>
+    <canvas id="c"></canvas>
 
     <script>
-        const canvas = document.getElementById('canvas');
+        const canvas = document.getElementById('c');
         const ctx = canvas.getContext('2d');
-        const subtitleEl = document.getElementById('subtitles');
-        let width, height, startTime;
-        let isPlaying = false;
-        let frame = 0;
-
-        // Cinematic State
-        let camera = { x: 0, y: 0, zoom: 1, shake: 0 };
+        const subs = document.getElementById('subtitles');
+        
+        let w, h, t = 0, playing = false;
         let particles = [];
-        let actors = {
-            hero: { x: -100, y: 0, health: 100, pose: 'idle', direction: 1 },
-            enemies: []
-        };
+        let camera = { x: 0, y: 0, zoom: 1, targetZoom: 1, shake: 0 };
 
         function resize() {
-            width = canvas.width = window.innerWidth;
-            height = canvas.height = window.innerHeight;
+            w = canvas.width = window.innerWidth;
+            h = canvas.height = window.innerHeight;
         }
-        window.addEventListener('resize', resize);
+        window.onresize = resize;
         resize();
 
-        function startMovie() {
-            document.getElementById('overlay').style.opacity = '0';
+        function play() {
+            document.getElementById('overlay').style.opacity = 0;
             setTimeout(() => {
                 document.getElementById('overlay').style.display = 'none';
-                isPlaying = true;
-                startTime = Date.now();
-                requestAnimationFrame(update);
-            }, 1000);
+                playing = true;
+                subs.style.opacity = 1;
+                loop();
+            }, 2000);
         }
 
-        function createBlood(x, y, count) {
-            for(let i=0; i<count; i++) {
-                particles.push({
-                    x, y, 
-                    vx: (Math.random() - 0.5) * 10, 
-                    vy: (Math.random() - 0.5) * 10,
-                    life: 1, color: '#ff0000'
-                });
+        class Particle {
+            constructor(x, y, color, type = 'blood') {
+                this.x = x; this.y = y;
+                this.vx = (Math.random() - 0.5) * (type === 'shell' ? 5 : 12);
+                this.vy = Math.random() * -8;
+                this.life = 1;
+                this.color = color;
+                this.type = type;
+            }
+            update() {
+                this.x += this.vx; this.y += this.vy;
+                this.vy += 0.25; // Gravity
+                this.life -= 0.015;
+                if(this.y > 0) { this.y = 0; this.vx *= 0.5; this.vy *= -0.3; } // Floor bounce
             }
         }
 
-        function drawStickman(x, y, scale, color, pose, dir) {
+        function drawStick(x, y, scale, angle, pose, color = "#fff") {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(scale, scale);
             ctx.strokeStyle = color;
-            ctx.lineWidth = 3 * scale;
+            ctx.lineWidth = 4;
             ctx.lineCap = 'round';
 
-            // Head
-            ctx.beginPath();
-            ctx.arc(x, y - 50*scale, 10*scale, 0, Math.PI*2);
-            ctx.stroke();
-
-            // Body
-            ctx.beginPath();
-            ctx.moveTo(x, y - 40*scale);
-            ctx.lineTo(x, y - 10*scale);
+            const walk = Math.sin(t * 0.15) * 15;
             
-            // Legs (dynamic based on pose)
-            let legOffset = Math.sin(frame * 0.1) * 10;
-            if(pose === 'dead') {
-                ctx.moveTo(x, y-10*scale); ctx.lineTo(x + 20*scale, y);
-                ctx.moveTo(x, y-10*scale); ctx.lineTo(x + 25*scale, y - 5*scale);
-            } else {
-                ctx.moveTo(x, y - 10*scale); ctx.lineTo(x - 15*scale, y + 10*scale);
-                ctx.moveTo(x, y - 10*scale); ctx.lineTo(x + 15*scale, y + 10*scale);
+            // Head (Shadow effect)
+            ctx.beginPath();
+            ctx.arc(0, -60, 12, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Spine
+            ctx.beginPath();
+            ctx.moveTo(0, -48);
+            ctx.lineTo(0, -20);
+
+            if(pose === 'walk') {
+                // Legs
+                ctx.moveTo(0, -20); ctx.lineTo(walk, 0);
+                ctx.moveTo(0, -20); ctx.lineTo(-walk, 0);
+                // Arms
+                ctx.moveTo(0, -40); ctx.lineTo(-walk * 0.8, -25);
+                ctx.moveTo(0, -40); ctx.lineTo(walk * 0.8, -25);
+            } else if(pose === 'aim') {
+                ctx.moveTo(0, -20); ctx.lineTo(-10, 0);
+                ctx.moveTo(0, -20); ctx.lineTo(10, 0);
+                // Aiming Arm
+                ctx.moveTo(0, -40); ctx.lineTo(35, -45);
+                // Gun Detail
+                ctx.fillStyle = "#333";
+                ctx.fillRect(30, -52, 18, 10);
+            } else if(pose === 'recoil') {
+                ctx.moveTo(0, -20); ctx.lineTo(-15, 0);
+                ctx.moveTo(0, -20); ctx.lineTo(5, 0);
+                ctx.moveTo(0, -40); ctx.lineTo(30, -60);
+                ctx.fillRect(25, -67, 18, 10);
             }
 
-            // Arms / Gun
-            ctx.moveTo(x, y - 30*scale);
-            if(pose === 'aim') {
-                ctx.lineTo(x + 30*scale * dir, y - 30*scale); // Arm pointing
-                // Gun
-                ctx.fillStyle = '#444';
-                ctx.fillRect(x + 25*scale * dir, y - 35*scale, 15*scale * dir, 8*scale);
-            } else {
-                ctx.lineTo(x - 15*scale, y - 15*scale);
-                ctx.lineTo(x + 15*scale, y - 15*scale);
-            }
             ctx.stroke();
+            ctx.restore();
         }
 
-        function update() {
-            if(!isPlaying) return;
-            ctx.clearRect(0, 0, width, height);
-            frame++;
+        function loop() {
+            if(!playing) return;
+            t++;
+            ctx.fillStyle = '#0a0a0a';
+            ctx.fillRect(0, 0, w, h);
 
-            let elapsed = (Date.now() - startTime) / 1000;
-
-            // --- THE DIRECTOR (Scripted Events) ---
+            // Camera Logic
+            camera.zoom += (camera.targetZoom - camera.zoom) * 0.05;
             ctx.save();
-            // Apply Camera
             if(camera.shake > 0) {
                 ctx.translate(Math.random()*camera.shake, Math.random()*camera.shake);
                 camera.shake *= 0.9;
             }
-            ctx.translate(width/2 + camera.x, height/2 + camera.y);
+            ctx.translate(w/2, h/2);
             ctx.scale(camera.zoom, camera.zoom);
+            ctx.translate(camera.x, camera.y);
 
-            // Ground
-            ctx.strokeStyle = '#222';
+            // --- SCENE LAYERS ---
+            
+            // 1. Distant Background (Parallax Mountains)
+            ctx.fillStyle = '#111';
             ctx.beginPath();
-            ctx.moveTo(-2000, 10); ctx.lineTo(2000, 10);
-            ctx.stroke();
+            ctx.moveTo(-1000, 0);
+            for(let i=-1000; i<1000; i+=100) ctx.lineTo(i, -100 - Math.random()*50);
+            ctx.lineTo(1000, 0);
+            ctx.fill();
 
-            // Sequence 1: The Entrance (0-5s)
-            if(elapsed < 5) {
-                actors.hero.x += 1;
-                subtitleEl.innerText = "I didn't want this...";
-            } 
-            // Sequence 2: The Ambush (5-10s)
-            else if (elapsed < 10) {
-                if(actors.enemies.length === 0) {
-                    actors.enemies.push({x: 300, y: 0, status: 'alive'});
-                    camera.shake = 10;
+            // 2. Floor
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(-2000, 0); ctx.lineTo(2000, 0); ctx.stroke();
+
+            // 3. Scripted Animation Logic
+            const sec = t / 60;
+            
+            if(sec < 4) {
+                camera.x -= 0.5;
+                drawStick(camera.x * -1 - 200, 0, 1.5, 0, 'walk');
+                subs.innerText = "They said it would be easy.";
+            } else if (sec < 7) {
+                camera.targetZoom = 1.5;
+                drawStick(-100, 0, 1.5, 0, 'aim');
+                subs.innerText = "But nothing ever is.";
+            } else if (sec < 12) {
+                const isFiring = Math.floor(sec * 10) % 10 === 0;
+                drawStick(-100, 0, 1.5, 0, isFiring ? 'recoil' : 'aim');
+                
+                if(isFiring) {
+                    camera.shake = 8;
+                    // Flash
+                    ctx.fillStyle = "rgba(255,255,255,0.1)";
+                    ctx.fillRect(-2000, -2000, 4000, 4000);
+                    // Particles
+                    particles.push(new Particle(-55, -45, '#ffd700', 'shell'));
+                    for(let i=0; i<5; i++) particles.push(new Particle(150, -40, '#ff0000'));
                 }
-                subtitleEl.innerText = "They gave me no choice.";
-                actors.hero.pose = 'aim';
+                
+                // Enemy Silhouette
+                drawStick(200, 0, 1.5, 0, 'aim', '#ff4444');
+                subs.innerText = "* Gunshots echoing in the valley *";
+            } else {
+                camera.targetZoom = 0.8;
+                camera.y = -50;
+                drawStick(-100, 0, 1.5, 0, 'walk');
+                subs.innerText = "Memory is a heavy burden.";
             }
-            // Sequence 3: The Gunfight (10s+)
-            else {
-                if(frame % 60 === 0 && elapsed < 15) {
-                    camera.shake = 15;
-                    createBlood(300, -30, 20);
-                    actors.enemies[0].status = 'dead';
-                    subtitleEl.innerText = "BANG.";
-                }
-                if(elapsed > 16) {
-                    subtitleEl.innerText = "It's a long way down for us stickmen.";
-                    camera.zoom += 0.001; // Dramatic slow zoom
-                }
-            }
 
-            // Draw Actors
-            drawStickman(actors.hero.x, actors.hero.y, 1.5, '#fff', actors.hero.pose, 1);
-            actors.enemies.forEach(en => {
-                drawStickman(en.x, en.y, 1.5, '#ff4444', en.status === 'dead' ? 'dead' : 'aim', -1);
-            });
-
-            // Particles
+            // 4. Particles
             particles.forEach((p, i) => {
-                p.x += p.vx; p.y += p.vy;
-                p.vy += 0.2; // Gravity
-                p.life -= 0.01;
-                ctx.fillStyle = p.color;
+                p.update();
                 ctx.globalAlpha = p.life;
-                ctx.fillRect(p.x, p.y, 3, 3);
-                if(p.life <= 0) particles.splice(i, 1);
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.type === 'shell' ? 2 : 3, 0, 7);
+                ctx.fill();
+                if(p.life < 0) particles.splice(i, 1);
             });
             ctx.globalAlpha = 1;
 
             ctx.restore();
 
-            // Cinematic Bars
+            // Cinematic Grain & Bars
+            ctx.fillStyle = 'rgba(255,255,255,0.02)';
+            for(let i=0; i<100; i++) ctx.fillRect(Math.random()*w, Math.random()*h, 2, 2);
+            
             ctx.fillStyle = 'black';
-            ctx.fillRect(0, 0, width, 100);
-            ctx.fillRect(0, height - 100, width, 100);
+            ctx.fillRect(0, 0, w, h * 0.15);
+            ctx.fillRect(0, h * 0.85, w, h * 0.15);
 
-            requestAnimationFrame(update);
+            requestAnimationFrame(loop);
         }
     </script>
 </body>
