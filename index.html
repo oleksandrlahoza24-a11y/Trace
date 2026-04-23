@@ -190,122 +190,138 @@ uniform vec2  uTexel;
 uniform float uTime;
 uniform float uAspect;
 
-#define ITERATIONS 5
-#define DEPTH_SCALE 0.15
-#define CAUSTIC_STRENGTH 1.4
+// --- Physics Constants ---
+#define PI 3.14159265359
+#define WATER_COLOR vec3(0.02, 0.25, 0.45)
+#define DEEP_COLOR  vec3(0.01, 0.05, 0.12)
+#define SKY_COLOR   vec3(0.4, 0.6, 0.9)
+#define SUN_DIR     normalize(vec3(0.6, 0.4, 0.5))
+#define IOR         1.33
 
-// --- Math Helpers ---
-float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
-float vnoise(vec2 p) {
-    vec2 i = floor(p), f = p - i;
-    f = f*f*(3.0 - 2.0*f);
-    return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x), f.y);
+// --- Noise & FBM (High Fidelity) ---
+float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453123); }
+
+float noise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
+               mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
 }
-float fbm(vec2 p) {
-    float v=0.0, a=0.5;
-    for(int i=0; i<6; i++){ v+=vnoise(p)*a; p*=2.05; a*=0.45; }
+
+float ocean_fbm(vec2 p) {
+    float v = 0.0, a = 0.5;
+    for(int i = 0; i < 7; i++) {
+        v += noise(p) * a;
+        p *= 2.3; a *= 0.45;
+    }
     return v;
 }
 
-// --- Realistic Sky with Mie Scattering Approximation ---
-vec3 getSky(vec3 rd) {
-    float sun = max(dot(rd, normalize(vec3(0.5, 0.8, -0.5))), 0.0);
-    vec3 sky = mix(vec3(0.3, 0.6, 0.9), vec3(0.05, 0.1, 0.3), pow(max(0.0, rd.y), 0.5));
-    sky += vec3(1.0, 0.8, 0.6) * pow(sun, 256.0); // Sun
-    sky += vec3(1.0, 0.5, 0.2) * pow(sun, 8.0) * 0.3; // Glow
-    return sky;
-}
-
+// --- Height Fetch (16-bit Support) ---
 #ifdef UINT8_MODE
-    float H(vec2 uv) {
+    float getH(vec2 uv) {
         vec4 s = texture2D(uWater, uv);
         return (s.r + s.g / 255.0) * 2.0 - 1.0;
     }
 #else
-    float H(vec2 uv) { return texture2D(uWater, uv).r * 2.0 - 1.0; }
+    float getH(vec2 uv) { return texture2D(uWater, uv).r * 2.0 - 1.0; }
 #endif
 
-// --- 3D Parallax Seabed ---
-vec3 getSeabedColor(vec2 uv, vec3 rd, float h) {
-    // Ray-march the refraction offset for a "thick" water feel
-    vec2 p = uv;
-    float refractionIndex = 1.33;
-    vec3 refracted = refract(rd, vec3(0,0,1), 1.0/refractionIndex);
-    
-    // Parallax mapping: shift UV based on depth
-    vec2 shift = refracted.xy * (1.0 - h * 0.5) * DEPTH_SCALE;
-    vec2 suv = uv + shift;
-    
-    // Procedural Sand & Rock
-    float n = fbm(suv * 8.0 + uTime * 0.01);
-    vec3 sand = mix(vec3(0.8, 0.7, 0.5), vec3(0.5, 0.4, 0.3), n);
-    
-    // Caustics (Voronoi approximation)
-    vec2 cUV = suv * 15.0;
-    float caust = 0.0;
-    for(int i=0; i<3; i++) {
-        vec2 t = cUV + vec2(uTime * 1.2, uTime * 0.8);
-        float d = vnoise(t + float(i)*1.5);
-        caust += pow(0.5 + 0.5 * sin(d * 12.0 + uTime), 4.0);
-    }
-    return sand * (0.8 + (caust / 3.0) * CAUSTIC_STRENGTH);
+// --- Optics ---
+vec3 getSky(vec3 rd) {
+    float sun = max(0.0, dot(rd, SUN_DIR));
+    vec3 sky = mix(vec3(0.2, 0.4, 0.7), vec3(0.6, 0.8, 1.0), pow(1.0 - max(0.0, rd.y), 3.0));
+    sky += vec3(1.0, 0.9, 0.7) * pow(sun, 200.0) * 5.0; // Sun core
+    sky += vec3(1.0, 0.6, 0.3) * pow(sun, 12.0) * 0.8; // Atmosphere
+    return sky;
+}
+
+// Simple caustic function based on wave curvature
+float getCaustics(vec2 uv) {
+    vec2 p = uv * 20.0;
+    float n = ocean_fbm(p + uTime * 0.5);
+    return pow(1.0 - abs(sin(n * 6.28)), 5.0);
 }
 
 void main() {
     vec2 uv = vUV;
-    vec2 tx = uTexel;
+    float h = getH(uv);
     
-    // High-Precision Normal Generation (Central Difference)
-    float h = H(uv);
-    float hE = H(uv + vec2(tx.x, 0.0));
-    float hN = H(uv + vec2(0.0, tx.y));
-    vec3 normal = normalize(vec3((h - hE) * 15.0, (h - hN) * 15.0, 1.0));
-
-    // View & Light Vectors
-    vec3 viewDir = normalize(vec3((uv - 0.5) * vec2(uAspect, 1.0), -1.0));
-    vec3 lightDir = normalize(vec3(0.5, 0.8, 0.6));
-    vec3 reflDir = reflect(viewDir, normal);
+    // --- Complex Normals (Sobel-style with jitter) ---
+    vec2 e = vec2(uTexel.x * 1.5, 0.0);
+    float hL = getH(uv - e.xy);
+    float hR = getH(uv + e.xy);
+    float hD = getH(uv - e.yx);
+    float hU = getH(uv + e.yx);
     
-    // --- 3D Component 1: Chromatic Refraction ---
-    float r = getSeabedColor(uv, viewDir, h).r;
-    float g = getSeabedColor(uv + 0.002, viewDir, h).g;
-    float b = getSeabedColor(uv + 0.004, viewDir, h).b;
-    vec3 seabed = vec3(r, g, b);
+    // Calculate normal with wave-steepness factor
+    vec3 normal = normalize(vec3(hL - hR, hD - hU, 0.25));
+    
+    // Camera / View vectors
+    vec3 rd = normalize(vec3((uv - 0.5) * vec2(uAspect, 1.0), 1.0));
+    vec3 n = normal;
+    
+    // --- Reflection & Refraction ---
+    vec3 refl = reflect(rd, n);
+    vec3 sky = getSky(refl);
+    
+    // Fresnel - Schlick's approximation
+    float F0 = pow((1.0 - IOR) / (1.0 + IOR), 2.0);
+    float fresnel = F0 + (1.0 - F0) * pow(1.0 - max(0.0, dot(n, -rd)), 5.0);
 
-    // --- 3D Component 2: Volume & Absorption (Beer-Lambert) ---
+    // --- Sub-Surface Scattering ---
+    // Simulates light entering the wave and bouncing out the other side
+    float sss = pow(max(0.0, dot(n, SUN_DIR)), 2.0) * pow(max(0.0, h * 0.5 + 0.5), 3.0);
+    vec3 sssCol = vec3(0.0, 0.6, 0.5) * sss * 0.4;
+
+    // --- Water Volume & Depth ---
+    // Distance light travels through water
     float depth = clamp(1.0 - (h * 0.5 + 0.5), 0.0, 1.0);
-    vec3 scatterCol = vec3(0.0, 0.25, 0.45);
-    seabed = mix(seabed, scatterCol, depth * 0.8);
+    vec3 absorption = exp(-vec3(1.0, 0.4, 0.2) * (depth * 4.0));
+    vec3 waterBody = mix(DEEP_COLOR, WATER_COLOR, absorption);
     
-    // --- 3D Component 3: Fresnel & Reflection ---
-    float fresnel = pow(1.0 - max(0.0, dot(normal, -viewDir)), 5.0);
-    fresnel = mix(0.02, 1.0, fresnel); // Water F0 is ~0.02
-    vec3 reflection = getSky(reflDir);
+    // --- Sea Floor & Caustics ---
+    vec2 refrUV = uv + n.xy * 0.05; // Light bending
+    float caus = getCaustics(refrUV);
+    vec3 floorCol = vec3(0.7, 0.6, 0.4) * (0.5 + 0.5 * caus);
+    floorCol = mix(floorCol, DEEP_COLOR, depth * 1.2);
+
+    // --- High-Gloss PBR Specular ---
+    vec3 halfV = normalize(SUN_DIR - rd);
+    float nh = max(0.0, dot(n, halfV));
+    float spec = pow(nh, 512.0) * 15.0; // Sharp sun glint
+    spec += pow(nh, 32.0) * 0.5;        // Broad sky shimmer
     
-    // --- 3D Component 4: Specular PBR (GGX-ish) ---
-    vec3 halfV = normalize(lightDir - viewDir);
-    float spec = pow(max(0.0, dot(normal, halfV)), 128.0) * 2.0;
+    // --- Foam Logic ---
+    // Foam appears at crests (high h) and based on turbulence (high gradient)
+    float turbulence = length(vec2(hL - hR, hD - hU));
+    float foamMask = smoothstep(0.2, 0.5, h + turbulence * 0.5);
+    float foamNoise = ocean_fbm(uv * 40.0 + uTime * 0.2);
+    vec3 foam = vec3(0.9, 0.95, 1.0) * smoothstep(0.4, 0.6, foamNoise) * foamMask;
+
+    // --- Final Composition ---
+    vec3 ocean = mix(floorCol, waterBody, 0.6);
+    vec3 col = mix(ocean, sky, fresnel);
     
-    // --- 3D Component 5: Subsurface Scattering (Wave Crests) ---
-    float sss = pow(max(0.0, h * 0.5 + 0.5), 3.0) * 0.4;
-    vec3 crestCol = vec3(0.2, 0.9, 1.0) * sss;
+    col += sssCol;                // Add sub-surface scatter
+    col += spec * fresnel;        // Add sun glints (fresnel modulated)
+    col = mix(col, foam, foamMask * 0.7); // Apply foam
 
-    // Composition
-    vec3 finalCol = mix(seabed, reflection, fresnel);
-    finalCol += spec * vec3(1.0, 0.95, 0.9) * fresnel; // Sparkling
-    finalCol += crestCol;
+    // --- Global "Ocean Haze" (Horizon Fog) ---
+    float dist = length(uv - 0.5);
+    col = mix(col, vec3(0.5, 0.7, 0.9), smoothstep(0.3, 0.8, dist) * 0.3);
 
-    // Add cinematic foam on edges
-    float foam = smoothstep(0.3, 0.5, h) * fbm(uv * 30.0 + uTime);
-    finalCol = mix(finalCol, vec3(0.9, 0.95, 1.0), foam * 0.4);
+    // --- Cinematic Post-Processing ---
+    // Tonemapping
+    col = col * 1.1 / (1.0 + col);
+    // Gamma correction
+    col = pow(col, vec3(1.0 / 2.2));
+    // Subtle vignette
+    col *= 1.0 - dot(uv - 0.5, uv - 0.5) * 0.6;
 
-    // Tone Mapping & Gamma
-    finalCol = finalCol / (1.0 + finalCol); // Simple Reinhard
-    finalCol = pow(finalCol, vec3(1.0/2.2));
-
-    gl_FragColor = vec4(finalCol, 1.0);
-}`;
-
+    gl_FragColor = vec4(col, 1.0);
+}
+`;
 // ─── GL Helpers ─────────────────────────────────────────────────────────────
 function mkShader(type, src) {
   const s = gl.createShader(type);
