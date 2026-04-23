@@ -2,487 +2,249 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Realistic Dunes</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Infinite Dune Crawler</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
   * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { width:100%; height:100%; overflow:hidden; background:#090502; touch-action:none;
-    -webkit-user-select:none; user-select:none; }
-  canvas { display:block; position:fixed; top:0; left:0; touch-action:none; cursor:crosshair; }
-  #ui {
-    position:fixed; bottom:28px; left:50%; transform:translateX(-50%);
-    color:rgba(220,170,80,0.52); font-family:'Share Tech Mono',monospace; font-size:11px;
-    letter-spacing:5px; text-transform:uppercase; pointer-events:none;
-    transition:opacity 2.5s; white-space:nowrap;
-    text-shadow:0 0 18px rgba(200,130,30,0.55);
+  html, body { width:100%; height:100%; overflow:hidden; background:#090502; touch-action:none; -webkit-user-select:none; user-select:none; }
+  canvas { display:block; position:fixed; top:0; left:0; }
+  
+  /* UI Elements */
+  #ui-layer { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+  #badge { position:fixed; top:40px; left:50%; transform:translateX(-50%); color:rgba(220,170,80,0.4); font-family:'Share Tech Mono',monospace; font-size:10px; letter-spacing:8px; white-space:nowrap; }
+  
+  /* Joystick Styles */
+  #joy-bound {
+    position: fixed; bottom: 60px; left: 60px;
+    width: 120px; height: 120px;
+    background: rgba(200,150,50,0.05);
+    border: 1px solid rgba(200,150,50,0.2);
+    border-radius: 50%;
+    pointer-events: auto;
   }
-  #ui.fade { opacity:0; }
-  #badge {
-    position:fixed; top:20px; left:50%; transform:translateX(-50%);
-    color:rgba(220,170,80,0.28); font-family:'Share Tech Mono',monospace;
-    font-size:10px; letter-spacing:7px; pointer-events:none; white-space:nowrap;
-    text-shadow:0 0 12px rgba(200,130,30,0.35);
+  #joy-stick {
+    position: absolute; top: 50%; left: 50%;
+    width: 50px; height: 50px;
+    margin: -25px 0 0 -25px;
+    background: rgba(220,170,80,0.15);
+    border: 2px solid rgba(220,170,80,0.4);
+    border-radius: 50%;
+    transition: transform 0.1s ease-out;
   }
-  .corner { position:fixed; width:40px; height:40px; pointer-events:none; }
-  #c1{top:0;   left:0;  border-top:1px solid rgba(200,155,60,0.26);border-left:1px solid rgba(200,155,60,0.26);}
-  #c2{top:0;   right:0; border-top:1px solid rgba(200,155,60,0.26);border-right:1px solid rgba(200,155,60,0.26);}
-  #c3{bottom:0;left:0;  border-bottom:1px solid rgba(200,155,60,0.26);border-left:1px solid rgba(200,155,60,0.26);}
-  #c4{bottom:0;right:0; border-bottom:1px solid rgba(200,155,60,0.26);border-right:1px solid rgba(200,155,60,0.26);}
 </style>
 </head>
 <body>
+
 <canvas id="c"></canvas>
-<div class="corner" id="c1"></div><div class="corner" id="c2"></div>
-<div class="corner" id="c3"></div><div class="corner" id="c4"></div>
-<div id="badge">SiO₂ · REALISTIC GRANULAR</div>
-<div id="ui">sculpt the dunes</div>
+
+<div id="ui-layer">
+    <div id="badge">NOMAD INFINITE · MK-I</div>
+    <div id="joy-bound"><div id="joy-stick"></div></div>
+</div>
+
 <script>
 'use strict';
 
 const canvas = document.getElementById('c');
-const ui     = document.getElementById('ui');
-const DPR    = Math.min(window.devicePixelRatio || 1, 2);
-let W = 0, H = 0, CW = 0, CH = 0;
+const joyStick = document.getElementById('joy-stick');
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+let W, H, CW, CH;
+const S = 512; // Sim Res
+
+// --- CAR STATE ---
+const car = {
+    x: 0.5, y: 0.5, // World pos (0-1)
+    angle: 0, 
+    v: 0,
+    w: 0.03, l: 0.05, // Car dimensions
+    inputX: 0, inputY: 0
+};
+
 function resize(){
-  CW = window.innerWidth; CH = window.innerHeight;
-  W  = Math.round(CW * DPR); H = Math.round(CH * DPR);
-  canvas.width = W; canvas.height = H;
-  canvas.style.width  = CW + 'px';
-  canvas.style.height = CH + 'px';
+    CW = window.innerWidth; CH = window.innerHeight;
+    W = Math.round(CW * DPR); H = Math.round(CH * DPR);
+    canvas.width = W; canvas.height = H;
+    canvas.style.width = CW + 'px'; canvas.style.height = CH + 'px';
 }
 resize(); window.addEventListener('resize', resize);
 
-const gl = canvas.getContext('webgl', {antialias:false, alpha:false, powerPreference:'high-performance'})
-        || canvas.getContext('experimental-webgl', {antialias:false, alpha:false});
-if(!gl){ document.body.innerHTML = '<p style="color:#ca8;font-family:monospace;padding:40px">WebGL unavailable</p>'; throw 0; }
+const gl = canvas.getContext('webgl', {antialias:false, alpha:false});
+const extFL = gl.getExtension('OES_texture_float_linear');
+const extHL = gl.getExtension('OES_texture_half_float_linear');
+let FTYPE = gl.UNSIGNED_BYTE, UINT8 = true;
+if(gl.getExtension('OES_texture_half_float')) { FTYPE = 0x8D61; UINT8 = false; }
 
-const extFloat = gl.getExtension('OES_texture_float');
-const extHalfF = gl.getExtension('OES_texture_half_float');
-const extFL    = gl.getExtension('OES_texture_float_linear');
-const extHL    = gl.getExtension('OES_texture_half_float_linear');
-gl.getExtension('WEBGL_color_buffer_float');
-gl.getExtension('EXT_color_buffer_half_float');
-
-function canRT(type){
-  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 4, 4, 0, gl.RGBA, type, null);
-  const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
-  const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
-  gl.deleteFramebuffer(f); gl.deleteTexture(t); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  return ok;
-}
-let FTYPE, ULIN, UINT8;
-if(extFloat && canRT(gl.FLOAT))                       { FTYPE=gl.FLOAT;                ULIN=!!extFL; UINT8=false; }
-else if(extHalfF && canRT(extHalfF.HALF_FLOAT_OES))   { FTYPE=extHalfF.HALF_FLOAT_OES; ULIN=!!extHL; UINT8=false; }
-else                                                  { FTYPE=gl.UNSIGNED_BYTE;        ULIN=true;    UINT8=true;  }
-
-const S = 512; // Resolution
-
-const VERT = `attribute vec2 aPos; varying vec2 vUV;
-void main(){ vUV = aPos*.5+.5; gl_Position = vec4(aPos,0.,1.); }`;
-
-const INIT_SRC = (UINT8 ? '#define U8\n' : '') + `
-precision highp float;
-varying vec2 vUV;
-
-float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
-float vn(vec2 p){
-  vec2 i=floor(p),f=p-i; f=f*f*(3.-2.*f);
-  return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),
-             mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);
-}
-float fbm(vec2 p){ float v=0.,a=.5; for(int i=0;i<4;i++){v+=vn(p)*a;p*=2.1;a*=.5;} return v; }
-
-void main(){
-  vec2 uv = vUV;
-  float h = 0.34;
-  h += 0.27 * exp(-(pow((uv.x-0.27)*3.1,2.)+pow((uv.y-0.43)*1.9,2.)));
-  h += 0.24 * exp(-(pow((uv.x-0.71)*3.6,2.)+pow((uv.y-0.27)*2.2,2.)));
-  h += 0.21 * exp(-(pow((uv.x-0.53)*2.9,2.)+pow((uv.y-0.75)*1.8,2.)));
-  h += 0.17 * exp(-(pow((uv.x-0.13)*4.2,2.)+pow((uv.y-0.66)*2.4,2.)));
-  h += 0.15 * exp(-(pow((uv.x-0.84)*3.5,2.)+pow((uv.y-0.56)*2.1,2.)));
-  h += 0.12 * exp(-(pow((uv.x-0.42)*5.0,2.)+pow((uv.y-0.12)*3.0,2.)));
-  h -= 0.07 * exp(-(pow((uv.x-0.50)*3.8,2.)+pow((uv.y-0.50)*3.8,2.)));
-  h -= 0.05 * exp(-(pow((uv.x-0.88)*5.0,2.)+pow((uv.y-0.15)*5.0,2.)));
-  h += 0.020 * sin(uv.x*21.+uv.y*4.2+1.1);
-  h += 0.015 * sin(uv.y*16.-uv.x*2.8+0.7);
-  h += 0.012 * fbm(uv*15.+2.1);
-  h = clamp(h, 0.02, 0.97);
-  #ifdef U8
-    float t2 = h*255.; gl_FragColor = vec4(floor(t2)/255., fract(t2), 0., 1.);
-  #else
-    gl_FragColor = vec4(h, 0., 0., 1.);
-  #endif
-}`;
+// --- SHADERS ---
+const VERT = `attribute vec2 aPos; varying vec2 vUV; void main(){ vUV = aPos*.5+.5; gl_Position = vec4(aPos,0.,1.); }`;
 
 const SIM_SRC = (UINT8 ? '#define U8\n' : '') + `
 precision highp float;
 varying vec2 vUV;
 uniform sampler2D uS;
-uniform vec2  uTx;
-uniform vec2  uM;
-uniform vec2  uMv;
-uniform float uR;
+uniform vec2 uTx, uW1, uW2, uW3, uW4;
 uniform float uStr;
-uniform float uWind;
 
 #ifdef U8
   float dec(vec2 v){ return v.x + v.y/255.; }
-  float H(vec2 u){ return dec(texture2D(uS,u).rg); }
+  float H(vec2 u){ return dec(texture2D(uS, fract(u)).rg); }
   vec2 enc(float v){ float t=clamp(v,0.,.99999)*255.; return vec2(floor(t)/255.,fract(t)); }
 #else
-  float H(vec2 u){ return texture2D(uS,u).r; }
+  float H(vec2 u){ return texture2D(uS, fract(u)).r; }
 #endif
 
-// Random noise to vary the angle of repose slightly (simulates varying compaction)
-float hash(vec2 p){ return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453); }
-
 void main(){
-  float h  = H(vUV);
-  float tx = uTx.x, ty = uTx.y;
+    float h = H(vUV);
+    vec2 tx = vec2(uTx.x, 0.0), ty = vec2(0.0, uTx.y);
+    
+    // Neighbors (Toroidal Wrap)
+    float hN = H(vUV+ty), hS = H(vUV-ty), hE = H(vUV+tx), hW = H(vUV-tx);
+    
+    // Physics: Granular Avalanching
+    float aor = 0.025, fr = 0.12;
+    float flow = 0.0;
+    float dN=hN-h; flow+=sign(dN)*max(0.,abs(dN)-aor)*fr;
+    float dS=hS-h; flow+=sign(dS)*max(0.,abs(dS)-aor)*fr;
+    float dE=hE-h; flow+=sign(dE)*max(0.,abs(dE)-aor)*fr;
+    float dW=hW-h; flow+=sign(dW)*max(0.,abs(dW)-aor)*fr;
+    
+    float newH = h + flow;
 
-  float hN  = H(vUV+vec2( 0., ty));
-  float hS  = H(vUV+vec2( 0.,-ty));
-  float hE  = H(vUV+vec2( tx, 0.));
-  float hW  = H(vUV+vec2(-tx, 0.));
-  float hNE = H(vUV+vec2( tx, ty));
-  float hNW = H(vUV+vec2(-tx, ty));
-  float hSE = H(vUV+vec2( tx,-ty));
-  float hSW = H(vUV+vec2(-tx,-ty));
+    // Tire Tracks (4 wheels)
+    float d1 = length(vUV - uW1), d2 = length(vUV - uW2), d3 = length(vUV - uW3), d4 = length(vUV - uW4);
+    float track = smoothstep(0.02, 0.0, min(min(d1,d2), min(d3,d4)));
+    newH -= track * uStr;
 
-  // Tighter AOR and slightly lower flow rate for more dry, granular behavior
-  float localAorMod = (hash(vUV * 100.0) * 0.004) - 0.002;
-  float AOR  = 0.026 + localAorMod;  
-  float AOR2 = 0.036 + localAorMod;  
-  const float FR   = 0.11; 
-
-  float flow = 0.;
-  float dN=hN-h; flow+=sign(dN)*max(0.,abs(dN)-AOR )*FR;
-  float dS=hS-h; flow+=sign(dS)*max(0.,abs(dS)-AOR )*FR;
-  float dE=hE-h; flow+=sign(dE)*max(0.,abs(dE)-AOR )*FR;
-  float dW=hW-h; flow+=sign(dW)*max(0.,abs(dW)-AOR )*FR;
-
-  float dNE=hNE-h; flow+=sign(dNE)*max(0.,abs(dNE)-AOR2)*FR*0.5;
-  float dNW=hNW-h; flow+=sign(dNW)*max(0.,abs(dNW)-AOR2)*FR*0.5;
-  float dSE=hSE-h; flow+=sign(dSE)*max(0.,abs(dSE)-AOR2)*FR*0.5;
-  float dSW=hSW-h; flow+=sign(dSW)*max(0.,abs(dSW)-AOR2)*FR*0.5;
-
-  float newH = h + flow;
-
-  float wSrc = H(vUV - vec2(tx*1.8, ty*0.15)); 
-  float wDst = H(vUV + vec2(tx*1.8, ty*0.15)); 
-  float wDiff = wSrc - wDst;
-  newH += max(0., wDiff - AOR*0.5) * 0.05 * uWind;
-
-  float dist  = length(vUV - uM);
-  float touch = smoothstep(uR, 0., dist);
-  newH -= touch * uStr;
-
-  float mvSpd = length(uMv);
-  float hasMv = step(0.0012, mvSpd);
-  vec2 mvDir  = uMv / max(mvSpd, 0.0001);
-  vec2 toP    = vUV - uM;
-  float along = dot(toP, mvDir);
-  float aside = length(toP - along*mvDir);
-  float pushZ = smoothstep(uR*2.5, 0., aside) * smoothstep(uR*0.3, uR*2.0, along);
-  newH += pushZ * uStr * min(mvSpd*25., 1.) * 0.45 * hasMv;
-
-  newH = clamp(newH, 0., 1.);
-
-  #ifdef U8
-    gl_FragColor = vec4(enc(newH), 0., 1.);
-  #else
-    gl_FragColor = vec4(newH, 0., 0., 1.);
-  #endif
+    gl_FragColor = UINT8 ? vec4(enc(newH),0,1) : vec4(newH,0,0,1);
 }`;
 
-const RENDER_SRC = (UINT8 ? '#define U8\n' : '') + `
+const REN_SRC = (UINT8 ? '#define U8\n' : '') + `
 precision highp float;
 varying vec2 vUV;
-uniform sampler2D uW;
-uniform vec2  uTx;
-uniform float uTime, uAspect;
-
-float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
-float vn(vec2 p){
-  vec2 i=floor(p),f=p-i; f=f*f*(3.-2.*f);
-  return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),
-             mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);
-}
-float fbm(vec2 p){ float v=0.,a=.5; for(int i=0;i<5;i++){v+=vn(p)*a;p*=2.1;a*=.5;} return v; }
+uniform sampler2D uS;
+uniform vec2 uTx, uOffset;
+uniform float uAspect;
 
 #ifdef U8
-  float H(vec2 uv){ vec4 s=texture2D(uW,uv); return s.r+s.g/255.; }
+  float H(vec2 u){ vec4 s=texture2D(uS, fract(u)); return s.r+s.g/255.; }
 #else
-  float H(vec2 uv){ return texture2D(uW,uv).r; }
+  float H(vec2 u){ return texture2D(uS, fract(u)).r; }
 #endif
 
-float GGX(float ndh, float r){ float a=r*r*r*r,d=ndh*ndh*(a-1.)+1.; return a/(3.14159*d*d+1e-5); }
-
-// Quartz sparkle function
-float sparkle(vec2 uv, vec3 viewDir, vec3 normal, vec3 lightDir) {
-    vec3 halfV = normalize(viewDir + lightDir);
-    float NdotH = max(0.0, dot(normal, halfV));
-    // High frequency spatial hash mixed with specular reflection
-    float grain = hash(uv * 1200.0); 
-    float glint = pow(NdotH, 150.0 + grain * 200.0) * step(0.8, grain);
-    return glint * 4.0; 
-}
-
 void main(){
-  vec2 uv = vUV;
-  float t  = uTime;
+    vec2 uv = vUV + uOffset;
+    float h = H(uv);
+    vec2 tx = uTx * 1.5;
+    float hL = H(uv-vec2(tx.x,0.)), hR = H(uv+vec2(tx.x,0.));
+    float hU = H(uv+vec2(0.,tx.y)), hD = H(uv-vec2(0.,tx.y));
+    
+    vec3 N = normalize(vec3(hL-hR, hD-hU, 0.1));
+    vec3 L = normalize(vec3(0.5, 0.5, 0.8));
+    float diff = max(dot(N, L), 0.0);
+    
+    vec3 sand = mix(vec3(0.3, 0.2, 0.1), vec3(0.9, 0.75, 0.5), h);
+    vec3 col = sand * (diff + 0.2);
+    
+    // Draw simple car icon at center
+    float dCar = length((vUV - 0.5) * vec2(uAspect, 1.0));
+    if(dCar < 0.015) col = vec3(0.1, 0.1, 0.1);
 
-  vec2 tx  = uTx * 2.2; 
-  float hC  = H(uv);
-  float hL  = H(uv-vec2(tx.x,0.));  float hR  = H(uv+vec2(tx.x,0.));
-  float hU  = H(uv+vec2(0.,tx.y));  float hD  = H(uv-vec2(0.,tx.y));
-  float hLU = H(uv+vec2(-tx.x, tx.y)); float hRU = H(uv+vec2(tx.x, tx.y));
-  float hLD = H(uv+vec2(-tx.x,-tx.y)); float hRD = H(uv+vec2(tx.x,-tx.y));
-
-  const float NS = 8.5; 
-  float dX = (hRD+2.*hR+hRU-hLD-2.*hL-hLU)*NS/uAspect;
-  float dY = (hLU+2.*hU+hRU-hLD-2.*hD-hRD)*NS;
-  vec3 N   = normalize(vec3(-dX,-dY,1.));
-  vec3 V   = vec3(0.,0.,1.);
-
-  vec3 sunDir = normalize(vec3(0.55, 0.20, 0.70));
-  vec3 halfV  = normalize(V+sunDir);
-  float sunD  = max(dot(N,sunDir),0.);
-  float NdotH = max(dot(N,halfV),0.);
-  float cosI  = max(dot(N,V),0.);
-  float F     = 0.02 + 0.05*pow(1.-cosI,5.); 
-
-  // Realistic sand palette (more muted, desaturated tones)
-  vec3 deepV  = vec3(0.24, 0.16, 0.10); 
-  vec3 midS   = vec3(0.60, 0.45, 0.28); 
-  vec3 slopeS = vec3(0.78, 0.65, 0.45); 
-  vec3 peakS  = vec3(0.92, 0.84, 0.68); 
-
-  float hN = clamp(hC*2.5, 0., 1.);
-  vec3 col = mix(deepV,  midS,   smoothstep(0.,   0.35, hN));
-  col      = mix(col,    slopeS, smoothstep(0.35, 0.70, hN));
-  col      = mix(col,    peakS,  smoothstep(0.70, 1.0,  hN));
-
-  // Much finer grain noise to look like microscopic particles
-  float g1 = vn(uv*200.  + t*0.001);
-  float g2 = vn(uv*450. + 3.7);
-  float g3 = fbm(uv*50. + t*0.002);
-  col *= 0.85 + g1*0.15 + g2*0.08 + g3*0.05;
-
-  float streak = fbm(uv*8.0 + 5.1);
-  col = mix(col, col*vec3(1.1,0.9,0.7), streak*0.12);
-
-  float ao = clamp(hC*4.5+0.15, 0., 1.);
-  col *= mix(0.2, 1.0, ao*ao);
-
-  vec3 sunCol  = vec3(1.00, 0.88, 0.65);       
-  vec3 skyAmb  = vec3(0.25, 0.35, 0.55);       
-  vec3 horzAmb = vec3(0.55, 0.38, 0.20);       
-
-  float upF    = dot(N, vec3(0.,0.,1.))*0.5+0.5;
-  vec3 ambient = mix(horzAmb, skyAmb, upF)*0.5;
-  col         *= ambient + sunCol*sunD*1.05;
-
-  // Enhanced subsurface scattering on sharp ridges
-  vec3 backL = normalize(vec3(-0.5,-0.2,0.6));
-  float sss  = pow(max(0.,dot(N,backL)),2.0) * max(0.,1.-hC*3.0);
-  col       += vec3(0.95,0.45,0.15)*sss*0.35;
-
-  // Smoother self-shadow transitions
-  float shade = clamp(1.-sunD*1.5,0.,1.) * (1.-ao) * 0.7;
-  col = mix(col, vec3(0.08,0.05,0.04), shade*0.5);
-
-  float rt  = t*0.04;
-  vec2 rUV  = uv*vec2(uAspect,1.);
-  float ax  = rUV.x*0.9 + rUV.y*0.1; 
-
-  float rL  = sin(ax*25. + fbm(uv*4.0+rt)*4.0 + rt);
-  rL        = pow(clamp(rL*.5+.5,0.,1.), 2.0);
-  float rF  = sin(ax*75. + fbm(uv*12.0+rt*1.2)*2.5 + rt*1.5);
-  rF        = pow(clamp(rF*.5+.5,0.,1.), 1.5);
-  float rip = mix(rL, rF, 0.4);
-
-  float slope = length(vec2(dX,dY));
-  float ripV  = clamp(1.-slope*3.0,0.,1.) * smoothstep(0.05,0.3,hC) * (1.-smoothstep(0.75,0.95,hC));
-
-  col  = mix(col, col*0.75 + vec3(0.05,0.03,0.02), rip*ripV*0.35);
-  col += sunCol * rip * ripV * sunD * 0.2;
-
-  float rough = max(0.08, 0.12+(1.-hC)*0.05);
-  col += sunCol * GGX(NdotH, rough) * sunD * 0.08 * F;
-  
-  // Real Quartz Glint Implementation
-  float glints = sparkle(uv, V, N, sunDir);
-  col += sunCol * glints * sunD * 0.08 * clamp(hC*3.0-0.2, 0., 1.);
-
-  float lap     = hU+hD+hL+hR - 4.*hC;
-  float caustic = pow(max(0.,-lap*12.),1.5)*1.2;
-  col += sunCol * caustic * sunD * 0.15;
-
-  float exposed = smoothstep(0.08,0.01,hC);
-  vec3 earthCol = vec3(0.12,0.07,0.03) * (0.8 + fbm(uv*25.)*0.3);
-  float crack   = smoothstep(0.48,0.50,abs(sin(uv.x*45.+uv.y*15.)*sin(uv.y*35.-uv.x*10.)));
-  earthCol      = mix(earthCol, earthCol*0.3, crack*0.7);
-  col           = mix(col, earthCol, exposed);
-
-  vec2 dustUV = uv*vec2(uAspect*25.,25.) + vec2(t*0.03, t*0.008);
-  vec2 dsi    = floor(dustUV);
-  vec2 dsf    = fract(dustUV);
-  float dh1   = hash(dsi);
-  float dh2   = hash(dsi+vec2(47.,0.));
-  float dh3   = hash(dsi+vec2(0.,91.));
-  float mR    = 0.025+dh1*0.04;
-  float mDist = length(dsf-vec2(0.2+dh1*0.6, 0.2+dh2*0.6));
-  float mote  = smoothstep(mR, mR*0.1, mDist) * step(dh3,0.08) * smoothstep(0.35,0.05,hC); 
-  col += vec3(0.9,0.7,0.4)*mote*0.5;
-
-  float haze = (1.-hC)*(1.-sunD)*0.25;
-  col  = mix(col, vec3(0.55,0.40,0.25), haze*0.3);
-
-  vec2 vd = (vUV*2.-1.)*vec2(uAspect,1.);
-  col    *= clamp(1.-dot(vd,vd)*0.08, 0., 1.);
-
-  col  = col*(1.+col*0.2)/(col+0.85)*1.1;
-  col  = pow(max(col,vec3(0.)), vec3(1./2.2));
-  col.r = min(col.r*1.02, 1.);
-  col.b *= 0.92; 
-
-  gl_FragColor = vec4(col, 1.);
+    gl_FragColor = vec4(pow(col, vec3(1.0/2.2)), 1.0);
 }`;
 
-function mkSh(type, src){
-  const s = gl.createShader(type);
-  gl.shaderSource(s, src); gl.compileShader(s);
-  if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
-  return s;
-}
-function mkProg(fsrc){
-  const p = gl.createProgram();
-  gl.attachShader(p, mkSh(gl.VERTEX_SHADER, VERT));
-  gl.attachShader(p, mkSh(gl.FRAGMENT_SHADER, fsrc));
-  gl.linkProgram(p);
-  if(!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-  const u = {}, n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
-  for(let i=0;i<n;i++){ const x=gl.getActiveUniform(p,i); u[x.name]=gl.getUniformLocation(p,x.name); }
-  return {p, u};
+// --- BOILERPLATE ---
+function mkProg(vs, fs){
+    const p = gl.createProgram();
+    const s1 = gl.createShader(gl.VERTEX_SHADER), s2 = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(s1, vs); gl.compileShader(s1);
+    gl.shaderSource(s2, fs); gl.compileShader(s2);
+    gl.attachShader(p, s1); gl.attachShader(p, s2); gl.linkProgram(p);
+    const u = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+    for(let i=0; i<n; i++){ const x=gl.getActiveUniform(p,i); u[x.name]=gl.getUniformLocation(p,x.name); }
+    return {p, u};
 }
 
-let initP, simP, renP;
-try {
-  initP = mkProg(INIT_SRC);
-  simP  = mkProg(SIM_SRC);
-  renP  = mkProg(RENDER_SRC);
-} catch(e) {
-  document.body.innerHTML = `<pre style="color:#ca8;padding:20px;font-size:11px;white-space:pre-wrap">${e.message}</pre>`;
-  throw e;
-}
-
-const qb = gl.createBuffer();
-gl.bindBuffer(gl.ARRAY_BUFFER, qb);
+const simP = mkProg(VERT, SIM_SRC), renP = mkProg(VERT, REN_SRC);
+const qb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, qb);
 gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
-function bindQ(prog){
-  gl.bindBuffer(gl.ARRAY_BUFFER, qb);
-  const loc = gl.getAttribLocation(prog.p, 'aPos');
-  gl.enableVertexAttribArray(loc);
-  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-}
 
 function mkFBO(){
-  const n   = S * S * 4;
-  const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
-  const emptyData = UINT8 ? new Uint8Array(n)
-                  : (FTYPE === gl.FLOAT ? new Float32Array(n) : new Uint16Array(n));
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, S, S, 0, gl.RGBA, FTYPE, emptyData);
-  const filt = ULIN ? gl.LINEAR : gl.NEAREST;
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filt);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filt);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  const fbo = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  return {tex, fbo};
+    const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, S, S, 0, gl.RGBA, FTYPE, null);
+    gl.texParameteri(gl.TEXTURE_2D, 10240, 9729); gl.texParameteri(gl.TEXTURE_2D, 10241, 9729);
+    gl.texParameteri(gl.TEXTURE_2D, 10242, 10497); gl.texParameteri(gl.TEXTURE_2D, 10243, 10497); // REPEAT
+    const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, 36064, gl.TEXTURE_2D, t, 0);
+    return {t, f};
 }
-let fboA = mkFBO(), fboB = mkFBO();
+let fA = mkFBO(), fB = mkFBO();
 
-(function initDunes(){
-  gl.bindFramebuffer(gl.FRAMEBUFFER, fboA.fbo);
-  gl.viewport(0, 0, S, S);
-  gl.useProgram(initP.p);
-  bindQ(initP);
-  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-})();
-
-const ptr = {x:.5, y:.5, px:.5, py:.5, vx:0, vy:0, active:false};
-let gone = false;
-function toUV(cx,cy){ return {x:cx/CW, y:1.-cy/CH}; }
-function dismiss(){ if(gone)return; gone=true; ui.classList.add('fade'); setTimeout(()=>ui.style.display='none',3000); }
-function onDown(e){
-  const t=e.touches?e.touches[0]:e, uv=toUV(t.clientX,t.clientY);
-  ptr.px=uv.x; ptr.py=uv.y; ptr.x=uv.x; ptr.y=uv.y;
-  ptr.vx=0; ptr.vy=0; ptr.active=true; dismiss();
+// --- JOYSTICK LOGIC ---
+function handleJoy(e){
+    const b = document.getElementById('joy-bound').getBoundingClientRect();
+    const t = e.touches ? e.touches[0] : e;
+    const dx = t.clientX - (b.left + b.width/2);
+    const dy = t.clientY - (b.top + b.height/2);
+    const dist = Math.min(60, Math.hypot(dx, dy));
+    const ang = Math.atan2(dy, dx);
+    const jx = Math.cos(ang) * dist;
+    const jy = Math.sin(ang) * dist;
+    joyStick.style.transform = `translate(${jx}px, ${jy}px)`;
+    car.inputX = jx / 60; car.inputY = jy / 60;
 }
-function onMove(e){
-  if(!ptr.active) return;
-  const t=e.touches?e.touches[0]:e, uv=toUV(t.clientX,t.clientY);
-  ptr.px=ptr.x; ptr.py=ptr.y;
-  ptr.vx=uv.x-ptr.x; ptr.vy=uv.y-ptr.y;
-  ptr.x=uv.x; ptr.y=uv.y;
-}
-function onUp(){ ptr.active=false; ptr.vx=0; ptr.vy=0; }
-canvas.addEventListener('mousedown', onDown);
-canvas.addEventListener('mousemove', onMove);
-window.addEventListener('mouseup', onUp);
-canvas.addEventListener('touchstart', e=>{e.preventDefault();onDown(e);},{passive:false});
-canvas.addEventListener('touchmove',  e=>{e.preventDefault();onMove(e);},{passive:false});
-canvas.addEventListener('touchend',   e=>{e.preventDefault();onUp();  },{passive:false});
+document.getElementById('joy-bound').addEventListener('touchstart', e => handleJoy(e));
+document.getElementById('joy-bound').addEventListener('touchmove', e => { e.preventDefault(); handleJoy(e); });
+window.addEventListener('touchend', () => {
+    joyStick.style.transform = `translate(0,0)`; car.inputX = car.inputY = 0;
+});
 
-function simulate(src, dst, applyMouse){
-  gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fbo);
-  gl.viewport(0, 0, S, S);
-  gl.useProgram(simP.p);
-  bindQ(simP);
-  const u = simP.u;
-  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.tex);
-  gl.uniform1i(u.uS,   0);
-  gl.uniform2f(u.uTx,  1./S, 1./S);
-  gl.uniform2f(u.uM,   ptr.x, ptr.y);
-  gl.uniform2f(u.uMv,  ptr.vx, ptr.vy);
-  gl.uniform1f(u.uR,   0.046);
-  const spd = Math.hypot(ptr.vx, ptr.vy);
-  const str = (applyMouse && ptr.active) ? Math.min(0.09 + spd*17., 0.55) : 0.;
-  gl.uniform1f(u.uStr,  str);
-  gl.uniform1f(u.uWind, Math.max(0., Math.sin(time * 0.16)*0.65 + 0.12));
-  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-}
-
-let time = 0;
-function render(src){
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  gl.viewport(0, 0, W, H);
-  gl.useProgram(renP.p);
-  bindQ(renP);
-  const u = renP.u;
-  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.tex);
-  gl.uniform1i(u.uW,      0);
-  gl.uniform2f(u.uTx,     1./S, 1./S);
-  gl.uniform1f(u.uTime,   time);
-  gl.uniform1f(u.uAspect, W/H);
-  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-}
-
+// --- MAIN LOOP ---
 function frame(now){
-  requestAnimationFrame(frame);
-  time = now * 0.001;
-  for(let i = 0; i < 5; i++){
-    simulate(fboA, fboB, i === 0);
-    const tmp = fboA; fboA = fboB; fboB = tmp;
-  }
-  render(fboA);
+    requestAnimationFrame(frame);
+    
+    // Physics
+    car.v = car.v * 0.97 + (-car.inputY * 0.005);
+    car.angle += car.inputX * car.v * 2.0;
+    car.x += Math.cos(car.angle) * car.v;
+    car.y -= Math.sin(car.angle) * car.v; // Canvas Y is flipped
+
+    const wX = Math.cos(car.angle) * 0.02, wY = Math.sin(car.angle) * 0.02;
+    const sX = Math.cos(car.angle+1.57)*0.015, sY = Math.sin(car.angle+1.57)*0.015;
+
+    // Sim
+    gl.useProgram(simP.p);
+    gl.bindBuffer(gl.ARRAY_BUFFER, qb);
+    const loc = gl.getAttribLocation(simP.p, 'aPos');
+    gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+    for(let i=0; i<4; i++){
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fB.f);
+        gl.viewport(0,0,S,S);
+        gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fA.t);
+        gl.uniform1i(simP.u.uS, 0);
+        gl.uniform2f(simP.u.uTx, 1/S, 1/S);
+        gl.uniform1f(simP.u.uStr, Math.abs(car.v) * 5.0);
+        
+        // Wheel positions (toroidal fract)
+        const fx = v => ((v % 1) + 1) % 1;
+        gl.uniform2f(simP.u.uW1, fx(car.x+wX+sX), fx(car.y+wY+sY));
+        gl.uniform2f(simP.u.uW2, fx(car.x+wX-sX), fx(car.y+wY-sY));
+        gl.uniform2f(simP.u.uW3, fx(car.x-wX+sX), fx(car.y-wY+sY));
+        gl.uniform2f(simP.u.uW4, fx(car.x-wX-sX), fx(car.y-wY-sY));
+        
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        let t = fA; fA = fB; fB = t;
+    }
+
+    // Render
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0,0,W,H);
+    gl.useProgram(renP.p);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fA.t);
+    gl.uniform2f(renP.u.uOffset, car.x - 0.5, car.y - 0.5);
+    gl.uniform2f(renP.u.uTx, 1/S, 1/S);
+    gl.uniform1f(renP.u.uAspect, CW/CH);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 }
 requestAnimationFrame(frame);
 </script>
