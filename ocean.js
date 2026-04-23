@@ -1,101 +1,125 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { Sky } from 'three/addons/objects/Sky.js';
 
-// --- CONFIGURATION ---
-const SIM_RES = 512; // Resolution of physics grid
-const GEOM_RES = 512; // Resolution of water surface detail
-
-let scene, camera, renderer, waterMesh, controls, sun;
+let scene, camera, renderer, controls, waterMesh;
 let raycaster = new THREE.Raycaster();
 let mouse = new THREE.Vector2(-1, -1);
 
-// Physics Buffers
-let renderTarget1, renderTarget2, simMaterial, simScene, simCamera;
+// Physics Resolution (Higher = more detailed ripples, but heavier)
+const RES = 256; 
+let rtCurrent, rtPrev, rtTemp;
+let simScene, simCamera, simMaterial;
 
 init();
 animate();
 
 function init() {
-    // 1. Core Engine
+    // 1. Scene & Camera
     scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 2000);
-    camera.position.set(120, 100, 120);
+    scene.background = new THREE.Color(0x020508);
+    
+    camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 80, 120);
 
-    renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.8;
     document.body.appendChild(renderer.domElement);
 
-    // 2. Physics Simulation Setup (The "Brain")
-    renderTarget1 = new THREE.WebGLRenderTarget(SIM_RES, SIM_RES, { type: THREE.HalfFloatType, format: THREE.RGBAFormat });
-    renderTarget2 = new THREE.WebGLRenderTarget(SIM_RES, SIM_RES, { type: THREE.HalfFloatType, format: THREE.RGBAFormat });
+    // 2. Physics Buffers (Ping-Pong)
+    const options = {
+        type: THREE.HalfFloatType,
+        format: THREE.RGBAFormat,
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter
+    };
+    rtCurrent = new THREE.WebGLRenderTarget(RES, RES, options);
+    rtPrev = new THREE.WebGLRenderTarget(RES, RES, options);
+    rtTemp = new THREE.WebGLRenderTarget(RES, RES, options);
 
+    // 3. Simulation Shader (The Physics)
     simScene = new THREE.Scene();
     simCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-    
     simMaterial = new THREE.ShaderMaterial({
         uniforms: {
-            tPrev: { value: null },
             tCurr: { value: null },
+            tPrev: { value: null },
             uMouse: { value: new THREE.Vector2(-1, -1) },
-            uDelta: { value: 1.0 / SIM_RES }
+            uStrength: { value: 0.15 },
+            uInvRes: { value: new THREE.Vector2(1/RES, 1/RES) }
         },
         vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position, 1.0); }`,
         fragmentShader: `
-            uniform sampler2D tPrev;
             uniform sampler2D tCurr;
+            uniform sampler2D tPrev;
             uniform vec2 uMouse;
-            uniform float uDelta;
+            uniform vec2 uInvRes;
             varying vec2 vUv;
             void main() {
-                vec4 curr = texture2D(tCurr, vUv);
-                vec4 prev = texture2D(tPrev, vUv);
-                // Wave Equation logic
-                float neighbors = (
-                    texture2D(tCurr, vUv + vec2(uDelta, 0.0)).r +
-                    texture2D(tCurr, vUv + vec2(-uDelta, 0.0)).r +
-                    texture2D(tCurr, vUv + vec2(0.0, uDelta)).r +
-                    texture2D(tCurr, vUv + vec2(0.0, -uDelta)).r
-                ) * 0.5;
-                float next = (neighbors - prev.r) * 0.985; // Damping
-                // Interaction
-                float dist = distance(vUv, uMouse);
-                if(dist < 0.015) next += 0.5;
+                float c = texture2D(tCurr, vUv).r;
+                float p = texture2D(tPrev, vUv).r;
+                
+                // Neighbors for wave propagation
+                float n = texture2D(tCurr, vUv + vec2(0.0, uInvRes.y)).r;
+                float s = texture2D(tCurr, vUv - vec2(0.0, uInvRes.y)).r;
+                float e = texture2D(tCurr, vUv + vec2(uInvRes.x, 0.0)).r;
+                float w = texture2D(tCurr, vUv - vec2(uInvRes.x, 0.0)).r;
+
+                // Wave equation
+                float next = (n + s + e + w) * 0.5 - p;
+                next *= 0.99; // Damping factor (water thickness)
+
+                // Mouse/Touch Interaction
+                float d = distance(vUv, uMouse);
+                if (d < 0.02) next += 0.4;
+
                 gl_FragColor = vec4(next, next, next, 1.0);
             }
         `
     });
+    simScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), simMaterial));
 
-    const simPlane = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), simMaterial);
-    simScene.add(simPlane);
-
-    // 3. Visual Water Surface (The "Beauty")
-    const waterGeo = new THREE.PlaneGeometry(200, 200, GEOM_RES, GEOM_RES);
+    // 4. The Visual Water Surface
+    const waterGeo = new THREE.PlaneGeometry(150, 150, 256, 256);
     const waterMat = new THREE.MeshStandardMaterial({
-        color: 0x00151a,
-        roughness: 0.02,
+        color: 0x003344,
         metalness: 0.9,
-        flatShading: false,
-        envMapIntensity: 1.2
+        roughness: 0.05,
+        envMapIntensity: 1.0
     });
 
-    // Inject physics into the visual shader
+    // Custom Shader Injection for Displacement AND Normals
     waterMat.onBeforeCompile = (shader) => {
-        shader.uniforms.uSimMap = { value: renderTarget1.texture };
+        shader.uniforms.uSimMap = { value: rtCurrent.texture };
+        shader.uniforms.uInvRes = { value: new THREE.Vector2(1/RES, 1/RES) };
+        
         shader.vertexShader = `
             uniform sampler2D uSimMap;
+            uniform vec2 uInvRes;
             varying float vHeight;
+            varying vec3 vNormalUpdate;
             ${shader.vertexShader}
         `.replace(
             `#include <begin_vertex>`,
             `
             float h = texture2D(uSimMap, uv).r;
             vHeight = h;
-            vec3 transformed = vec3(position.x, position.y, position.z + h * 15.0);
+            
+            // Calculate normals from the heightmap for realistic lighting
+            float hN = texture2D(uSimMap, uv + vec2(0.0, uInvRes.y)).r;
+            float hS = texture2D(uSimMap, uv - vec2(0.0, uInvRes.y)).r;
+            float hE = texture2D(uSimMap, uv + vec2(uInvRes.x, 0.0)).r;
+            float hW = texture2D(uSimMap, uv - vec2(uInvRes.x, 0.0)).r;
+            
+            vec3 normalCalc = normalize(vec3(hW - hE, hS - hN, 0.2));
+            vNormalUpdate = normalCalc;
+
+            vec3 transformed = vec3(position.x, position.y, position.z + h * 12.0);
             `
+        ).replace(
+            `#include <beginnormal_vertex>`,
+            `#include <beginnormal_vertex>\n objectNormal = vNormalUpdate;`
         );
     };
 
@@ -103,40 +127,41 @@ function init() {
     waterMesh.rotation.x = -Math.PI / 2;
     scene.add(waterMesh);
 
-    // 4. Environment (Sky & Lights)
-    const sky = new Sky();
-    sky.scale.setScalar(10000);
-    scene.add(sky);
-    
-    sun = new THREE.Vector3();
-    const pmremGenerator = new THREE.PMREMGenerator(renderer);
-    const phi = THREE.MathUtils.degToRad(88);
-    const theta = THREE.MathUtils.degToRad(180);
-    sun.setFromSphericalCoords(1, phi, theta);
-    sky.material.uniforms['sunPosition'].value.copy(sun);
-    scene.environment = pmremGenerator.fromScene(sky).texture;
+    // 5. Environment & Lights
+    const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambient);
 
-    const mainLight = new THREE.DirectionalLight(0xffffff, 2);
-    mainLight.position.copy(sun).multiplyScalar(100);
-    scene.add(mainLight);
+    const sun = new THREE.DirectionalLight(0xffffff, 2);
+    sun.position.set(50, 100, 50);
+    scene.add(sun);
 
-    // 5. Interaction & Camera
+    // Create a simple environment map for reflections
+    const canvas = document.createElement('canvas');
+    canvas.width = 64; canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#001122'; ctx.fillRect(0, 0, 64, 64);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 64, 10);
+    const envTex = new THREE.CanvasTexture(canvas);
+    envTex.mapping = THREE.EquirectangularReflectionMapping;
+    scene.environment = envTex;
+
+    // 6. Interaction
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.maxPolarAngle = Math.PI * 0.45;
 
-    window.addEventListener('pointermove', onPointer);
+    window.addEventListener('pointermove', updateMouse);
     window.addEventListener('resize', onResize);
 }
 
-function onPointer(e) {
-    let x = (e.clientX / window.innerWidth) * 2 - 1;
-    let y = -(e.clientY / window.innerHeight) * 2 + 1;
-    raycaster.setFromCamera({x, y}, camera);
-    const intersects = raycaster.intersectObject(waterMesh);
-    if (intersects.length > 0) {
-        mouse.copy(intersects[0].uv);
+function updateMouse(e) {
+    const coords = new THREE.Vector2(
+        (e.clientX / window.innerWidth) * 2 - 1,
+        -(e.clientY / window.innerHeight) * 2 + 1
+    );
+    raycaster.setFromCamera(coords, camera);
+    const hit = raycaster.intersectObject(waterMesh);
+    if (hit.length > 0) {
+        mouse.copy(hit[0].uv);
     }
 }
 
@@ -149,22 +174,23 @@ function onResize() {
 function animate() {
     requestAnimationFrame(animate);
 
-    // Run Physics Step
-    simMaterial.uniforms.tPrev.value = renderTarget1.texture;
-    simMaterial.uniforms.tCurr.value = renderTarget2.texture;
+    // Step 1: Physics (Ping-Pong)
+    simMaterial.uniforms.tCurr.value = rtCurrent.texture;
+    simMaterial.uniforms.tPrev.value = rtPrev.texture;
     simMaterial.uniforms.uMouse.value.copy(mouse);
-    
-    renderer.setRenderTarget(renderTarget1);
+
+    renderer.setRenderTarget(rtTemp);
     renderer.render(simScene, simCamera);
 
-    // Swap Buffers
-    let temp = renderTarget1;
-    renderTarget1 = renderTarget2;
-    renderTarget2 = temp;
+    // Swap buffers
+    rtPrev = rtCurrent;
+    rtCurrent = rtTemp;
+    rtTemp = rtPrev;
 
-    // Reset mouse so we don't draw a constant line if finger lifts
+    // Reset mouse to stop "drawing" when not moving
     mouse.set(-1, -1);
 
+    // Step 2: Render Visuals
     controls.update();
     renderer.setRenderTarget(null);
     renderer.render(scene, camera);
