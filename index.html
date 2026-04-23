@@ -3,43 +3,40 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Infinite Dune Crawler</title>
+<title>Infinite Dune Crawler - Fixed</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
   * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { width:100%; height:100%; overflow:hidden; background:#090502; touch-action:none; -webkit-user-select:none; user-select:none; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#1a140f; touch-action:none; -webkit-user-select:none; user-select:none; }
   canvas { display:block; position:fixed; top:0; left:0; }
-  
-  /* UI Elements */
   #ui-layer { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
   #badge { position:fixed; top:40px; left:50%; transform:translateX(-50%); color:rgba(220,170,80,0.4); font-family:'Share Tech Mono',monospace; font-size:10px; letter-spacing:8px; white-space:nowrap; }
-  
-  /* Joystick Styles */
   #joy-bound {
     position: fixed; bottom: 60px; left: 60px;
-    width: 120px; height: 120px;
+    width: 140px; height: 140px;
     background: rgba(200,150,50,0.05);
-    border: 1px solid rgba(200,150,50,0.2);
+    border: 2px solid rgba(200,150,50,0.15);
     border-radius: 50%;
     pointer-events: auto;
   }
   #joy-stick {
     position: absolute; top: 50%; left: 50%;
-    width: 50px; height: 50px;
-    margin: -25px 0 0 -25px;
-    background: rgba(220,170,80,0.15);
-    border: 2px solid rgba(220,170,80,0.4);
+    width: 60px; height: 60px;
+    margin: -30px 0 0 -30px;
+    background: rgba(220,170,80,0.2);
+    border: 2px solid rgba(220,170,80,0.5);
     border-radius: 50%;
-    transition: transform 0.1s ease-out;
+    pointer-events: none;
   }
+  #err { position: fixed; top: 10px; left: 10px; color: #ff5500; font-family: monospace; font-size: 12px; pointer-events: none; }
 </style>
 </head>
 <body>
 
 <canvas id="c"></canvas>
-
+<div id="err"></div>
 <div id="ui-layer">
-    <div id="badge">NOMAD INFINITE · MK-I</div>
+    <div id="badge">NOMAD INFINITE · REBOOTED</div>
     <div id="joy-bound"><div id="joy-stick"></div></div>
 </div>
 
@@ -48,18 +45,14 @@
 
 const canvas = document.getElementById('c');
 const joyStick = document.getElementById('joy-stick');
+const errLog = document.getElementById('err');
 const DPR = Math.min(window.devicePixelRatio || 1, 2);
 let W, H, CW, CH;
-const S = 512; // Sim Res
+const S = 512; 
 
-// --- CAR STATE ---
-const car = {
-    x: 0.5, y: 0.5, // World pos (0-1)
-    angle: 0, 
-    v: 0,
-    w: 0.03, l: 0.05, // Car dimensions
-    inputX: 0, inputY: 0
-};
+const car = { x: 0.5, y: 0.5, angle: 0, v: 0, inputX: 0, inputY: 0 };
+
+function log(msg) { errLog.innerText += msg + '\n'; }
 
 function resize(){
     CW = window.innerWidth; CH = window.innerHeight;
@@ -69,14 +62,36 @@ function resize(){
 }
 resize(); window.addEventListener('resize', resize);
 
-const gl = canvas.getContext('webgl', {antialias:false, alpha:false});
-const extFL = gl.getExtension('OES_texture_float_linear');
-const extHL = gl.getExtension('OES_texture_half_float_linear');
-let FTYPE = gl.UNSIGNED_BYTE, UINT8 = true;
-if(gl.getExtension('OES_texture_half_float')) { FTYPE = 0x8D61; UINT8 = false; }
+const gl = canvas.getContext('webgl', {antialias:false, alpha:false, depth: false});
+if(!gl) log("WebGL not supported");
 
-// --- SHADERS ---
+// Compatibility Checks
+const extHalf = gl.getExtension('OES_texture_half_float');
+const extHalfLin = gl.getExtension('OES_texture_half_float_linear');
+let FTYPE = gl.UNSIGNED_BYTE, UINT8 = true;
+
+if(extHalf && extHalfLin) {
+    FTYPE = extHalf.HALF_FLOAT_OES;
+    UINT8 = false;
+} else {
+    log("Using 8-bit fallback (lower precision)");
+}
+
 const VERT = `attribute vec2 aPos; varying vec2 vUV; void main(){ vUV = aPos*.5+.5; gl_Position = vec4(aPos,0.,1.); }`;
+
+const INIT_SRC = (UINT8 ? '#define U8\n' : '') + `
+precision highp float;
+varying vec2 vUV;
+float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+void main(){
+    float h = 0.4 + 0.1 * sin(vUV.x*10.0) * cos(vUV.y*10.0);
+    h += hash(vUV) * 0.02;
+    #ifdef U8
+      float t = h*255.; gl_FragColor = vec4(floor(t)/255., fract(t), 0, 1);
+    #else
+      gl_FragColor = vec4(h, 0, 0, 1);
+    #endif
+}`;
 
 const SIM_SRC = (UINT8 ? '#define U8\n' : '') + `
 precision highp float;
@@ -96,23 +111,16 @@ uniform float uStr;
 void main(){
     float h = H(vUV);
     vec2 tx = vec2(uTx.x, 0.0), ty = vec2(0.0, uTx.y);
-    
-    // Neighbors (Toroidal Wrap)
     float hN = H(vUV+ty), hS = H(vUV-ty), hE = H(vUV+tx), hW = H(vUV-tx);
     
-    // Physics: Granular Avalanching
-    float aor = 0.025, fr = 0.12;
+    float aor = 0.02, fr = 0.1;
     float flow = 0.0;
-    float dN=hN-h; flow+=sign(dN)*max(0.,abs(dN)-aor)*fr;
-    float dS=hS-h; flow+=sign(dS)*max(0.,abs(dS)-aor)*fr;
-    float dE=hE-h; flow+=sign(dE)*max(0.,abs(dE)-aor)*fr;
-    float dW=hW-h; flow+=sign(dW)*max(0.,abs(dW)-aor)*fr;
+    #define FLOW(nh) { float d = nh-h; flow += sign(d)*max(0.,abs(d)-aor)*fr; }
+    FLOW(hN); FLOW(hS); FLOW(hE); FLOW(hW);
     
     float newH = h + flow;
-
-    // Tire Tracks (4 wheels)
     float d1 = length(vUV - uW1), d2 = length(vUV - uW2), d3 = length(vUV - uW3), d4 = length(vUV - uW4);
-    float track = smoothstep(0.02, 0.0, min(min(d1,d2), min(d3,d4)));
+    float track = smoothstep(0.015, 0.0, min(min(d1,d2), min(d3,d4)));
     newH -= track * uStr;
 
     gl_FragColor = UINT8 ? vec4(enc(newH),0,1) : vec4(newH,0,0,1);
@@ -138,94 +146,97 @@ void main(){
     float hL = H(uv-vec2(tx.x,0.)), hR = H(uv+vec2(tx.x,0.));
     float hU = H(uv+vec2(0.,tx.y)), hD = H(uv-vec2(0.,tx.y));
     
-    vec3 N = normalize(vec3(hL-hR, hD-hU, 0.1));
-    vec3 L = normalize(vec3(0.5, 0.5, 0.8));
-    float diff = max(dot(N, L), 0.0);
+    vec3 N = normalize(vec3(hL-hR, hD-hU, 0.08));
+    float diff = max(dot(N, normalize(vec3(0.5, 0.7, 1.0))), 0.0);
     
-    vec3 sand = mix(vec3(0.3, 0.2, 0.1), vec3(0.9, 0.75, 0.5), h);
-    vec3 col = sand * (diff + 0.2);
+    vec3 sand = mix(vec3(0.35, 0.25, 0.15), vec3(0.9, 0.75, 0.5), h);
+    vec3 col = sand * (diff + 0.15);
     
-    // Draw simple car icon at center
     float dCar = length((vUV - 0.5) * vec2(uAspect, 1.0));
-    if(dCar < 0.015) col = vec3(0.1, 0.1, 0.1);
+    if(dCar < 0.01) col = vec3(0,0,0);
 
     gl_FragColor = vec4(pow(col, vec3(1.0/2.2)), 1.0);
 }`;
 
-// --- BOILERPLATE ---
 function mkProg(vs, fs){
     const p = gl.createProgram();
     const s1 = gl.createShader(gl.VERTEX_SHADER), s2 = gl.createShader(gl.FRAGMENT_SHADER);
     gl.shaderSource(s1, vs); gl.compileShader(s1);
+    if(!gl.getShaderParameter(s1, gl.COMPILE_STATUS)) log(gl.getShaderInfoLog(s1));
     gl.shaderSource(s2, fs); gl.compileShader(s2);
+    if(!gl.getShaderParameter(s2, gl.COMPILE_STATUS)) log(gl.getShaderInfoLog(s2));
     gl.attachShader(p, s1); gl.attachShader(p, s2); gl.linkProgram(p);
     const u = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
     for(let i=0; i<n; i++){ const x=gl.getActiveUniform(p,i); u[x.name]=gl.getUniformLocation(p,x.name); }
     return {p, u};
 }
 
-const simP = mkProg(VERT, SIM_SRC), renP = mkProg(VERT, REN_SRC);
+const initP = mkProg(VERT, INIT_SRC), simP = mkProg(VERT, SIM_SRC), renP = mkProg(VERT, REN_SRC);
 const qb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, qb);
 gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
 
 function mkFBO(){
     const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, S, S, 0, gl.RGBA, FTYPE, null);
-    gl.texParameteri(gl.TEXTURE_2D, 10240, 9729); gl.texParameteri(gl.TEXTURE_2D, 10241, 9729);
-    gl.texParameteri(gl.TEXTURE_2D, 10242, 10497); gl.texParameteri(gl.TEXTURE_2D, 10243, 10497); // REPEAT
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
     const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, 36064, gl.TEXTURE_2D, t, 0);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
     return {t, f};
 }
 let fA = mkFBO(), fB = mkFBO();
 
-// --- JOYSTICK LOGIC ---
+// Initial Dune Pass
+gl.bindFramebuffer(gl.FRAMEBUFFER, fA.f);
+gl.viewport(0,0,S,S);
+gl.useProgram(initP.p);
+const iLoc = gl.getAttribLocation(initP.p, 'aPos');
+gl.enableVertexAttribArray(iLoc); gl.vertexAttribPointer(iLoc, 2, gl.FLOAT, false, 0, 0);
+gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+// Joystick
 function handleJoy(e){
     const b = document.getElementById('joy-bound').getBoundingClientRect();
     const t = e.touches ? e.touches[0] : e;
     const dx = t.clientX - (b.left + b.width/2);
     const dy = t.clientY - (b.top + b.height/2);
-    const dist = Math.min(60, Math.hypot(dx, dy));
+    const dist = Math.min(70, Math.hypot(dx, dy));
     const ang = Math.atan2(dy, dx);
-    const jx = Math.cos(ang) * dist;
-    const jy = Math.sin(ang) * dist;
+    const jx = Math.cos(ang) * dist; const jy = Math.sin(ang) * dist;
     joyStick.style.transform = `translate(${jx}px, ${jy}px)`;
-    car.inputX = jx / 60; car.inputY = jy / 60;
+    car.inputX = jx / 70; car.inputY = jy / 70;
 }
-document.getElementById('joy-bound').addEventListener('touchstart', e => handleJoy(e));
+document.getElementById('joy-bound').addEventListener('touchstart', handleJoy);
 document.getElementById('joy-bound').addEventListener('touchmove', e => { e.preventDefault(); handleJoy(e); });
-window.addEventListener('touchend', () => {
-    joyStick.style.transform = `translate(0,0)`; car.inputX = car.inputY = 0;
-});
+window.addEventListener('touchend', () => { joyStick.style.transform = `translate(0,0)`; car.inputX = car.inputY = 0; });
 
-// --- MAIN LOOP ---
 function frame(now){
     requestAnimationFrame(frame);
     
-    // Physics
-    car.v = car.v * 0.97 + (-car.inputY * 0.005);
-    car.angle += car.inputX * car.v * 2.0;
+    // Simple car physics
+    car.v = car.v * 0.95 + (-car.inputY * 0.006);
+    car.angle += car.inputX * car.v * 1.5;
     car.x += Math.cos(car.angle) * car.v;
-    car.y -= Math.sin(car.angle) * car.v; // Canvas Y is flipped
+    car.y -= Math.sin(car.angle) * car.v;
 
     const wX = Math.cos(car.angle) * 0.02, wY = Math.sin(car.angle) * 0.02;
     const sX = Math.cos(car.angle+1.57)*0.015, sY = Math.sin(car.angle+1.57)*0.015;
 
-    // Sim
+    // Simulation Pass
     gl.useProgram(simP.p);
-    gl.bindBuffer(gl.ARRAY_BUFFER, qb);
-    const loc = gl.getAttribLocation(simP.p, 'aPos');
-    gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    const sLoc = gl.getAttribLocation(simP.p, 'aPos');
+    gl.enableVertexAttribArray(sLoc); gl.vertexAttribPointer(sLoc, 2, gl.FLOAT, false, 0, 0);
 
-    for(let i=0; i<4; i++){
+    for(let i=0; i<3; i++){
         gl.bindFramebuffer(gl.FRAMEBUFFER, fB.f);
         gl.viewport(0,0,S,S);
         gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fA.t);
         gl.uniform1i(simP.u.uS, 0);
         gl.uniform2f(simP.u.uTx, 1/S, 1/S);
-        gl.uniform1f(simP.u.uStr, Math.abs(car.v) * 5.0);
+        gl.uniform1f(simP.u.uStr, Math.abs(car.v) * 4.0);
         
-        // Wheel positions (toroidal fract)
         const fx = v => ((v % 1) + 1) % 1;
         gl.uniform2f(simP.u.uW1, fx(car.x+wX+sX), fx(car.y+wY+sY));
         gl.uniform2f(simP.u.uW2, fx(car.x+wX-sX), fx(car.y+wY-sY));
@@ -236,7 +247,7 @@ function frame(now){
         let t = fA; fA = fB; fB = t;
     }
 
-    // Render
+    // Render Pass
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0,0,W,H);
     gl.useProgram(renP.p);
