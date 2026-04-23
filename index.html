@@ -122,8 +122,11 @@ precision highp float;
 varying vec2 vUV;
 uniform sampler2D uS;
 uniform vec2  uTx;
-uniform vec2  uM, uMv;
-uniform float uR, uStr, uWind, uTime;
+uniform vec2  uM;
+uniform vec2  uMv;
+uniform float uR;
+uniform float uStr;
+uniform float uWind;
 
 #ifdef U8
   float dec(vec2 v){ return v.x + v.y/255.; }
@@ -133,52 +136,82 @@ uniform float uR, uStr, uWind, uTime;
   float H(vec2 u){ return texture2D(uS,u).r; }
 #endif
 
+// Random noise to vary the angle of repose slightly (simulates varying compaction)
+float hash(vec2 p){ return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453); }
+
 void main(){
-  vec2 uv = vUV;
-  float h = H(uv);
-  
-  // --- NON-NEWTONIAN RHEOLOGY ---
-  // Calculate local "Stress" (how fast the sand is being disturbed)
-  float stress = length(uMv) * smoothstep(uR * 2.0, 0.0, length(uv - uM));
-  
-  // The Angle of Repose is now DYNAMIC. 
-  // High stress = liquid (low AOR), Low stress = solid (high AOR)
-  float AOR = mix(0.028, 0.005, clamp(stress * 50.0, 0.0, 1.0));
-  
-  float flow = 0.0;
-  for(int y=-1; y<=1; y++) {
-    for(int x=-1; x<=1; x++) {
-      if(x==0 && y==0) continue;
-      vec2 off = vec2(float(x), float(y)) * uTx;
-      float nh = H(uv + off);
-      float d = nh - h;
-      // Flow happens only if slope exceeds the dynamic AOR
-      flow += sign(d) * max(0.0, abs(d) - AOR) * 0.12;
-    }
-  }
+  float h  = H(vUV);
+  float tx = uTx.x, ty = uTx.y;
+
+  float hN  = H(vUV+vec2( 0., ty));
+  float hS  = H(vUV+vec2( 0.,-ty));
+  float hE  = H(vUV+vec2( tx, 0.));
+  float hW  = H(vUV+vec2(-tx, 0.));
+  float hNE = H(vUV+vec2( tx, ty));
+  float hNW = H(vUV+vec2(-tx, ty));
+  float hSE = H(vUV+vec2( tx,-ty));
+  float hSW = H(vUV+vec2(-tx,-ty));
+
+  // Tighter AOR and slightly lower flow rate for more dry, granular behavior
+  float localAorMod = (hash(vUV * 100.0) * 0.004) - 0.002;
+  float AOR  = 0.026 + localAorMod;  
+  float AOR2 = 0.036 + localAorMod;  
+  const float FR   = 0.11; 
+
+  float flow = 0.;
+  float dN=hN-h; flow+=sign(dN)*max(0.,abs(dN)-AOR )*FR;
+  float dS=hS-h; flow+=sign(dS)*max(0.,abs(dS)-AOR )*FR;
+  float dE=hE-h; flow+=sign(dE)*max(0.,abs(dE)-AOR )*FR;
+  float dW=hW-h; flow+=sign(dW)*max(0.,abs(dW)-AOR )*FR;
+
+  float dNE=hNE-h; flow+=sign(dNE)*max(0.,abs(dNE)-AOR2)*FR*0.5;
+  float dNW=hNW-h; flow+=sign(dNW)*max(0.,abs(dNW)-AOR2)*FR*0.5;
+  float dSE=hSE-h; flow+=sign(dSE)*max(0.,abs(dSE)-AOR2)*FR*0.5;
+  float dSW=hSW-h; flow+=sign(dSW)*max(0.,abs(dSW)-AOR2)*FR*0.5;
 
   float newH = h + flow;
 
-  // --- FERRO-FLUIDIC INTERACTION ---
-  // Instead of just digging, the sand "swirls" around the cursor velocity
-  vec2 toM = uv - uM;
-  float dM = length(toM);
-  if(dM < uR * 1.5) {
-    float swirl = dot(normalize(toM), vec2(-uMv.y, uMv.x)) * 5.0;
-    newH += swirl * uStr * (1.0 - dM/uR);
-    newH -= smoothstep(uR, 0.0, dM) * uStr;
-  }
+  float wSrc = H(vUV - vec2(tx*1.8, ty*0.15)); 
+  float wDst = H(vUV + vec2(tx*1.8, ty*0.15)); 
+  float wDiff = wSrc - wDst;
+  newH += max(0., wDiff - AOR*0.5) * 0.05 * uWind;
 
-  newH = clamp(newH, 0.0, 1.0);
-  gl_FragColor = vec4(enc(newH), 0.0, 1.0);
+  float dist  = length(vUV - uM);
+  float touch = smoothstep(uR, 0., dist);
+  newH -= touch * uStr;
+
+  float mvSpd = length(uMv);
+  float hasMv = step(0.0012, mvSpd);
+  vec2 mvDir  = uMv / max(mvSpd, 0.0001);
+  vec2 toP    = vUV - uM;
+  float along = dot(toP, mvDir);
+  float aside = length(toP - along*mvDir);
+  float pushZ = smoothstep(uR*2.5, 0., aside) * smoothstep(uR*0.3, uR*2.0, along);
+  newH += pushZ * uStr * min(mvSpd*25., 1.) * 0.45 * hasMv;
+
+  newH = clamp(newH, 0., 1.);
+
+  #ifdef U8
+    gl_FragColor = vec4(enc(newH), 0., 1.);
+  #else
+    gl_FragColor = vec4(newH, 0., 0., 1.);
+  #endif
 }`;
 
 const RENDER_SRC = (UINT8 ? '#define U8\n' : '') + `
 precision highp float;
 varying vec2 vUV;
 uniform sampler2D uW;
-uniform vec2 uTx;
+uniform vec2  uTx;
 uniform float uTime, uAspect;
+
+float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+float vn(vec2 p){
+  vec2 i=floor(p),f=p-i; f=f*f*(3.-2.*f);
+  return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),
+             mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);
+}
+float fbm(vec2 p){ float v=0.,a=.5; for(int i=0;i<5;i++){v+=vn(p)*a;p*=2.1;a*=.5;} return v; }
 
 #ifdef U8
   float H(vec2 uv){ vec4 s=texture2D(uW,uv); return s.r+s.g/255.; }
@@ -186,53 +219,138 @@ uniform float uTime, uAspect;
   float H(vec2 uv){ return texture2D(uW,uv).r; }
 #endif
 
-// Spectral palette for Thin-Film Interference
-vec3 spectral(float t) {
-    vec3 c = 0.5 + 0.5 * cos(6.28318 * (vec3(1,0.66,0.33) + t));
-    return clamp(c, 0.0, 1.0);
+float GGX(float ndh, float r){ float a=r*r*r*r,d=ndh*ndh*(a-1.)+1.; return a/(3.14159*d*d+1e-5); }
+
+// Quartz sparkle function
+float sparkle(vec2 uv, vec3 viewDir, vec3 normal, vec3 lightDir) {
+    vec3 halfV = normalize(viewDir + lightDir);
+    float NdotH = max(0.0, dot(normal, halfV));
+    // High frequency spatial hash mixed with specular reflection
+    float grain = hash(uv * 1200.0); 
+    float glint = pow(NdotH, 150.0 + grain * 200.0) * step(0.8, grain);
+    return glint * 4.0; 
 }
 
-void main() {
-    vec2 uv = vUV;
-    float h = H(uv);
-    
-    // 1. ANISOTROPIC SURFACE RECONSTRUCTION
-    vec2 tx = uTx * 1.1;
-    float hL = H(uv-vec2(tx.x,0.)), hR = H(uv+vec2(tx.x,0.));
-    float hD = H(uv-vec2(0.,tx.y)), hU = H(uv+vec2(0.,tx.y));
-    vec3 N = normalize(vec3(hL-hR, hD-hU, 0.08));
-    
-    // 2. QUANTUM LIGHTING
-    vec3 L = normalize(vec3(sin(uTime*0.2), 0.5, 0.8));
-    vec3 V = vec3(0,0,1);
-    vec3 Hv = normalize(V + L);
-    float NoH = max(dot(N, Hv), 0.0);
-    float NoV = max(dot(N, V), 0.0);
+void main(){
+  vec2 uv = vUV;
+  float t  = uTime;
 
-    // 3. THIN-FILM INTERFERENCE (Iridescence)
-    // The "oil slick" effect on crystal ridges
-    float interference = pow(1.0 - NoV, 3.0) * h;
-    vec3 iridCol = spectral(interference + h * 0.5);
+  vec2 tx  = uTx * 2.2; 
+  float hC  = H(uv);
+  float hL  = H(uv-vec2(tx.x,0.));  float hR  = H(uv+vec2(tx.x,0.));
+  float hU  = H(uv+vec2(0.,tx.y));  float hD  = H(uv-vec2(0.,tx.y));
+  float hLU = H(uv+vec2(-tx.x, tx.y)); float hRU = H(uv+vec2(tx.x, tx.y));
+  float hLD = H(uv+vec2(-tx.x,-tx.y)); float hRD = H(uv+vec2(tx.x,-tx.y));
 
-    // 4. BIOLUMINESCENT UNDERGLOW
-    // Deep parts emit a soft neon pulse
-    vec3 glowCol = vec3(0.0, 0.4, 1.0) * pow(1.0 - h, 4.0) * (0.5 + 0.5 * sin(uTime + h*10.0));
+  const float NS = 8.5; 
+  float dX = (hRD+2.*hR+hRU-hLD-2.*hL-hLU)*NS/uAspect;
+  float dY = (hLU+2.*hU+hRU-hLD-2.*hD-hRD)*NS;
+  vec3 N   = normalize(vec3(-dX,-dY,1.));
+  vec3 V   = vec3(0.,0.,1.);
 
-    // 5. CAUSTIC SHATTER
-    // Simulated light refraction through crystal lattice
-    float shatter = step(0.8, fract(h * 20.0 + interference * 5.0));
-    
-    // 6. FINAL COMPOSITION
-    vec3 base = mix(vec3(0.05, 0.08, 0.15), vec3(0.7, 0.85, 1.0), h);
-    vec3 final = base * max(dot(N, L), 0.2);
-    final += iridCol * interference * 0.6;
-    final += glowCol * 0.5;
-    final += vec3(1.0) * pow(NoH, 128.0) * 0.8; // Hot specular
-    final += shatter * vec3(0.5, 0.8, 1.0) * interference;
+  vec3 sunDir = normalize(vec3(0.55, 0.20, 0.70));
+  vec3 halfV  = normalize(V+sunDir);
+  float sunD  = max(dot(N,sunDir),0.);
+  float NdotH = max(dot(N,halfV),0.);
+  float cosI  = max(dot(N,V),0.);
+  float F     = 0.02 + 0.05*pow(1.-cosI,5.); 
 
-    // Gamma & Tone
-    final = pow(final / (final + 0.2), vec3(1.0/2.2));
-    gl_FragColor = vec4(final, 1.0);
+  // Realistic sand palette (more muted, desaturated tones)
+  vec3 deepV  = vec3(0.24, 0.16, 0.10); 
+  vec3 midS   = vec3(0.60, 0.45, 0.28); 
+  vec3 slopeS = vec3(0.78, 0.65, 0.45); 
+  vec3 peakS  = vec3(0.92, 0.84, 0.68); 
+
+  float hN = clamp(hC*2.5, 0., 1.);
+  vec3 col = mix(deepV,  midS,   smoothstep(0.,   0.35, hN));
+  col      = mix(col,    slopeS, smoothstep(0.35, 0.70, hN));
+  col      = mix(col,    peakS,  smoothstep(0.70, 1.0,  hN));
+
+  // Much finer grain noise to look like microscopic particles
+  float g1 = vn(uv*200.  + t*0.001);
+  float g2 = vn(uv*450. + 3.7);
+  float g3 = fbm(uv*50. + t*0.002);
+  col *= 0.85 + g1*0.15 + g2*0.08 + g3*0.05;
+
+  float streak = fbm(uv*8.0 + 5.1);
+  col = mix(col, col*vec3(1.1,0.9,0.7), streak*0.12);
+
+  float ao = clamp(hC*4.5+0.15, 0., 1.);
+  col *= mix(0.2, 1.0, ao*ao);
+
+  vec3 sunCol  = vec3(1.00, 0.88, 0.65);       
+  vec3 skyAmb  = vec3(0.25, 0.35, 0.55);       
+  vec3 horzAmb = vec3(0.55, 0.38, 0.20);       
+
+  float upF    = dot(N, vec3(0.,0.,1.))*0.5+0.5;
+  vec3 ambient = mix(horzAmb, skyAmb, upF)*0.5;
+  col         *= ambient + sunCol*sunD*1.05;
+
+  // Enhanced subsurface scattering on sharp ridges
+  vec3 backL = normalize(vec3(-0.5,-0.2,0.6));
+  float sss  = pow(max(0.,dot(N,backL)),2.0) * max(0.,1.-hC*3.0);
+  col       += vec3(0.95,0.45,0.15)*sss*0.35;
+
+  // Smoother self-shadow transitions
+  float shade = clamp(1.-sunD*1.5,0.,1.) * (1.-ao) * 0.7;
+  col = mix(col, vec3(0.08,0.05,0.04), shade*0.5);
+
+  float rt  = t*0.04;
+  vec2 rUV  = uv*vec2(uAspect,1.);
+  float ax  = rUV.x*0.9 + rUV.y*0.1; 
+
+  float rL  = sin(ax*25. + fbm(uv*4.0+rt)*4.0 + rt);
+  rL        = pow(clamp(rL*.5+.5,0.,1.), 2.0);
+  float rF  = sin(ax*75. + fbm(uv*12.0+rt*1.2)*2.5 + rt*1.5);
+  rF        = pow(clamp(rF*.5+.5,0.,1.), 1.5);
+  float rip = mix(rL, rF, 0.4);
+
+  float slope = length(vec2(dX,dY));
+  float ripV  = clamp(1.-slope*3.0,0.,1.) * smoothstep(0.05,0.3,hC) * (1.-smoothstep(0.75,0.95,hC));
+
+  col  = mix(col, col*0.75 + vec3(0.05,0.03,0.02), rip*ripV*0.35);
+  col += sunCol * rip * ripV * sunD * 0.2;
+
+  float rough = max(0.08, 0.12+(1.-hC)*0.05);
+  col += sunCol * GGX(NdotH, rough) * sunD * 0.08 * F;
+  
+  // Real Quartz Glint Implementation
+  float glints = sparkle(uv, V, N, sunDir);
+  col += sunCol * glints * sunD * 0.08 * clamp(hC*3.0-0.2, 0., 1.);
+
+  float lap     = hU+hD+hL+hR - 4.*hC;
+  float caustic = pow(max(0.,-lap*12.),1.5)*1.2;
+  col += sunCol * caustic * sunD * 0.15;
+
+  float exposed = smoothstep(0.08,0.01,hC);
+  vec3 earthCol = vec3(0.12,0.07,0.03) * (0.8 + fbm(uv*25.)*0.3);
+  float crack   = smoothstep(0.48,0.50,abs(sin(uv.x*45.+uv.y*15.)*sin(uv.y*35.-uv.x*10.)));
+  earthCol      = mix(earthCol, earthCol*0.3, crack*0.7);
+  col           = mix(col, earthCol, exposed);
+
+  vec2 dustUV = uv*vec2(uAspect*25.,25.) + vec2(t*0.03, t*0.008);
+  vec2 dsi    = floor(dustUV);
+  vec2 dsf    = fract(dustUV);
+  float dh1   = hash(dsi);
+  float dh2   = hash(dsi+vec2(47.,0.));
+  float dh3   = hash(dsi+vec2(0.,91.));
+  float mR    = 0.025+dh1*0.04;
+  float mDist = length(dsf-vec2(0.2+dh1*0.6, 0.2+dh2*0.6));
+  float mote  = smoothstep(mR, mR*0.1, mDist) * step(dh3,0.08) * smoothstep(0.35,0.05,hC); 
+  col += vec3(0.9,0.7,0.4)*mote*0.5;
+
+  float haze = (1.-hC)*(1.-sunD)*0.25;
+  col  = mix(col, vec3(0.55,0.40,0.25), haze*0.3);
+
+  vec2 vd = (vUV*2.-1.)*vec2(uAspect,1.);
+  col    *= clamp(1.-dot(vd,vd)*0.08, 0., 1.);
+
+  col  = col*(1.+col*0.2)/(col+0.85)*1.1;
+  col  = pow(max(col,vec3(0.)), vec3(1./2.2));
+  col.r = min(col.r*1.02, 1.);
+  col.b *= 0.92; 
+
+  gl_FragColor = vec4(col, 1.);
 }`;
 
 function mkSh(type, src){
