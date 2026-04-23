@@ -2,184 +2,109 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Survival Horror Engine</title>
+    <title>Survival Horror Framework</title>
     <style>
-        :root {
-            --bg-color: #050505;
-            --ui-green: #00ff41;
-        }
-
-        body {
-            margin: 0;
-            background: var(--bg-color);
-            color: var(--ui-green);
-            font-family: 'Courier New', Courier, monospace;
-            overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-        }
-
-        #game-container {
-            position: relative;
-            width: 800px;
-            height: 600px;
-            border: 2px solid #333;
-            background: #111;
-            overflow: hidden;
-        }
-
-        /* Office View */
-        #office {
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(to bottom, #1a1a1a, #000);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            transition: 0.3s;
-        }
+        body { margin: 0; background: #000; color: #f00; font-family: 'Courier New', Courier, monospace; overflow: hidden; user-select: none; }
+        #game-container { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        
+        /* The Office View */
+        #office { width: 80%; height: 70%; border: 5px solid #333; position: relative; background: #1a1a1a; transition: background 0.2s; }
+        .door { position: absolute; top: 0; width: 10%; height: 100%; background: #444; display: flex; align-items: center; justify-content: center; color: white; }
+        #door-left { left: 0; }
+        #door-right { right: 0; }
+        .door.closed { background: #111; height: 100%; top: 0; }
 
         /* UI Elements */
-        .hud {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            z-index: 10;
-        }
+        #ui-layer { position: absolute; bottom: 20px; width: 90%; display: flex; justify-content: space-between; font-size: 24px; }
+        .btn { padding: 10px 20px; background: #222; border: 2px solid #555; color: #fff; cursor: pointer; }
+        .btn:active { background: #444; }
 
-        #cam-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 50, 0, 0.2);
-            display: none;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 5;
-        }
-
-        .scanline {
-            width: 100%;
-            height: 2px;
-            background: rgba(255, 255, 255, 0.1);
-            position: absolute;
-            animation: move 4s linear infinite;
-        }
-
-        @keyframes move {
-            from { top: 0; }
-            to { top: 100%; }
-        }
-
-        .btn-panel {
-            position: absolute;
-            bottom: 20px;
-            width: 100%;
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-        }
-
-        button {
-            background: #222;
-            color: var(--ui-green);
-            border: 1px solid var(--ui-green);
-            padding: 10px 20px;
-            cursor: pointer;
-            text-transform: uppercase;
-        }
-
-        button:hover {
-            background: var(--ui-green);
-            color: #000;
-        }
-
-        #static {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: url('https://media.giphy.com/media/oEI9uWU9zOQ48/giphy.gif');
-            opacity: 0.05;
-            pointer-events: none;
-        }
+        /* Camera Overlay */
+        #camera-monitor { display: none; position: absolute; top: 5%; left: 5%; width: 90%; height: 80%; background: #050505; border: 10px solid #222; z-index: 10; }
+        #cam-feed { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 40px; color: #0f0; }
+        .static { background: url('https://media.giphy.com/media/oEI9uWUicG5I4/giphy.gif'); opacity: 0.1; position: absolute; top:0; left:0; width:100%; height:100%; pointer-events: none;}
     </style>
 </head>
 <body>
 
 <div id="game-container">
-    <div id="static"></div>
-    <div class="scanline"></div>
-    
-    <div class="hud">
-        <div>POWER: <span id="power">100</span>%</div>
-        <div>TIME: <span id="time">12</span> AM</div>
-    </div>
-
     <div id="office">
-        <h2>SECURITY OFFICE</h2>
-        <p>Watching the hallways...</p>
+        <div id="door-left" class="door">LEFT</div>
+        <div id="door-right" class="door">RIGHT</div>
+        <div style="text-align: center; margin-top: 20%;">OFFICE VIEW</div>
     </div>
 
-    <div id="cam-overlay">
-        <h1 style="color: white; text-shadow: 2px 2px red;">CAM 01 - MAIN HALL</h1>
+    <div id="ui-layer">
+        <div>Power: <span id="power">100</span>%</div>
+        <button class="btn" onclick="toggleCams()">CAMERAS</button>
+        <div id="clock">12 AM</div>
     </div>
 
-    <div class="btn-panel">
-        <button onclick="toggleCams()">Toggle Cameras</button>
-        <button onclick="toggleLights()">Light</button>
+    <div id="camera-monitor">
+        <div class="static"></div>
+        <div id="cam-feed">CAM 01: MAIN HALL</div>
+        <div style="position:absolute; bottom:10px; left:10px;">
+            <button onclick="changeCam('01')">CAM 1</button>
+            <button onclick="changeCam('02')">CAM 2</button>
+            <button onclick="toggleCams()" style="background:red; color:white;">CLOSE</button>
+        </div>
     </div>
 </div>
 
 <script>
     let power = 100;
-    let time = 0;
+    let hour = 0;
     let camOpen = false;
+    let leftDoorClosed = false;
+    let rightDoorClosed = false;
 
     // Power Drain Logic
     setInterval(() => {
-        if (power > 0) {
-            power -= (camOpen ? 2 : 1);
-            document.getElementById('power').innerText = Math.max(0, power);
-        } else {
-            document.getElementById('office').style.background = "black";
-            document.getElementById('office').innerHTML = "<h1>POWER OUTAGE</h1>";
-        }
-    }, 3000);
+        let drain = 0.1;
+        if(camOpen) drain += 0.2;
+        if(leftDoorClosed) drain += 0.3;
+        if(rightDoorClosed) drain += 0.3;
+        
+        power = Math.max(0, power - drain);
+        document.getElementById('power').innerText = Math.floor(power);
+        
+        if(power <= 0) gameOver("Out of Power!");
+    }, 1000);
 
-    // Time Clock Logic
+    // Time Logic
     setInterval(() => {
-        time++;
-        if (time <= 6) {
-            document.getElementById('time').innerText = time;
-        }
-        if (time === 6) {
-            alert("6 AM - YOU SURVIVED");
-            location.reload();
-        }
-    }, 45000);
+        hour++;
+        if(hour > 6) alert("You Survived!");
+        document.getElementById('clock').innerText = hour + " AM";
+    }, 45000); // 45 seconds per hour
 
     function toggleCams() {
-        if (power <= 0) return;
         camOpen = !camOpen;
-        document.getElementById('cam-overlay').style.display = camOpen ? 'flex' : 'none';
+        document.getElementById('camera-monitor').style.display = camOpen ? 'block' : 'none';
     }
 
-    function toggleLights() {
-        if (power <= 0) return;
-        const office = document.getElementById('office');
-        office.style.background = office.style.background === 'white' ? 'linear-gradient(to bottom, #1a1a1a, #000)' : 'white';
+    function changeCam(id) {
+        document.getElementById('cam-feed').innerText = "CAM " + id + ": LOADING...";
         setTimeout(() => {
-            office.style.background = 'linear-gradient(to bottom, #1a1a1a, #000)';
-        }, 500);
+            document.getElementById('cam-feed').innerText = "CAM " + id + (id === '01' ? ": HALLWAY" : ": KITCHEN");
+        }, 300);
+    }
+
+    // Key listeners for doors
+    window.addEventListener('keydown', (e) => {
+        if(e.key === 'a') {
+            leftDoorClosed = !leftDoorClosed;
+            document.getElementById('door-left').style.background = leftDoorClosed ? '#111' : '#444';
+        }
+        if(e.key === 'd') {
+            rightDoorClosed = !rightDoorClosed;
+            document.getElementById('door-right').style.background = rightDoorClosed ? '#111' : '#444';
+        }
+    });
+
+    function gameOver(reason) {
+        alert("GAME OVER: " + reason);
+        location.reload();
     }
 </script>
 
