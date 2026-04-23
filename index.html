@@ -2,377 +2,573 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-<title>Island Drive</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Ultra-Realistic Water</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #000; overflow: hidden; font-family: 'Courier New', monospace; }
-  #c { display: block; width: 100vw; height: 100vh; }
-
-  #hud {
-    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-    display: flex; gap: 16px; align-items: flex-end; pointer-events: none; z-index: 10;
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body {
+    width:100%; height:100%;
+    overflow:hidden;
+    background:#04111a;
+    touch-action:none;
+    -webkit-user-select:none;
+    user-select:none;
   }
-  .hud-box {
-    background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.18);
-    border-radius: 12px; padding: 10px 18px; color: #fff; text-align: center;
-    backdrop-filter: blur(6px);
+  canvas {
+    display:block;
+    position:fixed;
+    top:0; left:0;
+    touch-action:none;
+    cursor:crosshair;
   }
-  .hud-label { font-size: 10px; letter-spacing: 2px; opacity: 0.6; text-transform: uppercase; }
-  .hud-value { font-size: 22px; font-weight: bold; margin-top: 2px; }
-  #speedometer .hud-value { color: #7effa0; }
-
-  /* Touch controls */
-  #controls {
-    position: fixed; bottom: 20px; left: 0; right: 0;
-    display: flex; justify-content: space-between; align-items: flex-end;
-    padding: 0 28px; z-index: 20; pointer-events: none;
-  }
-  .ctrl-pad { display: grid; grid-template-columns: 60px 60px 60px; grid-template-rows: 60px 60px; gap: 8px; pointer-events: all; }
-  .ctrl-btn {
-    background: rgba(255,255,255,0.13); border: 2px solid rgba(255,255,255,0.3);
-    border-radius: 14px; color: #fff; font-size: 22px; display: flex;
-    align-items: center; justify-content: center; cursor: pointer;
-    user-select: none; -webkit-user-select: none; touch-action: none;
-    transition: background 0.1s;
-  }
-  .ctrl-btn:active, .ctrl-btn.pressed { background: rgba(255,255,255,0.32); }
-  .ctrl-btn.empty { pointer-events: none; background: none; border: none; }
-
-  .gas-pad { display: flex; flex-direction: column; gap: 8px; pointer-events: all; }
-  .gas-btn {
-    width: 80px; height: 80px; background: rgba(126,255,160,0.18);
-    border: 2px solid rgba(126,255,160,0.5); border-radius: 50%;
-    color: #7effa0; font-size: 28px; display: flex; align-items: center;
-    justify-content: center; cursor: pointer; user-select: none;
-    -webkit-user-select: none; touch-action: none; transition: background 0.1s;
-  }
-  .gas-btn:active, .gas-btn.pressed { background: rgba(126,255,160,0.45); }
-  .brake-btn {
-    width: 70px; height: 70px; background: rgba(255,100,100,0.18);
-    border: 2px solid rgba(255,100,100,0.4); border-radius: 50%;
-    color: #ff8888; font-size: 24px; display: flex; align-items: center;
-    justify-content: center; cursor: pointer; user-select: none;
-    -webkit-user-select: none; touch-action: none; transition: background 0.1s;
-  }
-  .brake-btn:active, .brake-btn.pressed { background: rgba(255,100,100,0.4); }
-
-  /* Desktop hint */
   #hint {
-    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
-    background: rgba(0,0,0,0.5); color: rgba(255,255,255,0.7);
-    padding: 7px 20px; border-radius: 20px; font-size: 12px;
-    letter-spacing: 1px; pointer-events: none; z-index: 10;
-    backdrop-filter: blur(4px);
+    position:fixed;
+    bottom:32px;
+    left:50%;
+    transform:translateX(-50%);
+    color:rgba(160,220,255,0.55);
+    font-family:'Palatino Linotype','Book Antiqua',Palatino,serif;
+    font-size:13px;
+    letter-spacing:4px;
+    text-transform:uppercase;
+    pointer-events:none;
+    transition:opacity 2.5s ease;
+    text-shadow:0 0 20px rgba(80,180,255,0.4);
+    white-space:nowrap;
   }
-  @media (hover: none) { #hint { display: none; } }
-  @media (hover: hover) { #controls { display: none; } #hud { bottom: 24px; } }
+  #hint.fade { opacity:0; }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
-
-<div id="hint">WASD / Arrow Keys to drive &nbsp;·&nbsp; Mouse to look</div>
-
-<div id="hud">
-  <div class="hud-box" id="speedometer">
-    <div class="hud-label">Speed</div>
-    <div class="hud-value" id="spd">0</div>
-    <div class="hud-label">km/h</div>
-  </div>
-  <div class="hud-box">
-    <div class="hud-label">Gear</div>
-    <div class="hud-value" id="gear">N</div>
-  </div>
-</div>
-
-<!-- Touch controls (shown on touch devices) -->
-<div id="controls">
-  <!-- Steering (left side) -->
-  <div class="ctrl-pad">
-    <div class="ctrl-btn empty"></div>
-    <div class="ctrl-btn" id="btn-up">▲</div>
-    <div class="ctrl-btn empty"></div>
-    <div class="ctrl-btn" id="btn-left">◀</div>
-    <div class="ctrl-btn" id="btn-down">▼</div>
-    <div class="ctrl-btn" id="btn-right">▶</div>
-  </div>
-  <!-- Gas / Brake (right side) -->
-  <div style="display:flex;flex-direction:column;gap:10px;align-items:center;pointer-events:all;">
-    <div class="gas-btn" id="btn-gas">⛽</div>
-    <div class="brake-btn" id="btn-brake">🛑</div>
-  </div>
-</div>
-
-<!-- Three.js CDN -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<!-- Our island models -->
-<script src="models.js"></script>
-
+<div id="hint">∿ touch the water ∿</div>
 <script>
-// ════════════════════════════════════════════
-//  RENDERER + SCENE
-// ════════════════════════════════════════════
+'use strict';
+
 const canvas = document.getElementById('c');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const hint   = document.getElementById('hint');
 
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.5, 2000);
+// ─── Retina / iPad DPR support ─────────────────────────────────────────────
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+let W = 0, H = 0;   // physical canvas pixels
+let CW = 0, CH = 0; // CSS layout pixels (event coordinates are in these)
 
-window.addEventListener('resize', () => {
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-});
+function resize() {
+  CW = window.innerWidth;
+  CH = window.innerHeight;
+  W  = Math.round(CW * DPR);
+  H  = Math.round(CH * DPR);
+  canvas.width        = W;
+  canvas.height       = H;
+  canvas.style.width  = CW + 'px';
+  canvas.style.height = CH + 'px';
+}
+resize();
+window.addEventListener('resize', resize);
 
-// Build the island via models.js
-IslandModels.build(scene);
+// ─── WebGL init ─────────────────────────────────────────────────────────────
+const glOpts = { antialias:false, alpha:false, preserveDrawingBuffer:false, powerPreference:'high-performance' };
+const gl = canvas.getContext('webgl', glOpts)
+        || canvas.getContext('experimental-webgl', glOpts);
 
-// ════════════════════════════════════════════
-//  CAR MODEL
-// ════════════════════════════════════════════
-function buildCar() {
-  const car = new THREE.Group();
-
-  const bodyMat  = new THREE.MeshLambertMaterial({ color: 0xe53935 });
-  const glassMat = new THREE.MeshLambertMaterial({ color: 0x90caf9, transparent: true, opacity: 0.6 });
-  const tireMat  = new THREE.MeshLambertMaterial({ color: 0x111111 });
-  const rimMat   = new THREE.MeshLambertMaterial({ color: 0xcccccc });
-  const lightMat = new THREE.MeshLambertMaterial({ color: 0xfffde7 });
-  const lightBMat= new THREE.MeshLambertMaterial({ color: 0xff1744 });
-
-  // Body
-  const bodyGeo = new THREE.BoxGeometry(4, 1, 8.5);
-  const body = new THREE.Mesh(bodyGeo, bodyMat);
-  body.position.y = 1.1;
-  body.castShadow = true;
-  car.add(body);
-
-  // Roof/cabin
-  const roofGeo = new THREE.BoxGeometry(3.2, 0.9, 4.2);
-  const roof = new THREE.Mesh(roofGeo, bodyMat);
-  roof.position.set(0, 2.0, 0.3);
-  roof.castShadow = true;
-  car.add(roof);
-
-  // Windshield
-  const wsGeo = new THREE.BoxGeometry(3.0, 0.8, 0.12);
-  const ws = new THREE.Mesh(wsGeo, glassMat);
-  ws.position.set(0, 2.0, 2.2);
-  ws.rotation.x = -0.35;
-  car.add(ws);
-
-  // Rear window
-  const rwGeo = new THREE.BoxGeometry(3.0, 0.7, 0.12);
-  const rw = new THREE.Mesh(rwGeo, glassMat);
-  rw.position.set(0, 2.0, -1.7);
-  rw.rotation.x = 0.35;
-  car.add(rw);
-
-  // Wheels (4 positions)
-  const wheelPos = [
-    [ 2.2, 0.55,  2.8],
-    [-2.2, 0.55,  2.8],
-    [ 2.2, 0.55, -2.8],
-    [-2.2, 0.55, -2.8],
-  ];
-  const wheels = [];
-  wheelPos.forEach(([x,y,z]) => {
-    const wg = new THREE.Group();
-    const tg = new THREE.CylinderGeometry(0.7, 0.7, 0.55, 16);
-    const t = new THREE.Mesh(tg, tireMat);
-    t.rotation.z = Math.PI / 2;
-    wg.add(t);
-    const rg = new THREE.CylinderGeometry(0.35, 0.35, 0.6, 8);
-    const r = new THREE.Mesh(rg, rimMat);
-    r.rotation.z = Math.PI / 2;
-    wg.add(r);
-    wg.position.set(x, y, z);
-    wg.castShadow = true;
-    car.add(wg);
-    wheels.push(wg);
-  });
-
-  // Headlights
-  [[1.5,1.1,4.2],[-1.5,1.1,4.2]].forEach(([x,y,z])=>{
-    const lg = new THREE.SphereGeometry(0.28,8,8);
-    const l = new THREE.Mesh(lg, lightMat);
-    l.position.set(x,y,z);
-    car.add(l);
-  });
-  // Taillights
-  [[1.5,1.1,-4.2],[-1.5,1.1,-4.2]].forEach(([x,y,z])=>{
-    const lg = new THREE.SphereGeometry(0.24,8,8);
-    const l = new THREE.Mesh(lg, lightBMat);
-    l.position.set(x,y,z);
-    car.add(l);
-  });
-
-  // Undercarriage
-  const ug = new THREE.BoxGeometry(3.6, 0.3, 8);
-  const um = new THREE.Mesh(ug, new THREE.MeshLambertMaterial({color:0x333333}));
-  um.position.y = 0.42;
-  car.add(um);
-
-  car.position.set(0, 0, 300);
-  scene.add(car);
-  return { group: car, wheels };
+if (!gl) {
+  document.body.style.cssText = 'background:#030c12;display:flex;align-items:center;justify-content:center';
+  document.body.innerHTML = '<p style="color:#7ad;font-family:serif;font-size:18px;text-align:center;line-height:2">WebGL not available<br><small style="opacity:.5">Try Chrome or Safari</small></p>';
+  throw 0;
 }
 
-const { group: carGroup, wheels } = buildCar();
+// Extensions
+const extFloat    = gl.getExtension('OES_texture_float');
+const extHalfF    = gl.getExtension('OES_texture_half_float');
+const extFloatLin = gl.getExtension('OES_texture_float_linear');
+const extHalfLin  = gl.getExtension('OES_texture_half_float_linear');
+gl.getExtension('WEBGL_color_buffer_float');
+gl.getExtension('EXT_color_buffer_half_float');
 
-// ════════════════════════════════════════════
-//  INPUT
-// ════════════════════════════════════════════
-const keys = {};
-document.addEventListener('keydown', e => keys[e.key] = true);
-document.addEventListener('keyup',   e => keys[e.key] = false);
-
-// Touch button bindings
-function bindBtn(id, keyName) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const press   = () => { keys[keyName] = true;  el.classList.add('pressed'); };
-  const release = () => { keys[keyName] = false; el.classList.remove('pressed'); };
-  el.addEventListener('touchstart', e => { e.preventDefault(); press(); },   { passive: false });
-  el.addEventListener('touchend',   e => { e.preventDefault(); release(); }, { passive: false });
-  el.addEventListener('mousedown', press);
-  el.addEventListener('mouseup',   release);
+function canRenderTo(type) {
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 4, 4, 0, gl.RGBA, type, null);
+  const f = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+  const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+  gl.deleteFramebuffer(f); gl.deleteTexture(t);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return ok;
 }
-bindBtn('btn-up',    'ArrowUp');
-bindBtn('btn-down',  'ArrowDown');
-bindBtn('btn-left',  'ArrowLeft');
-bindBtn('btn-right', 'ArrowRight');
-bindBtn('btn-gas',   'ArrowUp');
-bindBtn('btn-brake', 'ArrowDown');
 
-// Mouse look
-let yaw = 0, pitch = 0.28;
-let pointerLocked = false;
-canvas.addEventListener('click', () => canvas.requestPointerLock && canvas.requestPointerLock());
-document.addEventListener('pointerlockchange', () => { pointerLocked = !!document.pointerLockElement; });
-document.addEventListener('mousemove', e => {
-  if (!pointerLocked) return;
-  yaw   -= e.movementX * 0.002;
-  pitch -= e.movementY * 0.002;
-  pitch  = Math.max(-0.1, Math.min(0.9, pitch));
-});
+// Pick best available float format for FBO rendering
+let FTYPE, USE_LINEAR, UINT8;
+if (extFloat && canRenderTo(gl.FLOAT)) {
+  FTYPE = gl.FLOAT; USE_LINEAR = !!extFloatLin; UINT8 = false;
+} else if (extHalfF && canRenderTo(extHalfF.HALF_FLOAT_OES)) {
+  FTYPE = extHalfF.HALF_FLOAT_OES; USE_LINEAR = !!extHalfLin; UINT8 = false;
+} else {
+  // iPad / older devices fall here — uint8 with 16-bit encoding fixes quantisation pixels
+  FTYPE = gl.UNSIGNED_BYTE; USE_LINEAR = true; UINT8 = true;
+}
 
-// ════════════════════════════════════════════
-//  PHYSICS (arcade)
-// ════════════════════════════════════════════
-const carState = {
-  speed: 0,          // world units/s (negative = reverse)
-  heading: 0,        // radians
-  x: 0, z: 300,
-  steer: 0,
-};
-const MAX_SPEED_FWD = 55, MAX_SPEED_REV = 14;
-const ACCEL = 22, BRAKE = 40, FRICTION = 14, STEER_SPEED = 2.2;
-const WHEELBASE = 5.6;
+const S = 512; // simulation grid (square)
 
-function updatePhysics(dt) {
-  const gas   = keys['ArrowUp']    || keys['w'] || keys['W'];
-  const brk   = keys['ArrowDown']  || keys['s'] || keys['S'];
-  const left  = keys['ArrowLeft']  || keys['a'] || keys['A'];
-  const right = keys['ArrowRight'] || keys['d'] || keys['D'];
+// ─── Shader: vertex (shared) ────────────────────────────────────────────────
+const VERT = `
+attribute vec2 aPos;
+varying   vec2 vUV;
+void main() {
+  vUV = aPos * 0.5 + 0.5;
+  gl_Position = vec4(aPos, 0.0, 1.0);
+}`;
 
-  // Acceleration
-  if (gas)  carState.speed += ACCEL * dt;
-  if (brk)  carState.speed -= (carState.speed > 0 ? BRAKE : ACCEL) * dt;
+// ─── Shader: simulation ─────────────────────────────────────────────────────
+// FIX: On uint8 devices (iPad), we use 16-bit fixed-point:
+//   curr height → R (hi byte) + G (lo byte)
+//   prev height → B (hi byte) + A (lo byte)
+// This gives ~65000 precision levels vs 256, eliminating pixel-block artefacts.
+const SIM_FRAG = (UINT8 ? '#define UINT8_MODE\n' : '') + `
+precision highp float;
+varying vec2  vUV;
+uniform sampler2D uState;
+uniform vec2  uTexel;
+uniform vec2  uMouse;
+uniform float uRadius;
+uniform float uStrength;
 
-  // Friction
-  const friction = FRICTION * dt;
-  if (!gas && !brk) {
-    if (carState.speed > 0) carState.speed = Math.max(0, carState.speed - friction);
-    else carState.speed = Math.min(0, carState.speed + friction);
+#ifdef UINT8_MODE
+  // Encode float [-1,1] → two bytes stored in vec2([0,1])
+  // hi = integer part of t*255 / 255
+  // lo = fractional part of t*255  (full [0,1) range for sub-byte precision)
+  vec2 enc16(float v) {
+    float t   = clamp(v * 0.5 + 0.5, 0.0, 0.99999);
+    float t255 = t * 255.0;
+    return vec2(floor(t255) / 255.0, fract(t255));
+  }
+  // Decode: (hi + lo/255) * 2 - 1
+  float dec16(vec2 v) { return (v.x + v.y / 255.0) * 2.0 - 1.0; }
+  float CURR(vec2 uv) { return dec16(texture2D(uState, uv).rg); }
+  float PREV(vec2 uv) { return dec16(texture2D(uState, uv).ba); }
+#else
+  float CURR(vec2 uv) { return texture2D(uState, uv).r * 2.0 - 1.0; }
+  float PREV(vec2 uv) { return texture2D(uState, uv).g * 2.0 - 1.0; }
+#endif
+
+void main() {
+  float curr = CURR(vUV);
+  float prev = PREV(vUV);
+
+  float n = CURR(vUV + vec2( 0.0,      uTexel.y));
+  float s = CURR(vUV - vec2( 0.0,      uTexel.y));
+  float e = CURR(vUV + vec2( uTexel.x, 0.0     ));
+  float w = CURR(vUV - vec2( uTexel.x, 0.0     ));
+
+  // 2-D wave equation  (α=0.5 → numerically stable max speed)
+  float next = (-prev + (n + s + e + w) * 0.5) * 0.994;
+
+  // Sponge-layer: absorb at borders to kill reflections
+  float bx = min(vUV.x, 1.0 - vUV.x) * 14.0;
+  float by = min(vUV.y, 1.0 - vUV.y) * 14.0;
+  next *= mix(0.78, 1.0, clamp(min(bx, by), 0.0, 1.0));
+
+  // Pointer / drop disturbance
+  float d = length(vUV - uMouse);
+  next -= smoothstep(uRadius, 0.0, d) * uStrength;
+  next  = clamp(next, -1.0, 1.0);
+
+  #ifdef UINT8_MODE
+    gl_FragColor = vec4(enc16(next), enc16(curr));
+  #else
+    gl_FragColor = vec4(next * 0.5 + 0.5, curr * 0.5 + 0.5, 0.0, 1.0);
+  #endif
+}`;
+
+// ─── Shader: render ─────────────────────────────────────────────────────────
+const RENDER_FRAG = (UINT8 ? '#define UINT8_MODE\n' : '') + `
+precision highp float;
+varying vec2  vUV;
+uniform sampler2D uWater;
+uniform vec2  uTexel;
+uniform float uTime;
+uniform float uAspect;
+
+// ── Noise ─────────────────────────────────────────────────────────────────
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+float vnoise(vec2 p) {
+  vec2 i = floor(p), f = p - i;
+  f = f*f*(3.0 - 2.0*f);
+  return mix(mix(hash(i),         hash(i+vec2(1,0)), f.x),
+             mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x), f.y);
+}
+float fbm(vec2 p) {
+  float v=0.0, a=0.5;
+  for(int i=0;i<5;i++){ v+=vnoise(p)*a; p*=2.1; a*=0.5; }
+  return v;
+}
+
+// ── Sky dome ──────────────────────────────────────────────────────────────
+vec3 getSky(vec2 dir) {
+  float t   = clamp(dir.y * 1.6, 0.0, 1.0);
+  vec3 sky  = mix(vec3(0.48, 0.72, 0.96), vec3(0.05, 0.22, 0.68), t*t);
+  // Sun disc
+  vec2 sunD = normalize(vec2(0.35, 0.72));
+  float sd  = dot(normalize(dir), sunD);
+  sky += vec3(1.00, 0.97, 0.80) * pow(max(sd, 0.0), 200.0) * 4.0;
+  sky += vec3(1.00, 0.78, 0.42) * pow(max(sd, 0.0),   5.0) * 0.45;
+  // Soft clouds
+  float cl = fbm(dir*5.0+3.7) * fbm(dir*3.0+1.2);
+  sky = mix(sky, vec3(0.92, 0.95, 1.00), smoothstep(0.35,0.65,cl)*0.5*(1.0-t));
+  return sky;
+}
+
+// ── Seabed ────────────────────────────────────────────────────────────────
+vec3 getSeabed(vec2 uv) {
+  float dr = uTime * 0.025;
+  float r1 = sin(uv.x*32.0 + fbm(uv*4.0+dr)*5.0)*0.5+0.5;
+  float r2 = sin(uv.y*26.0 + fbm(uv*3.5+1.7+dr)*4.0)*0.5+0.5;
+  float det = fbm(uv*16.0+dr*0.5);
+  vec3 base = mix(vec3(0.73,0.61,0.38), vec3(0.82,0.71,0.48), r1*r2*pow(det,0.5));
+  // Rocks
+  float rf  = smoothstep(0.55,0.75, fbm(uv*3.8+2.3));
+  base = mix(base, vec3(0.47,0.43,0.37)*(0.7+0.3*fbm(uv*9.0+4.1)), rf*0.7);
+  // Seaweed
+  float wd  = smoothstep(0.60,0.82,fbm(uv*8.5+5.8))*smoothstep(0.50,0.68,fbm(uv*5.0+8.3));
+  base = mix(base, vec3(0.15,0.38,0.18), wd*0.60);
+  // Pebbles
+  float pb  = step(0.78, hash(floor(uv*80.0)));
+  base = mix(base, vec3(vnoise(uv*80.0)*0.2+0.5)*0.6, pb*0.3);
+  return base;
+}
+
+// ── Height fetch (handles UINT8 16-bit encoding) ──────────────────────────
+#ifdef UINT8_MODE
+  float H(vec2 uv) {
+    vec4 s = texture2D(uWater, uv);
+    return (s.r + s.g / 255.0) * 2.0 - 1.0;
+  }
+#else
+  float H(vec2 uv) { return texture2D(uWater, uv).r * 2.0 - 1.0; }
+#endif
+
+// ── GGX microfacet specular (replaces Phong — realistic water sparkle) ────
+float GGX(float NdotH, float rough) {
+  float a2 = rough*rough*rough*rough;
+  float d  = NdotH*NdotH*(a2-1.0)+1.0;
+  return a2 / (3.14159*d*d + 1e-5);
+}
+
+void main() {
+  vec2 uv = vUV;
+  vec2 tx = uTexel * 2.0;
+
+  // ── Sobel normal from height field (8-tap, smoother than 4-tap) ─────────
+  float hL  = H(uv - vec2(tx.x, 0.0));
+  float hR  = H(uv + vec2(tx.x, 0.0));
+  float hU  = H(uv + vec2(0.0,  tx.y));
+  float hD  = H(uv - vec2(0.0,  tx.y));
+  float hLU = H(uv + vec2(-tx.x,  tx.y));
+  float hRU = H(uv + vec2( tx.x,  tx.y));
+  float hLD = H(uv + vec2(-tx.x, -tx.y));
+  float hRD = H(uv + vec2( tx.x, -tx.y));
+
+  float ns = 4.8;
+  float dX = (hRD + 2.0*hR + hRU - hLD - 2.0*hL - hLU) * ns / uAspect;
+  float dY = (hLU + 2.0*hU + hRU - hLD - 2.0*hD - hRD) * ns;
+  vec3 normal = normalize(vec3(-dX, -dY, 1.0));
+
+  float h   = H(uv);
+  vec3  V   = vec3(0.0, 0.0, 1.0);
+  vec3  L   = normalize(vec3(0.40, 0.68, 1.0));
+  vec3  Hv  = normalize(V + L);   // halfway vector
+
+  // ── Fresnel (Schlick, water IOR 1.333) ───────────────────────────────────
+  float cosI   = max(dot(normal, V), 0.0);
+  float fresnel = 0.020 + 0.980 * pow(1.0 - cosI, 5.0);
+  fresnel = clamp(fresnel, 0.0, 1.0);
+
+  // ── Refraction ───────────────────────────────────────────────────────────
+  vec2 refOff = vec2(normal.x / uAspect, normal.y) * 0.065;
+  vec2 refUV  = clamp(uv + refOff, 0.001, 0.999);
+  vec3 seabed = getSeabed(refUV + vec2(uTime * 0.003, 0.0));
+
+  // Beer-Lambert water extinction
+  seabed *= exp(-vec3(0.70, 0.12, 0.04) * 2.5);
+
+  // ── Caustics ─────────────────────────────────────────────────────────────
+  // 1) Surface curvature (wave focusing)
+  float lap = hU + hD + hL + hR - 4.0*h;
+  float curvCaus = pow(max(0.0, -lap * 9.0), 1.6) * 2.0;
+  // 2) Animated interference pattern
+  vec2 cUV = refUV * vec2(uAspect*12.0, 12.0);
+  float ca = sin(cUV.x*1.9 + uTime*2.5)*sin(cUV.y*1.8 + uTime*2.1)
+           + sin(cUV.x*1.3 - uTime*1.7 + 1.1)*sin(cUV.y*1.4 - uTime*2.0 + 0.8)
+           + sin((cUV.x+cUV.y)*1.1 + uTime*1.4)*0.5;
+  float animCaus = pow(max(0.0, ca*0.2+0.5), 3.8) * 0.6;
+  seabed *= 1.0 + curvCaus + animCaus;
+
+  // ── Sky reflection ────────────────────────────────────────────────────────
+  vec3 R   = reflect(-L, normal);
+  vec3 sky = getSky(R.xy * 0.5 + 0.5);
+
+  // ── Water body tint ───────────────────────────────────────────────────────
+  vec3 deepCol    = vec3(0.008, 0.07, 0.20);
+  vec3 shallowCol = vec3(0.05,  0.36, 0.62);
+  vec3 waterCol   = mix(deepCol, shallowCol, clamp(0.5 + h*2.0, 0.0, 1.0));
+
+  // ── Compose via Fresnel ───────────────────────────────────────────────────
+  vec3 col = mix(seabed, sky, clamp(fresnel*0.90 + 0.05, 0.0, 1.0));
+  col = mix(col, waterCol, 0.18);
+
+  // ── Sub-surface scattering (light through wave crests) ───────────────────
+  float sss = smoothstep(-0.05, 0.30, h) * max(0.0, dot(normal, L));
+  col += vec3(0.00, 0.50, 0.72) * sss * 0.30;
+
+  // ── GGX specular ─────────────────────────────────────────────────────────
+  float rough  = max(0.012, 0.012 + abs(h)*0.08);  // rougher at crests
+  float NdotH  = max(dot(normal, Hv), 0.0);
+  float NdotL  = max(dot(normal, L),  0.0);
+  float spec   = GGX(NdotH, rough);
+  col += vec3(1.00, 0.97, 0.88) * spec * NdotL * 0.20 * fresnel;
+  // Wide shimmer halo
+  float RdotV  = max(dot(R, V), 0.0);
+  col += vec3(0.82, 0.91, 1.00) * pow(RdotV, 40.0) * 0.22;
+
+  // ── Foam at wave crests ───────────────────────────────────────────────────
+  float crest = smoothstep(0.18, 0.40, h);
+  float foamN = pow(fbm(uv*22.0 + uTime*0.8), 1.4);
+  col = mix(col, vec3(0.96, 0.98, 1.00), crest*foamN*0.85);
+  // Trailing wake foam
+  float wake = smoothstep(0.07, 0.20, abs(h)) * fbm(uv*16.0+uTime*0.4) * 0.15;
+  col += vec3(0.72, 0.86, 1.00) * wake;
+
+  // ── Horizon haze ─────────────────────────────────────────────────────────
+  float fog = pow(clamp(1.0 - vUV.y*1.6, 0.0, 1.0), 4.0) * 0.22;
+  col = mix(col, vec3(0.26, 0.52, 0.80), fog);
+
+  // ── Vignette ─────────────────────────────────────────────────────────────
+  vec2 vd = (vUV*2.0-1.0) * vec2(uAspect, 1.0);
+  col *= clamp(1.0 - dot(vd,vd)*0.055, 0.0, 1.0);
+
+  // ── Filmic tone-map + gamma ───────────────────────────────────────────────
+  col = col*(1.0+col*0.14)/(col+0.9)*1.08;
+  col = pow(max(col, vec3(0.0)), vec3(1.0/2.2));
+
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+// ─── GL Helpers ─────────────────────────────────────────────────────────────
+function mkShader(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+    throw new Error('Shader compile: ' + gl.getShaderInfoLog(s));
+  return s;
+}
+
+function mkProg(fsrc) {
+  const p = gl.createProgram();
+  gl.attachShader(p, mkShader(gl.VERTEX_SHADER,   VERT));
+  gl.attachShader(p, mkShader(gl.FRAGMENT_SHADER, fsrc));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS))
+    throw new Error('Program link: ' + gl.getProgramInfoLog(p));
+  const u = {};
+  const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) {
+    const info = gl.getActiveUniform(p, i);
+    u[info.name] = gl.getUniformLocation(p, info.name);
+  }
+  return { p, u };
+}
+
+let simProg, renderProg;
+try {
+  simProg    = mkProg(SIM_FRAG);
+  renderProg = mkProg(RENDER_FRAG);
+} catch (e) {
+  console.error(e);
+  document.body.innerHTML = `<pre style="color:#f88;padding:20px;font-size:11px;white-space:pre-wrap">${e.message}</pre>`;
+  throw e;
+}
+
+// Fullscreen quad
+const qbuf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, qbuf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+
+function bindQuad(prog) {
+  gl.bindBuffer(gl.ARRAY_BUFFER, qbuf);
+  const loc = gl.getAttribLocation(prog.p, 'aPos');
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+}
+
+// ─── FBOs ───────────────────────────────────────────────────────────────────
+function mkInitData() {
+  const n = S * S * 4;
+  if (!UINT8) {
+    // float or half-float: 0.5 encodes to resting height 0
+    if (FTYPE === gl.FLOAT)              return new Float32Array(n).fill(0.5);
+    if (FTYPE === extHalfF.HALF_FLOAT_OES) return new Uint16Array(n).fill(0x3800); // 0.5 in fp16
+  }
+  // UINT8 mode: enc16(0) → t=0.5 → t255=127.5 → hi=127/255, lo=0.5
+  // Byte values: hi=127 (≈127/255), lo=128 (round(0.5*255))
+  // Layout per texel: [curr_hi, curr_lo, prev_hi, prev_lo]
+  const d = new Uint8Array(n);
+  for (let i = 0; i < n; i += 4) { d[i]=127; d[i+1]=128; d[i+2]=127; d[i+3]=128; }
+  return d;
+}
+
+function mkFBO() {
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, S, S, 0, gl.RGBA, FTYPE, mkInitData());
+  const f = USE_LINEAR ? gl.LINEAR : gl.NEAREST;
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, f);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, f);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const fbo = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { tex, fbo };
+}
+
+let fboA = mkFBO();
+let fboB = mkFBO();
+
+// ─── Input ──────────────────────────────────────────────────────────────────
+const ptr = { x:0.5, y:0.5, active:false, prevX:0.5, prevY:0.5 };
+let hintDismissed = false;
+
+// FIX: divide by CSS pixels (CW/CH), NOT canvas physical pixels (W/H)
+// Touch/mouse events always give clientX/Y in CSS coordinate space
+function toUV(cx, cy) {
+  return { x: cx / CW, y: 1.0 - cy / CH };
+}
+
+function dismissHint() {
+  if (hintDismissed) return;
+  hintDismissed = true;
+  hint.classList.add('fade');
+  setTimeout(() => { hint.style.display = 'none'; }, 3000);
+}
+
+function onDown(e) {
+  const t = e.touches ? e.touches[0] : e;
+  const uv = toUV(t.clientX, t.clientY);
+  ptr.prevX = uv.x; ptr.prevY = uv.y;
+  ptr.x = uv.x; ptr.y = uv.y; ptr.active = true;
+  dismissHint();
+}
+
+function onMove(e) {
+  if (!ptr.active) return;
+  const t = e.touches ? e.touches[0] : e;
+  ptr.prevX = ptr.x; ptr.prevY = ptr.y;
+  const uv = toUV(t.clientX, t.clientY);
+  ptr.x = uv.x; ptr.y = uv.y;
+}
+
+function onUp() { ptr.active = false; }
+
+// Mouse
+canvas.addEventListener('mousedown', onDown);
+canvas.addEventListener('mousemove', onMove);
+window.addEventListener('mouseup',   onUp);
+
+// FIX: passive:false on ALL touch events so we can preventDefault
+// This stops iPad Safari hijacking the gesture as scroll/zoom
+canvas.addEventListener('touchstart',  e => { e.preventDefault(); onDown(e); }, { passive:false });
+canvas.addEventListener('touchmove',   e => { e.preventDefault(); onMove(e); }, { passive:false });
+canvas.addEventListener('touchend',    e => { e.preventDefault(); onUp();    }, { passive:false });
+canvas.addEventListener('touchcancel', e => { e.preventDefault(); onUp();    }, { passive:false });
+
+// ─── Ambient rain drops ─────────────────────────────────────────────────────
+const drops = [];
+let lastDrop = 0;
+
+function maybeSpawnDrop(now) {
+  const gap = ptr.active ? 5000 : (500 + Math.random() * 800);
+  if (now - lastDrop < gap) return;
+  lastDrop = now;
+  drops.push({
+    x:   0.08 + Math.random() * 0.84,
+    y:   0.08 + Math.random() * 0.84,
+    str: 0.10 + Math.random() * 0.22,
+    born: now,
+    ttl:  40  + Math.random() * 40
+  });
+}
+
+// ─── Simulation step ────────────────────────────────────────────────────────
+function simulate(src, dst, mx, my, active, str) {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fbo);
+  gl.viewport(0, 0, S, S);
+  gl.useProgram(simProg.p);
+  bindQuad(simProg);
+  const u = simProg.u;
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, src.tex);
+  gl.uniform1i(u.uState,    0);
+  gl.uniform2f(u.uTexel,    1.0/S, 1.0/S);
+  gl.uniform2f(u.uMouse,    mx, my);
+  gl.uniform1f(u.uRadius,   0.046);
+  gl.uniform1f(u.uStrength, active ? str : 0.0);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+// ─── Render ─────────────────────────────────────────────────────────────────
+let time = 0;
+
+function render(src) {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, W, H);
+  gl.useProgram(renderProg.p);
+  bindQuad(renderProg);
+  const u = renderProg.u;
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, src.tex);
+  gl.uniform1i(u.uWater,  0);
+  gl.uniform2f(u.uTexel,  1.0/S, 1.0/S);
+  gl.uniform1f(u.uTime,   time);
+  gl.uniform1f(u.uAspect, W / H);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+// ─── Main loop ──────────────────────────────────────────────────────────────
+function frame(now) {
+  requestAnimationFrame(frame);
+  time = now * 0.001;
+
+  maybeSpawnDrop(now);
+
+  let mx = ptr.x, my = ptr.y, mactive = ptr.active, mstr = 0.18;
+
+  // Use ambient drop if no finger/pointer
+  if (!mactive && drops.length > 0) {
+    const d = drops[0];
+    if (now - d.born < d.ttl) {
+      mx = d.x; my = d.y; mactive = true; mstr = d.str;
+    } else { drops.shift(); }
   }
 
-  // Clamp speed
-  carState.speed = Math.max(-MAX_SPEED_REV, Math.min(MAX_SPEED_FWD, carState.speed));
+  // Drag speed → wave strength
+  if (ptr.active) {
+    const spd = Math.hypot(ptr.x - ptr.prevX, ptr.y - ptr.prevY);
+    mstr = Math.min(0.12 + spd * 20.0, 0.60);
+  }
 
-  // Steering
-  const steerInput = (left ? -1 : 0) + (right ? 1 : 0);
-  const steerFactor = Math.min(1, Math.abs(carState.speed) / 8) * (carState.speed < 0 ? -1 : 1);
-  carState.heading += steerInput * STEER_SPEED * steerFactor * dt;
+  // 4 substeps per frame for accuracy & wave speed
+  for (let i = 0; i < 4; i++) {
+    simulate(fboA, fboB, mx, my, mactive && i < 2, mstr);
+    const tmp = fboA; fboA = fboB; fboB = tmp;
+  }
 
-  // Move car
-  carState.x += Math.sin(carState.heading) * carState.speed * dt;
-  carState.z += Math.cos(carState.heading) * carState.speed * dt;
-
-  // Spin wheels proportional to speed
-  wheels.forEach((w, i) => {
-    w.children[0].rotation.x += carState.speed * dt * 0.6;
-  });
-  // Steer front wheels visually
-  wheels[0].rotation.y = steerInput * 0.45;
-  wheels[1].rotation.y = steerInput * 0.45;
-
-  // Apply to mesh
-  carGroup.position.x = carState.x;
-  carGroup.position.z = carState.z;
-  carGroup.rotation.y = carState.heading;
-
-  // Keep car roughly on terrain (simple y lock)
-  carGroup.position.y = 0;
+  render(fboA);
 }
 
-// ════════════════════════════════════════════
-//  CAMERA FOLLOW
-// ════════════════════════════════════════════
-const camOffset = new THREE.Vector3();
-const camTarget = new THREE.Vector3();
-const camLookAt = new THREE.Vector3();
-
-function updateCamera() {
-  const dist = 16, height = 5 + pitch * 12;
-  // Orbit around car using yaw + car heading
-  const totalYaw = carState.heading + yaw;
-  camOffset.set(
-    Math.sin(totalYaw) * -dist,
-    height,
-    Math.cos(totalYaw) * -dist
-  );
-  camTarget.set(carGroup.position.x + camOffset.x, carGroup.position.y + camOffset.y, carGroup.position.z + camOffset.z);
-  camera.position.lerp(camTarget, 0.1);
-  camLookAt.set(carGroup.position.x, carGroup.position.y + 1.5, carGroup.position.z);
-  camera.lookAt(camLookAt);
-}
-
-// ════════════════════════════════════════════
-//  HUD UPDATE
-// ════════════════════════════════════════════
-const spdEl  = document.getElementById('spd');
-const gearEl = document.getElementById('gear');
-function updateHUD() {
-  const kmh = Math.abs(carState.speed * 3.6).toFixed(0);
-  spdEl.textContent = kmh;
-  if (carState.speed > 0.5)       gearEl.textContent = carState.speed < 15 ? '1' : carState.speed < 28 ? '2' : carState.speed < 42 ? '3' : '4';
-  else if (carState.speed < -0.5) gearEl.textContent = 'R';
-  else                             gearEl.textContent = 'N';
-}
-
-// ════════════════════════════════════════════
-//  ANIMATE
-// ════════════════════════════════════════════
-let last = performance.now();
-function animate() {
-  requestAnimationFrame(animate);
-  const now = performance.now();
-  const dt  = Math.min((now - last) / 1000, 0.05);
-  last = now;
-
-  updatePhysics(dt);
-  updateCamera();
-  updateHUD();
-
-  renderer.render(scene, camera);
-}
-animate();
+requestAnimationFrame(frame);
 </script>
 </body>
 </html>
