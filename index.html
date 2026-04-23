@@ -1,99 +1,88 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Project: Super Earth</title>
+    <title>HELLDIVERS: WEB EDITION</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', monospace; }
-        #ui {
-            position: absolute; top: 20px; left: 20px; color: #fbff00;
-            text-shadow: 2px 2px #000; pointer-events: none;
-        }
-        .crosshair {
-            position: absolute; top: 50%; left: 50%;
-            width: 20px; height: 20px; border: 2px solid #fbff00;
-            transform: translate(-50%, -50%); border-radius: 50%;
-        }
+        body { margin: 0; background: #1a1a1a; color: #fbff00; font-family: sans-serif; overflow: hidden; }
+        #hud { position: absolute; bottom: 20px; left: 20px; text-transform: uppercase; }
+        .key { display: inline-block; width: 30px; height: 30px; border: 2px solid #fbff00; text-align: center; line-height: 30px; margin: 2px; }
+        #terminal { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; display: none;}
     </style>
 </head>
 <body>
-
-    <div id="ui">
-        <h1>HELLPOD STATUS: DEPLOYING</h1>
-        <p>OBJECTIVE: SPREAD MANAGED DEMOCRACY</p>
-        <p>ALTITUDE: <span id="alt">5000</span>m</p>
+    <div id="hud">
+        <div>Health: [||||||||||] 100%</div>
+        <div id="stratagem-display">Next Stratagem: ⬆️ ➡️ ⬇️ ⬇️ ⬇️</div>
     </div>
-    <div class="crosshair"></div>
-
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
-            }
-        }
-    </script>
+    <div id="terminal">
+        <h1 style="font-size: 50px;">REINFORCING...</h1>
+    </div>
 
     <script type="module">
-        import * as THREE from 'three';
+        import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 
-        // --- SCENE SETUP ---
+        // 1. Scene & Environment
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        scene.background = new THREE.Color(0x111111);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        // --- LIGHTING ---
-        const light = new THREE.DirectionalLight(0xffffff, 1);
-        light.position.set(5, 10, 7.5);
+        // 2. The "Helldiver" (Player)
+        const playerGeo = new THREE.CapsuleGeometry(0.5, 1, 4, 8);
+        const playerMat = new THREE.MeshStandardMaterial({ color: 0xffff00 });
+        const player = new THREE.Mesh(playerGeo, playerMat);
+        player.position.y = 1;
+        scene.add(player);
+
+        // 3. Lighting (Atmospheric)
+        const light = new THREE.PointLight(0xffffff, 50, 100);
+        light.position.set(0, 10, 0);
         scene.add(light);
-        scene.add(new THREE.AmbientLight(0x404040));
+        scene.add(new THREE.AmbientLight(0x222222));
 
-        // --- PLANET SURFACE ---
-        const floorGeo = new THREE.PlaneGeometry(100, 100);
-        const floorMat = new THREE.MeshStandardMaterial({ color: 0x442211 }); // Dusty red
-        const floor = new THREE.Mesh(floorGeo, floorMat);
-        floor.rotation.x = -Math.PI / 2;
-        scene.add(floor);
+        // 4. Stratagem Logic
+        const code = ['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowDown', 'ArrowDown'];
+        let inputBuffer = [];
 
-        // --- THE HELLPOD (Simple Placeholder) ---
-        const podGeo = new THREE.CylinderGeometry(0.5, 0.3, 2, 8);
-        const podMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8 });
-        const hellpod = new THREE.Mesh(podGeo, podMat);
-        hellpod.position.y = 50; 
-        scene.add(hellpod);
+        window.addEventListener('keydown', (e) => {
+            // Player Movement
+            if(e.key === 'w') player.position.z -= 0.2;
+            if(e.key === 's') player.position.z += 0.2;
+            if(e.key === 'a') player.position.x -= 0.2;
+            if(e.key === 'd') player.position.x += 0.2;
 
-        // --- CAMERA LOGIC ---
-        camera.position.set(0, 5, 10);
-        camera.lookAt(hellpod.position);
-
-        let altitude = 5000;
-
-        // --- ANIMATION LOOP ---
-        function animate() {
-            requestAnimationFrame(animate);
-
-            // Simulate Descent
-            if (hellpod.position.y > 1) {
-                hellpod.position.y -= 0.2;
-                altitude -= 20;
-                document.getElementById('alt').innerText = Math.max(0, altitude);
-                
-                // Camera follows pod
-                camera.position.y = hellpod.position.y + 5;
-                camera.lookAt(hellpod.position);
+            // Stratagem Inputs
+            if(e.key.includes('Arrow')) {
+                inputBuffer.push(e.key);
+                if(inputBuffer.join('') === code.join('')) {
+                    triggerOrbitalStrike();
+                    inputBuffer = [];
+                }
             }
-
-            renderer.render(scene, camera);
-        }
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
+        function triggerOrbitalStrike() {
+            const beamGeo = new THREE.CylinderGeometry(0.2, 0.2, 100, 12);
+            const beamMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.8 });
+            const beam = new THREE.Mesh(beamGeo, beamMat);
+            beam.position.set(player.position.x, 50, player.position.z - 5);
+            scene.add(beam);
+            
+            setTimeout(() => scene.remove(beam), 500);
+            console.log("500KG BOMB DELIVERED");
+        }
+
+        camera.position.set(0, 10, 15);
+        camera.lookAt(player.position);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            camera.position.lerp(new THREE.Vector3(player.position.x, player.position.y + 8, player.position.z + 12), 0.1);
+            camera.lookAt(player.position);
+            renderer.render(scene, camera);
+        }
         animate();
     </script>
 </body>
