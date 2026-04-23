@@ -3,171 +3,148 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>The Daily Delirium - Truth is Extinct</title>
+    <title>Anime Tree Zen - Watch it Grow</title>
     <style>
-        body {
-            background-color: #f4f1ea;
-            color: #1a1a1a;
-            font-family: 'Georgia', serif;
-            margin: 0;
-            padding: 20px;
-        }
-
-        .newspaper-container {
-            max-width: 1200px;
-            margin: 0 auto;
-            border: 1px solid #333;
-            padding: 20px;
-            background-color: #fffcf5;
-            box-shadow: 10px 10px 0px #ccc;
-        }
-
-        header {
+        body { margin: 0; overflow: hidden; background: #87CEEB; font-family: 'Segoe UI', sans-serif; }
+        #ui {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
             text-align: center;
-            border-bottom: 5px double #333;
-            margin-bottom: 20px;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            pointer-events: none;
         }
-
-        header h1 {
-            font-size: 70px;
-            margin: 10px 0;
-            text-transform: uppercase;
-            letter-spacing: -2px;
-            font-family: 'Times New Roman', serif;
-        }
-
-        .sub-header {
-            display: flex;
-            justify-content: space-between;
-            border-bottom: 1px solid #333;
-            padding: 5px 0;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-
-        /* Newspaper Columns */
-        .main-content {
-            display: grid;
-            grid-template-columns: 2fr 1fr 1fr;
-            gap: 20px;
-        }
-
-        article {
-            margin-bottom: 20px;
-            border-bottom: 1px solid #ddd;
-            padding-bottom: 10px;
-        }
-
-        .headline {
-            font-weight: bold;
-            line-height: 1;
-            margin-bottom: 10px;
-        }
-
-        .huge { font-size: 42px; color: #b00; }
-        .large { font-size: 28px; }
-        .medium { font-size: 22px; }
-
-        .image-placeholder {
-            background-color: #eee;
-            width: 100%;
-            height: 200px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid #ccc;
-            margin-bottom: 10px;
-            font-style: italic;
-            color: #666;
-        }
-
-        .dropcap {
-            float: left;
-            font-size: 50px;
-            line-height: 40px;
-            padding-top: 4px;
-            padding-right: 8px;
-            font-weight: bold;
-        }
-
-        footer {
-            margin-top: 30px;
-            text-align: center;
-            font-size: 12px;
-            border-top: 2px solid #333;
-            padding-top: 10px;
-        }
-
-        @media (max-width: 900px) {
-            .main-content { grid-template-columns: 1fr; }
-        }
+        canvas { display: block; }
+        .instructions { font-size: 1.2rem; font-weight: bold; opacity: 0.8; }
     </style>
 </head>
 <body>
 
-<div class="newspaper-container">
-    <header>
-        <h1>THE DAILY DELIRIUM</h1>
-        <div class="sub-header">
-            <span>Vol. 999 - No. 00</span>
-            <span>Thursday, April 23, 2026</span>
-            <span>Price: One Human Soul</span>
-        </div>
-    </header>
-
-    <div class="main-content">
-        <div class="column-1">
-            <article>
-                <div class="headline huge">MOON DECLARES INDEPENDENCE; DEMANDS "LESS STARING" FROM EARTHLINGS</div>
-                <div class="image-placeholder">[Photo: The Moon wearing a giant pair of sunglasses]</div>
-                <p><span class="dropcap">I</span>n a move that has baffled astronomers and astrologers alike, the Moon has officially filed for divorce from Earth’s gravitational pull. In a lunar broadcast consisting entirely of high-pitched static and the smell of burnt toast, the celestial body claimed it was "tired of being watched while it sleeps" and requested that humans stop pointing telescopes at its "craters of vulnerability."</p>
-            </article>
-
-            <article>
-                <div class="headline large">ISRAEL ANNOUNCES NEW DIRECTIVE: ALL JEWS TO BE ARMED WITH TELEKINETIC LASERS</div>
-                <p>In a surprising tech-defense pivot, Israeli officials announced this morning that traditional equipment is being phased out. Instead, every citizen will be issued a "Cerebro-Spenser" helmet that amplifies natural thoughts into concentrated beams of light. "The future is mental," a spokesperson said while hovering three inches off the floor.</p>
-            </article>
-        </div>
-
-        <div class="column-2">
-            <article>
-                <div class="headline medium">Local Cat Elected Pope; First Decree is "Universal Nap Time"</div>
-                <p>The Vatican was covered in white smoke today, followed by the sound of a very loud purr. Mittens I, a three-year-old tabby from New Jersey, has ascended to the papacy. His first encyclical demands the immediate canonization of the Red Laser Pointer.</p>
-            </article>
-
-            <article>
-                <div class="headline medium">Scientist Discovers That Trees Are Actually Just Very Tall Dogs That Don't Know How To Bark</div>
-                <p>Dr. Barnaby Wobble claims that if you scratch a Douglas Fir in "just the right spot," its roots will wag. "We've been calling it photosynthesis," Wobble said. "It's actually just a very slow tail-wag for sunlight."</p>
-            </article>
-            
-            <article>
-                <div class="headline medium">Butter Prices Skyrocket as Cows Learn to Negotiate for Dental Insurance</div>
-                <p>The Bovine Union has successfully lobbied for better grass and full orthodontic coverage. Margarine is currently being treated as a black-market currency.</p>
-            </article>
-        </div>
-
-        <div class="column-3">
-            <article>
-                <div class="headline medium">BREAKING: The Color Blue to be Retired; Will be Replaced by "Screaming Teal"</div>
-                <p>Pantone officials state that Blue has become "too mainstream" and will be phased out of the visible spectrum by Friday. Citizens are advised to paint their oceans immediately.</p>
-            </article>
-
-            <article style="background: #000; color: #fff; padding: 10px;">
-                <div class="headline medium" style="color: #ff0;">CLASSIFIED AD:</div>
-                <p>WANTED: Someone to go back in time with me. This is not a joke. You'll get paid after we get back. Must bring your own weapons. I have only done this once before. Safety not guaranteed.</p>
-            </article>
-
-            <article>
-                <div class="headline medium">Ghost of Elvis Spotted Working at a Vegan Taco Bell in Mars Colony Delta</div>
-                <p>"He looked good," said one witness. "A bit translucent, but his crunchwrap folding skills are otherworldly."</p>
-            </article>
-        </div>
-    </div>
-
-    <footer>
-        &copy; 2026 THE DAILY DELIRIUM - ALL STORIES ARE 110% FABRICATED BY A LATTICE OF SENTIENT TOASTERS.
-    </footer>
+<div id="ui">
+    <div class="instructions">Watching the Spirit Tree flourish...</div>
+    <p>Refresh to plant a new one</p>
 </div>
 
+<script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+    }
+  }
+</script>
+
+<script type="module">
+    import * as THREE from 'three';
+
+    // --- SETUP ---
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xa3d5ff); // Soft Anime Sky
+    
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 5, 15);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    document.body.appendChild(renderer.domElement);
+
+    // --- LIGHTING ---
+    const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+    sun.position.set(5, 10, 7);
+    scene.add(sun);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+
+    // --- ANIME SHADER (TOON) ---
+    const trunkMaterial = new THREE.MeshToonMaterial({ color: 0x5D4037 });
+    const leafMaterial = new THREE.MeshToonMaterial({ color: 0x7cfc00 });
+
+    // --- TREE GROWTH LOGIC ---
+    const treeGroup = new THREE.Group();
+    scene.add(treeGroup);
+
+    function createBranch(parent, position, direction, length, thickness, depth) {
+        if (depth > 6) return;
+
+        // Create the Mesh
+        const geometry = new THREE.CylinderGeometry(thickness * 0.7, thickness, length, 8);
+        geometry.translate(0, length / 2, 0); // Move pivot to base
+        const branch = new THREE.Mesh(geometry, trunkMaterial);
+        
+        // Position and orient
+        branch.position.copy(position);
+        branch.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.clone().normalize());
+        
+        // Growth Animation Data
+        branch.scale.set(0, 0, 0);
+        parent.add(branch);
+
+        const endPoint = position.clone().add(direction.clone().multiplyScalar(length));
+
+        // Create children branches
+        const numBranches = 2 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < numBranches; i++) {
+            const newDir = direction.clone()
+                .applyAxisAngle(new THREE.Vector3(1, 0, 0), (Math.random() - 0.5) * 1.5)
+                .applyAxisAngle(new THREE.Vector3(0, 0, 1), (Math.random() - 0.5) * 1.5);
+            
+            setTimeout(() => {
+                createBranch(branch, new THREE.Vector3(0, length, 0), newDir, length * 0.75, thickness * 0.7, depth + 1);
+            }, 600 + (depth * 200));
+        }
+
+        // Add leaves at the tips
+        if (depth > 4) {
+            const leafGeo = new THREE.IcosahedronGeometry(0.5, 1);
+            const leaf = new THREE.Mesh(leafGeo, leafMaterial);
+            leaf.position.set(0, length, 0);
+            leaf.scale.set(0, 0, 0);
+            branch.add(leaf);
+        }
+
+        // Animation Loop for this specific branch
+        function grow() {
+            if (branch.scale.y < 1) {
+                branch.scale.y += 0.005;
+                branch.scale.x += 0.005;
+                branch.scale.z += 0.005;
+                requestAnimationFrame(grow);
+            }
+        }
+        grow();
+    }
+
+    // Start the growth
+    createBranch(treeGroup, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 1, 0), 4, 0.4, 0);
+
+    // --- GROUND ---
+    const groundGeo = new THREE.CircleGeometry(20, 32);
+    const groundMat = new THREE.MeshToonMaterial({ color: 0x91bd59 });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
+
+    // --- ANIMATION ---
+    function animate() {
+        requestAnimationFrame(animate);
+        
+        // Gentle sway (Wind effect)
+        treeGroup.rotation.y += 0.002;
+        treeGroup.children.forEach(child => {
+            child.rotation.z = Math.sin(Date.now() * 0.001) * 0.02;
+        });
+
+        renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    animate();
+</script>
 </body>
 </html>
