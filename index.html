@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Realistic Midnight Ocean</title>
+    <title>Atmospheric Midnight Sea</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #000; }
+        body { margin: 0; overflow: hidden; background: #000; }
         canvas { display: block; }
     </style>
 </head>
@@ -13,99 +13,120 @@
 
 <script type="module">
     import * as THREE from 'https://cdn.skypack.dev/three@0.132.2/build/three.module.js';
-    import { OrbitControls } from 'https://cdn.skypack.dev/three@0.132.2/examples/jsm/controls/OrbitControls.js';
     import { Water } from 'https://cdn.skypack.dev/three@0.132.2/examples/jsm/objects/Water.js';
 
-    // --- Scene Setup ---
+    // --- Core Setup ---
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
-    camera.position.set(30, 30, 100);
+    scene.fog = new THREE.FogExp2(0x00050a, 0.015); // Add thick night fog
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 1000);
+    camera.position.set(0, 15, 60);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMapping = THREE.ReinhardToneMapping;
     document.body.appendChild(renderer.domElement);
 
-    // --- Lighting ---
-    const ambientLight = new THREE.AmbientLight(0x111122, 0.5); // Deep blue night tint
-    scene.add(ambientLight);
+    // --- Lights ---
+    const moonLight = new THREE.DirectionalLight(0x556677, 0.2);
+    moonLight.position.set(100, 100, -100);
+    scene.add(moonLight);
 
-    // --- Water ---
+    // --- Realistic Water ---
     const waterGeometry = new THREE.PlaneGeometry(10000, 10000);
     const water = new Water(waterGeometry, {
         textureWidth: 512,
         textureHeight: 512,
-        waterNormals: new THREE.TextureLoader().load('https://threejs.org/examples/textures/waternormals.jpg', function(texture) {
-            texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+        waterNormals: new THREE.TextureLoader().load('https://threejs.org/examples/textures/waternormals.jpg', (t) => {
+            t.wrapS = t.wrapT = THREE.RepeatWrapping;
         }),
         sunDirection: new THREE.Vector3(),
         sunColor: 0xffffff,
-        waterColor: 0x001e0f,
-        distortionScale: 3.7,
-        fog: scene.fog !== undefined
+        waterColor: 0x00050a,
+        distortionScale: 8.0, // Rougher seas
     });
     water.rotation.x = -Math.PI / 2;
     scene.add(water);
 
-    // --- The Boat Group ---
-    const boat = new THREE.Group();
+    // --- Complex Boat Shape ---
+    const boatGroup = new THREE.Group();
     
-    // Simple Hull
-    const hullGeometry = new THREE.BoxGeometry(10, 4, 20);
-    const hullMaterial = new THREE.MeshStandardMaterial({ color: 0x221100, roughness: 0.8 });
-    const hull = new THREE.Mesh(hullGeometry, hullMaterial);
-    boat.add(hull);
-
-    // The Lantern
-    const lantern = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.5, 0.5, 1.5, 8),
-        new THREE.MeshBasicMaterial({ color: 0xffaa00 })
-    );
-    lantern.position.set(0, 5, 5);
-    boat.add(lantern);
-
-    // Lantern Glow
-    const light = new THREE.PointLight(0xffaa00, 2, 50);
-    light.position.set(0, 5, 5);
-    boat.add(light);
-
-    scene.add(boat);
-
-    // --- Rain ---
-    const rainCount = 10000;
-    const rainGeometry = new THREE.BufferGeometry();
-    const rainPositions = new Float32Array(rainCount * 3);
-    for (let i = 0; i < rainCount * 3; i += 3) {
-        rainPositions[i] = (Math.random() - 0.5) * 400;
-        rainPositions[i + 1] = Math.random() * 200;
-        rainPositions[i + 2] = (Math.random() - 0.5) * 400;
+    // Hull - Using Lathe for a curved wooden boat look
+    const points = [];
+    for ( let i = 0; i < 10; i ++ ) {
+        points.push( new THREE.Vector2( Math.sin( i * 0.2 ) * 5 + 1, ( i - 5 ) * 1.5 ) );
     }
-    rainGeometry.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
-    const rainMaterial = new THREE.PointsMaterial({ color: 0xaaaaaa, size: 0.1, transparent: true });
-    const rain = new THREE.Points(rainGeometry, rainMaterial);
+    const hullGeo = new THREE.LatheGeometry( points, 12, 0, Math.PI );
+    const boatMat = new THREE.MeshStandardMaterial({ color: 0x1a0f00, roughness: 0.9, side: THREE.DoubleSide });
+    const hull = new THREE.Mesh(hullGeo, boatMat);
+    hull.rotation.x = Math.PI / 2;
+    hull.rotation.z = Math.PI / 2;
+    hull.scale.set(1, 2.5, 0.8);
+    boatGroup.add(hull);
+
+    // Benches / Interior
+    const bench = new THREE.Mesh(new THREE.BoxGeometry(8, 0.5, 2), boatMat);
+    bench.position.y = 0.5;
+    boatGroup.add(bench);
+
+    // --- Lantern ---
+    const lanternGroup = new THREE.Group();
+    const frame = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.6, 1.5, 6), new THREE.MeshStandardMaterial({color: 0x111111}));
+    const glass = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8), new THREE.MeshBasicMaterial({color: 0xffcc33}));
+    
+    const lanternLight = new THREE.PointLight(0xffaa00, 3, 60);
+    lanternLight.castShadow = true;
+    
+    lanternGroup.add(frame, glass, lanternLight);
+    lanternGroup.position.set(0, 4, 8);
+    boatGroup.add(lanternGroup);
+    scene.add(boatGroup);
+
+    // --- Rain with "Motion Blur" (Streaks) ---
+    const rainCount = 8000;
+    const rainGeo = new THREE.BufferGeometry();
+    const rainPos = new Float32Array(rainCount * 3);
+    for (let i = 0; i < rainCount * 3; i += 3) {
+        rainPos[i] = (Math.random() - 0.5) * 400;
+        rainPos[i+1] = Math.random() * 200;
+        rainPos[i+2] = (Math.random() - 0.5) * 400;
+    }
+    rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
+    
+    // Custom material for rain streaks (long and thin)
+    const rainMat = new THREE.PointsMaterial({
+        color: 0x8888aa,
+        size: 0.4, 
+        transparent: true,
+        opacity: 0.4
+    });
+    const rain = new THREE.Points(rainGeo, rainMat);
     scene.add(rain);
 
-    // --- Animation Loop ---
+    // --- Animation Logic ---
     const clock = new THREE.Clock();
 
     function animate() {
         requestAnimationFrame(animate);
-        const elapsed = clock.getElapsedTime();
+        const t = clock.getElapsedTime();
 
-        // Animate water
-        water.material.uniforms['time'].value += 1.0 / 60.0;
+        // Wave movement
+        water.material.uniforms['time'].value += 0.5 / 60.0;
 
-        // Animate boat (rocking motion)
-        boat.position.y = Math.sin(elapsed * 1.5) * 0.5;
-        boat.rotation.x = Math.sin(elapsed * 1.2) * 0.05;
-        boat.rotation.z = Math.cos(elapsed * 0.8) * 0.05;
+        // Boat Physics (Rocking + Bobbing)
+        boatGroup.position.y = Math.sin(t * 0.8) * 0.7;
+        boatGroup.rotation.z = Math.sin(t * 0.5) * 0.1;
+        boatGroup.rotation.x = Math.cos(t * 0.3) * 0.05;
 
-        // Animate rain
+        // Lantern Flicker
+        lanternLight.intensity = 2 + Math.random() * 1.5;
+
+        // Rain motion
         const positions = rain.geometry.attributes.position.array;
         for (let i = 1; i < positions.length; i += 3) {
-            positions[i] -= 2; // Falling speed
-            if (positions[i] < 0) positions[i] = 200;
+            positions[i] -= 4.5; // Faster fall = streak effect
+            if (positions[i] < -10) positions[i] = 200;
         }
         rain.geometry.attributes.position.needsUpdate = true;
 
