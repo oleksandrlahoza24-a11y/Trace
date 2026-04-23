@@ -1,488 +1,353 @@
 'use strict';
+/* ═══════════════════════════════════════════════════════════════
+   BOAT.JS  —  Canvas 2D boat always centred on screen
+   The boat is always drawn at the centre; the water simulation
+   is the "world" and we poke wakes into it at the boat's UV pos.
+   Controls: WASD / arrows  +  virtual joystick (touch)
+   ═══════════════════════════════════════════════════════════════ */
+(function(){
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   BOAT.JS  —  3-D boat rendered on Canvas 2D overlay
-   Physics:  buoyancy from wave height, pitch/roll, wake injection
-   Controls: WASD / arrow keys (desktop)  +  virtual joystick (touch)
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-(function () {
-
-/* ── wait until water sim is ready ── */
-function waitAndInit() {
-  if (!window.waterSim) { setTimeout(waitAndInit, 50); return; }
+function waitAndInit(){
+  if(!window.waterSim){setTimeout(waitAndInit,50);return;}
   init();
 }
 waitAndInit();
 
-function init() {
+function init(){
 
-/* ─────────────────── Canvas 2D overlay ─────────────────── */
 const bc  = document.getElementById('boatCanvas');
 const ctx = bc.getContext('2d');
 
-/* ─────────────────── Boat state ─────────────────── */
+/* ── boat world state ── */
 const boat = {
-  /* world position in UV space (0-1, 0-1) so it stays centred always */
-  x: 0.5,
-  y: 0.5,
-  angle: 0,          /* heading in radians, 0 = right */
+  /* UV position in the wave field (0-1, 0-1); wraps around */
+  wx: 0.5, wy: 0.5,
+  angle: -Math.PI/2,   /* heading; -PI/2 = pointing up */
   speed: 0,
-  pitch: 0,
-  roll: 0,
-  bobHeight: 0,      /* visual bob from waves */
+  /* visual */
+  bobY:    0,          /* vertical bob in CSS px */
+  pitch:   0,          /* nose-up/down degrees */
+  roll:    0,          /* side tilt degrees */
+  pitchV:  0,
+  rollV:   0,
   lastWake: 0,
-
-  /* physics velocities */
-  vx: 0,
-  vy: 0,
-  pitchVel: 0,
-  rollVel: 0,
 };
 
-const MAX_SPEED   = 0.0022;
-const ACCEL       = 0.00008;
-const DECEL       = 0.97;
-const TURN_SPEED  = 0.032;
-const WAKE_RATE   = 80;    /* ms between wake drops */
-const WAKE_STR    = 0.10;
-const WAKE_RAD    = 0.028;
-const BOUNCE_STR  = 8.0;   /* pitch/roll sensitivity to wave slope */
+const MAX_SPEED  = 0.0018;  /* UV units per ms */
+const ACCEL      = 0.000055;
+const DECEL      = 0.968;
+const TURN_SPD   = 0.028;
+const WAKE_MS    = 90;
+const WAKE_STR   = 0.12;
 
-/* ─────────────────── Input state ─────────────────── */
-const keys = { up:false, down:false, left:false, right:false };
-
-document.addEventListener('keydown', e => {
-  if (e.key==='ArrowUp'    || e.key==='w' || e.key==='W') keys.up    = true;
-  if (e.key==='ArrowDown'  || e.key==='s' || e.key==='S') keys.down  = true;
-  if (e.key==='ArrowLeft'  || e.key==='a' || e.key==='A') keys.left  = true;
-  if (e.key==='ArrowRight' || e.key==='d' || e.key==='D') keys.right = true;
+/* ── keyboard ── */
+const K = {up:false,down:false,left:false,right:false};
+window.addEventListener('keydown',e=>{
+  if(e.key==='ArrowUp'   ||e.key==='w'||e.key==='W')K.up   =true;
+  if(e.key==='ArrowDown' ||e.key==='s'||e.key==='S')K.down =true;
+  if(e.key==='ArrowLeft' ||e.key==='a'||e.key==='A')K.left =true;
+  if(e.key==='ArrowRight'||e.key==='d'||e.key==='D')K.right=true;
 });
-document.addEventListener('keyup', e => {
-  if (e.key==='ArrowUp'    || e.key==='w' || e.key==='W') keys.up    = false;
-  if (e.key==='ArrowDown'  || e.key==='s' || e.key==='S') keys.down  = false;
-  if (e.key==='ArrowLeft'  || e.key==='a' || e.key==='A') keys.left  = false;
-  if (e.key==='ArrowRight' || e.key==='d' || e.key==='D') keys.right = false;
+window.addEventListener('keyup',e=>{
+  if(e.key==='ArrowUp'   ||e.key==='w'||e.key==='W')K.up   =false;
+  if(e.key==='ArrowDown' ||e.key==='s'||e.key==='S')K.down =false;
+  if(e.key==='ArrowLeft' ||e.key==='a'||e.key==='A')K.left =false;
+  if(e.key==='ArrowRight'||e.key==='d'||e.key==='D')K.right=false;
 });
 
-/* ─────────────────── Virtual Joystick ─────────────────── */
-const joystick = {
-  active: false,
-  baseX: 0,  baseY: 0,
-  tipX:  0,  tipY:  0,
-  dx: 0,     dy: 0,
-  touchId: -1,
-};
-const JOY_RADIUS = 55;
-const JOY_DEAD   = 0.12;
+/* ── joystick ── */
+const JR   = 60;  /* joystick radius px */
+const joy  = {active:false,id:-1,bx:0,by:0,tx:0,ty:0,dx:0,dy:0};
 
-/* joystick lives on the boat canvas (pointer-events restored below) */
-bc.style.pointerEvents = 'auto';
-bc.style.cursor = 'default';
-
-bc.addEventListener('touchstart', e => {
+bc.addEventListener('touchstart',e=>{
   e.preventDefault();
-  for (const t of e.changedTouches) {
-    if (joystick.active) continue;
-    joystick.active  = true;
-    joystick.touchId = t.identifier;
-    joystick.baseX   = t.clientX;
-    joystick.baseY   = t.clientY;
-    joystick.tipX    = t.clientX;
-    joystick.tipY    = t.clientY;
-    joystick.dx = 0; joystick.dy = 0;
+  for(const t of e.changedTouches){
+    if(joy.active)continue;
+    joy.active=true; joy.id=t.identifier;
+    joy.bx=t.clientX; joy.by=t.clientY;
+    joy.tx=t.clientX; joy.ty=t.clientY;
+    joy.dx=0; joy.dy=0;
   }
-}, { passive: false });
+},{passive:false});
 
-bc.addEventListener('touchmove', e => {
+bc.addEventListener('touchmove',e=>{
   e.preventDefault();
-  for (const t of e.changedTouches) {
-    if (t.identifier !== joystick.touchId) continue;
-    const rawDx = t.clientX - joystick.baseX;
-    const rawDy = t.clientY - joystick.baseY;
-    const dist  = Math.hypot(rawDx, rawDy);
-    const clamp = Math.min(dist, JOY_RADIUS);
-    const nx    = clamp / (dist || 1);
-    joystick.tipX = joystick.baseX + rawDx * nx;
-    joystick.tipY = joystick.baseY + rawDy * nx;
-    joystick.dx = (rawDx / JOY_RADIUS) * nx;
-    joystick.dy = (rawDy / JOY_RADIUS) * nx;
+  for(const t of e.changedTouches){
+    if(t.identifier!==joy.id)continue;
+    const dx=t.clientX-joy.bx, dy=t.clientY-joy.by;
+    const dist=Math.hypot(dx,dy);
+    const clamp=Math.min(dist,JR);
+    const frac=clamp/(dist||1);
+    joy.tx=joy.bx+dx*frac; joy.ty=joy.by+dy*frac;
+    joy.dx=dx/JR*frac; joy.dy=dy/JR*frac;
   }
-}, { passive: false });
+},{passive:false});
 
-function releaseJoy(e) {
+function releaseJoy(e){
   e.preventDefault();
-  for (const t of e.changedTouches) {
-    if (t.identifier === joystick.touchId) {
-      joystick.active = false;
-      joystick.dx = 0; joystick.dy = 0;
-    }
+  for(const t of e.changedTouches){
+    if(t.identifier===joy.id){joy.active=false;joy.dx=0;joy.dy=0;}
   }
 }
-bc.addEventListener('touchend',    releaseJoy, { passive: false });
-bc.addEventListener('touchcancel', releaseJoy, { passive: false });
+bc.addEventListener('touchend',   releaseJoy,{passive:false});
+bc.addEventListener('touchcancel',releaseJoy,{passive:false});
 
-/* ─────────────────── Coordinate helpers ─────────────────── */
-/* boat.x/y are 0-1 UV. Convert to screen pixels for drawing. */
-function uvToScreen(u, v) {
-  const sw = window.waterSim.screenW;
-  const sh = window.waterSim.screenH;
-  return { sx: u * sw, sy: v * sh };
-}
-
-/* ─────────────────── 3-D projection (simple perspective) ─────────────────── */
-/*
-  We draw a top-down world tilted in 3-D with a slight perspective.
-  The boat is always centred on screen; the world scrolls by keeping
-  boat.x/y as the UV "camera" position.  A rotation/tilt matrix maps
-  local boat coordinates to screen pixels.
-
-  Camera pitch ~35 deg so it looks slightly overhead-ish but 3-D.
-*/
-
-const CAM_PITCH  = 0.58;   /* radians, how much we tilt the camera down */
-const CAM_SCALE  = 220;    /* pixels per "unit" at eye level */
-const HORIZON_Y  = 0.38;   /* screen-fraction where horizon sits */
-
-function project(lx, ly, lz) {
-  /* rotate by boat heading so boat always faces up on screen */
-  const cosA = Math.cos(-boat.angle - Math.PI / 2);
-  const sinA = Math.sin(-boat.angle - Math.PI / 2);
-  const rx = lx * cosA - ly * sinA;
-  const ry = lx * sinA + ly * cosA;
-
-  /* apply camera pitch (rotate around x) */
-  const pry = ry * Math.cos(CAM_PITCH) - lz * Math.sin(CAM_PITCH);
-  const prz = ry * Math.sin(CAM_PITCH) + lz * Math.cos(CAM_PITCH);
-
-  /* perspective divide */
-  const fov  = 1.8;
-  const depth = fov + prz * 0.22;
-  const sx    = (rx / depth) * CAM_SCALE;
-  const sy    = (pry / depth) * CAM_SCALE;
-
-  const sw = bc.width  / (window.devicePixelRatio || 1);
-  const sh = bc.height / (window.devicePixelRatio || 1);
-  return {
-    x: sw * 0.5 + sx,
-    y: sh * HORIZON_Y + sy,
-    depth,
-  };
-}
-
-/* ─────────────────── Draw boat (simple 3-D mesh) ─────────────────── */
-function drawBoat() {
-  const dpr   = window.devicePixelRatio || 1;
-  const sw    = bc.width  / dpr;
-  const sh    = bc.height / dpr;
-
-  /* boat local geometry — upright, centred at origin
-     z=0 is waterline, positive z is up */
-  const HALF_L = 0.55;   /* half-length */
-  const HALF_W = 0.24;   /* half-width */
-  const HULL_D = 0.18;   /* hull depth below waterline */
-  const DECK_H = 0.10;   /* deck height above waterline */
-  const CABIN_L= 0.28;
-  const CABIN_W= 0.17;
-  const CABIN_H= 0.26;
-  const MAST_H = 0.90;
-
-  const bz = boat.bobHeight;  /* vertical bob from waves */
-
-  /* apply pitch/roll as local z offsets to points */
-  function bpt(lx, ly, lz) {
-    /* roll rotates around boat's local forward axis (ly axis) */
-    /* pitch rotates around boat's local left axis (lx axis) */
-    const rollZ  =  lx * Math.sin(boat.roll  * 0.6);
-    const pitchZ = -ly * Math.sin(boat.pitch * 0.5);
-    return project(lx, ly, lz + rollZ + pitchZ + bz);
+/* ── physics update ── */
+function update(now){
+  /* gather input */
+  let thr=0, trn=0;
+  if(K.up)   thr+=1;
+  if(K.down) thr-=0.5;
+  if(K.left) trn-=1;
+  if(K.right)trn+=1;
+  if(joy.active){
+    const mag=Math.hypot(joy.dx,joy.dy);
+    if(mag>0.1){thr+=-joy.dy*Math.min(mag,1.0); trn+=joy.dx*Math.min(mag,1.0);}
   }
+
+  boat.speed+=thr*ACCEL;
+  boat.speed=Math.max(-MAX_SPEED*0.4,Math.min(MAX_SPEED,boat.speed));
+  boat.speed*=DECEL;
+
+  if(Math.abs(boat.speed)>0.0001)
+    boat.angle+=trn*TURN_SPD*(boat.speed/MAX_SPEED);
+
+  /* move world position */
+  boat.wx+=Math.cos(boat.angle)*boat.speed;
+  boat.wy+=Math.sin(boat.angle)*boat.speed;
+  boat.wx=((boat.wx%1)+1)%1;
+  boat.wy=((boat.wy%1)+1)%1;
+
+  /* buoyancy — sample wave heights at 4 offsets */
+  const OFF=0.018;
+  const ca=Math.cos(boat.angle), sa=Math.sin(boat.angle);
+  const hF =waterSim.getHeight(boat.wx+ca*OFF,    boat.wy+sa*OFF);
+  const hB =waterSim.getHeight(boat.wx-ca*OFF,    boat.wy-sa*OFF);
+  const hL =waterSim.getHeight(boat.wx-sa*OFF*0.6,boat.wy+ca*OFF*0.6);
+  const hR =waterSim.getHeight(boat.wx+sa*OFF*0.6,boat.wy-ca*OFF*0.6);
+  const hC =waterSim.getHeight(boat.wx,boat.wy);
+
+  const tPitch=(hB-hF)*9.0;
+  boat.pitchV+=(tPitch-boat.pitch)*0.18; boat.pitchV*=0.72; boat.pitch+=boat.pitchV;
+
+  const tRoll=(hR-hL)*8.0;
+  boat.rollV +=(tRoll -boat.roll)*0.15;  boat.rollV *=0.72; boat.roll +=boat.rollV;
+
+  boat.bobY+=(hC*22-boat.bobY)*0.14;
+
+  /* wakes */
+  if(Math.abs(boat.speed)>0.0002 && now-boat.lastWake>WAKE_MS){
+    boat.lastWake=now;
+    const str=WAKE_STR*(Math.abs(boat.speed)/MAX_SPEED);
+    const bkx=boat.wx-ca*0.020, bky=boat.wy-sa*0.020;
+    waterSim.addDrop(bkx+sa*0.014,bky-ca*0.014,str*0.8,0.030);
+    waterSim.addDrop(bkx-sa*0.014,bky+ca*0.014,str*0.8,0.030);
+    waterSim.addDrop(bkx,bky,str*0.5,0.040);
+  }
+}
+
+/* ── draw boat (2D, boat always screen-centre) ──
+   We draw in CSS-pixel space; DPR scaling via ctx.scale. */
+function drawBoat(){
+  const dpr = window.devicePixelRatio||1;
+  const sw  = bc.width /dpr;   /* CSS width  */
+  const sh  = bc.height/dpr;   /* CSS height */
+  const cx  = sw*0.5;
+  const cy  = sh*0.5 + boat.bobY;
 
   ctx.save();
-  ctx.scale(dpr, dpr);
+  ctx.scale(dpr,dpr);
 
-  /* ── hull faces ── */
-  const hullVerts = [
-    /* bow tip */ bpt( 0,      -HALF_L, 0),
-    /* port stern */ bpt(-HALF_W,  HALF_L, 0),
-    /* starboard stern */ bpt( HALF_W,  HALF_L, 0),
-    /* keel bow */ bpt( 0,      -HALF_L*0.7, -HULL_D),
-    /* keel stern port */ bpt(-HALF_W*0.7, HALF_L, -HULL_D),
-    /* keel stern stbd */ bpt( HALF_W*0.7, HALF_L, -HULL_D),
-  ];
+  /* move to centre, rotate to heading */
+  ctx.translate(cx,cy);
+  ctx.rotate(boat.angle+Math.PI/2);
 
-  function poly(pts, fill, stroke) {
+  /* apply pitch/roll as a skew transform */
+  ctx.transform(1, boat.roll*0.07, boat.pitch*0.07, 1, 0, 0);
+
+  const S=1.0; /* scale factor — tweak to resize boat */
+
+  /* ── shadow on water ── */
+  ctx.save();
+  ctx.globalAlpha=0.18;
+  ctx.fillStyle='#000';
+  ctx.beginPath();
+  ctx.ellipse(0,4*S, 22*S,9*S, 0,0,Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+
+  /* ── hull ── */
+  ctx.beginPath();
+  ctx.moveTo(0,   -44*S);    /* bow tip */
+  ctx.bezierCurveTo( 18*S,-28*S,  22*S, 10*S,  18*S, 32*S);
+  ctx.lineTo( 18*S, 40*S);   /* stern starboard */
+  ctx.lineTo(-18*S, 40*S);   /* stern port */
+  ctx.bezierCurveTo(-22*S, 10*S, -18*S,-28*S,   0,  -44*S);
+  ctx.closePath();
+  ctx.fillStyle='#8B5E28';
+  ctx.fill();
+  ctx.strokeStyle='#5a3a0e';
+  ctx.lineWidth=2*S;
+  ctx.stroke();
+
+  /* hull planks */
+  ctx.strokeStyle='rgba(0,0,0,0.15)';
+  ctx.lineWidth=1*S;
+  for(let i=-3;i<=3;i++){
     ctx.beginPath();
-    ctx.moveTo(pts[0].x, pts[0].y);
-    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-    ctx.closePath();
-    if (fill)   { ctx.fillStyle   = fill;   ctx.fill();   }
-    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.2; ctx.stroke(); }
+    ctx.moveTo(i*5*S,-40*S);
+    ctx.lineTo(i*6*S, 40*S);
+    ctx.stroke();
   }
 
-  /* hull sides */
-  poly([hullVerts[0], hullVerts[1], hullVerts[4], hullVerts[3]], '#c8a870', '#7a5a20');
-  poly([hullVerts[0], hullVerts[2], hullVerts[5], hullVerts[3]], '#b89050', '#7a5a20');
-  /* stern */
-  poly([hullVerts[1], hullVerts[2], hullVerts[5], hullVerts[4]], '#a07838', '#7a5a20');
-  /* deck */
-  poly([hullVerts[0], hullVerts[1], hullVerts[2]], '#d4b87a', '#8a6428');
+  /* ── deck ── */
+  ctx.beginPath();
+  ctx.moveTo(0,   -40*S);
+  ctx.bezierCurveTo( 14*S,-26*S,  17*S, 8*S,  14*S, 30*S);
+  ctx.lineTo(-14*S, 30*S);
+  ctx.bezierCurveTo(-17*S,  8*S, -14*S,-26*S,   0, -40*S);
+  ctx.closePath();
+  ctx.fillStyle='#d4b87a';
+  ctx.fill();
 
   /* ── cabin ── */
-  const cabinBase = [
-    bpt(-CABIN_W,  -CABIN_L*0.2, DECK_H),
-    bpt( CABIN_W,  -CABIN_L*0.2, DECK_H),
-    bpt( CABIN_W,   CABIN_L*0.8, DECK_H),
-    bpt(-CABIN_W,   CABIN_L*0.8, DECK_H),
-  ];
-  const cabinTop = [
-    bpt(-CABIN_W*0.8, -CABIN_L*0.2, DECK_H+CABIN_H),
-    bpt( CABIN_W*0.8, -CABIN_L*0.2, DECK_H+CABIN_H),
-    bpt( CABIN_W*0.8,  CABIN_L*0.7, DECK_H+CABIN_H),
-    bpt(-CABIN_W*0.8,  CABIN_L*0.7, DECK_H+CABIN_H),
-  ];
+  ctx.beginPath();
+  ctx.roundRect(-10*S,-8*S, 20*S,26*S, 3*S);
+  ctx.fillStyle='#e8d4a0';
+  ctx.fill();
+  ctx.strokeStyle='#9a7840';
+  ctx.lineWidth=1.5*S;
+  ctx.stroke();
 
-  /* cabin faces — draw back-to-front roughly */
-  poly([cabinBase[3], cabinBase[2], cabinTop[2], cabinTop[3]], '#e8d4a0', '#9a7840'); /* top */
-  poly([cabinBase[0], cabinBase[1], cabinTop[1], cabinTop[0]], '#ccc090', '#9a7840'); /* front */
-  poly([cabinBase[1], cabinBase[2], cabinTop[2], cabinTop[1]], '#d4bc88', '#9a7840'); /* stbd side */
-  poly([cabinBase[0], cabinBase[3], cabinTop[3], cabinTop[0]], '#b8a070', '#9a7840'); /* port side */
-  /* roof */
-  poly([cabinTop[0], cabinTop[1], cabinTop[2], cabinTop[3]], '#f0e0b0', '#9a7840');
+  /* cabin roof — darker */
+  ctx.beginPath();
+  ctx.roundRect(-9*S,-7*S, 18*S,10*S, 2*S);
+  ctx.fillStyle='#b89050';
+  ctx.fill();
+
+  /* cabin windows */
+  ctx.fillStyle='rgba(120,200,255,0.6)';
+  ctx.strokeStyle='#7a6030'; ctx.lineWidth=1*S;
+  for(const wx of[-5*S,5*S]){
+    ctx.beginPath();ctx.roundRect(wx-3*S,-5*S,6*S,5*S,1*S);ctx.fill();ctx.stroke();
+  }
+
+  /* ── railing lines ── */
+  ctx.strokeStyle='rgba(160,120,60,0.7)';
+  ctx.lineWidth=1*S;
+  ctx.beginPath();
+  ctx.moveTo(-12*S,-34*S); ctx.lineTo(-14*S,28*S);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo( 12*S,-34*S); ctx.lineTo( 14*S,28*S);
+  ctx.stroke();
 
   /* ── mast ── */
-  const mastBase = bpt(0, -CABIN_L*0.1, DECK_H + CABIN_H);
-  const mastTop  = bpt(0, -CABIN_L*0.1, DECK_H + CABIN_H + MAST_H);
-  ctx.beginPath();
-  ctx.moveTo(mastBase.x, mastBase.y);
-  ctx.lineTo(mastTop.x,  mastTop.y);
-  ctx.strokeStyle = '#4a3010'; ctx.lineWidth = 2.2; ctx.stroke();
+  ctx.strokeStyle='#4a3010';
+  ctx.lineWidth=3*S;
+  ctx.beginPath();ctx.moveTo(0,6*S);ctx.lineTo(0,-56*S);ctx.stroke();
 
   /* boom */
-  const boomR  = bpt( 0.35, 0.05, DECK_H + CABIN_H + MAST_H * 0.08);
-  const boomL  = bpt(-0.05, 0.05, DECK_H + CABIN_H + MAST_H * 0.08);
-  ctx.beginPath();
-  ctx.moveTo(boomL.x, boomL.y);
-  ctx.lineTo(boomR.x, boomR.y);
-  ctx.strokeStyle = '#4a3010'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.lineWidth=2*S;
+  ctx.beginPath();ctx.moveTo(0,10*S);ctx.lineTo(15*S,14*S);ctx.stroke();
 
-  /* sail (simple triangle, fills with wind color) */
-  const sailT  = bpt(0,     -CABIN_L*0.1, DECK_H + CABIN_H + MAST_H * 0.95);
-  const sailBL = bpt(-0.05, CABIN_L*0.45,   DECK_H + CABIN_H + MAST_H * 0.07);
-  const sailBR = bpt(0.33,  CABIN_L*0.1,   DECK_H + CABIN_H + MAST_H * 0.07);
+  /* ── sail ── */
   ctx.beginPath();
-  ctx.moveTo(sailT.x,  sailT.y);
-  ctx.lineTo(sailBL.x, sailBL.y);
-  ctx.lineTo(sailBR.x, sailBR.y);
+  ctx.moveTo(0,-54*S);       /* mast top */
+  ctx.lineTo(0,8*S);         /* mast base */
+  ctx.lineTo(14*S,13*S);     /* boom tip */
   ctx.closePath();
-  ctx.fillStyle   = 'rgba(245,240,220,0.88)';
-  ctx.strokeStyle = '#bbb090';
-  ctx.lineWidth   = 0.8;
-  ctx.fill(); ctx.stroke();
-
-  /* ── speed indicator (simple) ── */
-  if (boat.speed > 0.0003) {
-    const spd   = boat.speed / MAX_SPEED;
-    ctx.fillStyle = 'rgba(160,220,255,0.7)';
-    ctx.font      = `${Math.round(11 + spd * 6)}px monospace`;
-    ctx.textAlign = 'center';
-    ctx.fillText(`${(spd * 12).toFixed(1)} kts`, sw * 0.5, sh * 0.92);
-  }
-
-  ctx.restore();
-}
-
-/* ─────────────────── Draw virtual joystick ─────────────────── */
-function drawJoystick() {
-  if (!joystick.active) return;
-  const dpr = window.devicePixelRatio || 1;
-  ctx.save();
-  ctx.scale(dpr, dpr);
-
-  /* base ring */
-  ctx.beginPath();
-  ctx.arc(joystick.baseX, joystick.baseY, JOY_RADIUS, 0, Math.PI * 2);
-  ctx.strokeStyle = 'rgba(200,230,255,0.30)';
-  ctx.lineWidth   = 2;
-  ctx.stroke();
-  ctx.fillStyle   = 'rgba(100,180,255,0.06)';
+  ctx.fillStyle='rgba(245,240,218,0.90)';
   ctx.fill();
-
-  /* tip knob */
-  ctx.beginPath();
-  ctx.arc(joystick.tipX, joystick.tipY, 22, 0, Math.PI * 2);
-  ctx.fillStyle   = 'rgba(160,220,255,0.45)';
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(200,240,255,0.70)';
-  ctx.lineWidth   = 1.5;
+  ctx.strokeStyle='#bbb090'; ctx.lineWidth=1*S;
   ctx.stroke();
 
-  ctx.restore();
-}
-
-/* ─────────────────── HUD hint ─────────────────── */
-let hintAlpha = 1.0;
-let hintTimer = 0;
-function drawHint(now) {
-  if (hintTimer === 0) hintTimer = now;
-  const age = (now - hintTimer) / 1000;
-  if (age > 6) { hintAlpha = Math.max(0, hintAlpha - 0.02); }
-  if (hintAlpha <= 0) return;
-
-  const dpr = window.devicePixelRatio || 1;
-  const sw  = bc.width  / dpr;
-  const sh  = bc.height / dpr;
-
-  ctx.save();
-  ctx.scale(dpr, dpr);
-  ctx.globalAlpha = hintAlpha * 0.65;
-  ctx.fillStyle   = 'rgba(160,220,255,1)';
-  ctx.font        = '12px monospace';
-  ctx.textAlign   = 'center';
-  ctx.letterSpacing = '3px';
-
-  /* different hint for touch vs desktop */
-  const isTouch = 'ontouchstart' in window;
-  ctx.fillText(
-    isTouch ? 'touch & drag to steer' : 'WASD / arrows to drive',
-    sw * 0.5,
-    sh * 0.86
-  );
-  ctx.restore();
-}
-
-/* ─────────────────── Wake particle trail ─────────────────── */
-const wakeParticles = [];
-
-function spawnWake(now) {
-  if (boat.speed < 0.0003) return;
-  if (now - boat.lastWake < WAKE_RATE) return;
-  boat.lastWake = now;
-
-  /* inject into water sim — two flanking drops behind the boat */
-  const OFFSET = 0.018;
-  const cosA = Math.cos(boat.angle);
-  const sinA = Math.sin(boat.angle);
-  /* perpendicular vector */
-  const px = -sinA * OFFSET;
-  const py =  cosA * OFFSET;
-  /* back vector */
-  const bx =  cosA * 0.022;
-  const by =  sinA * 0.022;
-
-  const str = WAKE_STR * (boat.speed / MAX_SPEED);
-  waterSim.addDrop(boat.x + bx + px, boat.y + by + py, str * 0.7, WAKE_RAD);
-  waterSim.addDrop(boat.x + bx - px, boat.y + by - py, str * 0.7, WAKE_RAD);
-  waterSim.addDrop(boat.x + bx,      boat.y + by,      str * 0.5, WAKE_RAD * 1.3);
-}
-
-/* ─────────────────── Physics update ─────────────────── */
-function updatePhysics(now) {
-  /* ── gather input ── */
-  let throttle = 0, turn = 0;
-
-  /* keyboard */
-  if (keys.up)    throttle += 1;
-  if (keys.down)  throttle -= 0.5;
-  if (keys.left)  turn     -= 1;
-  if (keys.right) turn     += 1;
-
-  /* joystick (touch) */
-  if (joystick.active) {
-    const jy = joystick.dy;
-    const jx = joystick.dx;
-    const mag = Math.hypot(jx, jy);
-    if (mag > JOY_DEAD) {
-      /* forward = negative Y on screen */
-      throttle += -jy * Math.min(mag / 0.6, 1.0);
-      turn     +=  jx * Math.min(mag / 0.6, 1.0);
+  /* ── bow wave spray (when moving) ── */
+  const spd=Math.abs(boat.speed)/MAX_SPEED;
+  if(spd>0.1){
+    ctx.globalAlpha=spd*0.55;
+    ctx.fillStyle='rgba(200,235,255,0.9)';
+    for(const side of[-1,1]){
+      ctx.beginPath();
+      ctx.ellipse(side*10*S,-38*S, 5*S*spd,2*S*spd, side*0.5,0,Math.PI*2);
+      ctx.fill();
     }
+    ctx.globalAlpha=1;
   }
 
-  /* ── apply thrust ── */
-  boat.speed += throttle * ACCEL;
-  boat.speed  = Math.max(-MAX_SPEED * 0.4, Math.min(MAX_SPEED, boat.speed));
-  boat.speed *= DECEL;
-
-  /* ── steering ── */
-  if (Math.abs(boat.speed) > 0.0001) {
-    boat.angle += turn * TURN_SPEED * (boat.speed / MAX_SPEED);
-  }
-
-  /* ── move boat (UV space) ── */
-  boat.x += Math.cos(boat.angle) * boat.speed;
-  boat.y += Math.sin(boat.angle) * boat.speed;
-
-  /* wrap around the infinite ocean */
-  boat.x = ((boat.x % 1) + 1) % 1;
-  boat.y = ((boat.y % 1) + 1) % 1;
-
-  /* ── buoyancy: sample wave heights around boat ── */
-  const SAMPLE_OFF = 0.020;
-  const hFront = waterSim.getHeight(
-    boat.x + Math.cos(boat.angle) * SAMPLE_OFF,
-    boat.y + Math.sin(boat.angle) * SAMPLE_OFF
-  );
-  const hBack  = waterSim.getHeight(
-    boat.x - Math.cos(boat.angle) * SAMPLE_OFF,
-    boat.y - Math.sin(boat.angle) * SAMPLE_OFF
-  );
-  const hLeft  = waterSim.getHeight(
-    boat.x - Math.sin(boat.angle) * SAMPLE_OFF * 0.6,
-    boat.y + Math.cos(boat.angle) * SAMPLE_OFF * 0.6
-  );
-  const hRight = waterSim.getHeight(
-    boat.x + Math.sin(boat.angle) * SAMPLE_OFF * 0.6,
-    boat.y - Math.cos(boat.angle) * SAMPLE_OFF * 0.6
-  );
-
-  const hCenter = waterSim.getHeight(boat.x, boat.y);
-
-  /* pitch = front-back slope */
-  const targetPitch = (hBack - hFront) * BOUNCE_STR;
-  boat.pitchVel += (targetPitch - boat.pitch) * 0.18;
-  boat.pitchVel *= 0.75;
-  boat.pitch    += boat.pitchVel;
-
-  /* roll = left-right slope */
-  const targetRoll  = (hRight - hLeft)  * BOUNCE_STR;
-  boat.rollVel  += (targetRoll  - boat.roll)  * 0.15;
-  boat.rollVel  *= 0.75;
-  boat.roll     += boat.rollVel;
-
-  /* vertical bob */
-  const targetBob = hCenter * 0.18;
-  boat.bobHeight  += (targetBob - boat.bobHeight) * 0.12;
-
-  /* ── spawn wakes ── */
-  spawnWake(now);
+  ctx.restore();
 }
 
-/* ─────────────────── Main loop ─────────────────── */
-let lastTime = 0;
-
-function frame(now) {
-  requestAnimationFrame(frame);
-
-  /* clear boat canvas */
-  const dpr = window.devicePixelRatio || 1;
-  ctx.clearRect(0, 0, bc.width / dpr * dpr, bc.height / dpr * dpr);
-  /* proper clear that handles DPR */
+/* ── draw joystick ── */
+function drawJoystick(){
+  if(!joy.active)return;
+  const dpr=window.devicePixelRatio||1;
   ctx.save();
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, bc.width, bc.height);
-  ctx.restore();
+  ctx.scale(dpr,dpr);
 
-  updatePhysics(now);
+  /* outer ring */
+  ctx.beginPath();
+  ctx.arc(joy.bx,joy.by,JR,0,Math.PI*2);
+  ctx.strokeStyle='rgba(180,220,255,0.35)';
+  ctx.lineWidth=2;
+  ctx.stroke();
+  ctx.fillStyle='rgba(80,160,255,0.07)';
+  ctx.fill();
+
+  /* inner knob */
+  ctx.beginPath();
+  ctx.arc(joy.tx,joy.ty,24,0,Math.PI*2);
+  ctx.fillStyle='rgba(140,210,255,0.50)';
+  ctx.fill();
+  ctx.strokeStyle='rgba(200,240,255,0.75)';
+  ctx.lineWidth=1.5;
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+/* ── draw speed HUD ── */
+function drawHUD(){
+  const dpr=window.devicePixelRatio||1;
+  const sw=bc.width/dpr, sh=bc.height/dpr;
+  const spd=Math.abs(boat.speed)/MAX_SPEED;
+  ctx.save();
+  ctx.scale(dpr,dpr);
+  ctx.globalAlpha=0.65;
+  ctx.fillStyle='rgba(160,220,255,1)';
+  ctx.font='bold 13px monospace';
+  ctx.textAlign='left';
+  ctx.fillText(`${(spd*12).toFixed(1)} kts`, 18, sh-18);
+  /* controls hint (fades after 8s) */
+  if(hintAge<8000){
+    ctx.globalAlpha=(1-(hintAge/8000))*0.55;
+    ctx.textAlign='center';
+    ctx.font='12px monospace';
+    const isTouch='ontouchstart' in window;
+    ctx.fillText(isTouch?'drag anywhere to steer':'WASD / arrows to sail',sw*0.5,sh-18);
+  }
+  ctx.restore();
+}
+
+/* ── main loop ── */
+let hintAge=0, lastNow=0;
+
+function frame(now){
+  requestAnimationFrame(frame);
+  const dt=lastNow?now-lastNow:16; lastNow=now;
+  hintAge=Math.min(hintAge+dt,9000);
+
+  /* clear */
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,bc.width,bc.height);
+
+  update(now);
   drawBoat();
   drawJoystick();
-  drawHint(now);
-
-  lastTime = now;
+  drawHUD();
 }
 
 requestAnimationFrame(frame);
 
-} /* end init() */
-
+} /* end init */
 })();
