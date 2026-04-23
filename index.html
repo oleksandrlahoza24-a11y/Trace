@@ -3,430 +3,171 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Unit 404: The Last Protocol</title>
+    <title>The Daily Delirium - Truth is Extinct</title>
     <style>
-        body { margin: 0; background: #020202; overflow: hidden; font-family: 'Courier New', Courier, monospace; color: #eee; user-select: none; }
-        canvas { display: block; filter: contrast(1.1) brightness(0.9); }
-        #boot-screen {
-            position: absolute; inset: 0; background: black; z-index: 1000;
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
-            transition: opacity 2s ease-out;
+        body {
+            background-color: #f4f1ea;
+            color: #1a1a1a;
+            font-family: 'Georgia', serif;
+            margin: 0;
+            padding: 20px;
         }
-        #boot-text { font-size: 14px; margin-bottom: 20px; width: 300px; text-align: left; white-space: pre; }
-        #start-btn {
-            background: none; border: 1px solid #333; color: #333; padding: 10px 30px;
-            text-transform: uppercase; letter-spacing: 4px; cursor: pointer; transition: 0.4s;
+
+        .newspaper-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            border: 1px solid #333;
+            padding: 20px;
+            background-color: #fffcf5;
+            box-shadow: 10px 10px 0px #ccc;
         }
-        #start-btn.ready { border-color: #0f0; color: #0f0; box-shadow: 0 0 15px rgba(0,255,0,0.3); }
-        #start-btn.ready:hover { background: #0f0; color: black; }
-        
-        #cinematic-ui { position: absolute; inset: 0; pointer-events: none; z-index: 10; display: none; }
-        .letterbox { position: absolute; left: 0; width: 100%; height: 12%; background: black; }
-        .top { top: 0; border-bottom: 1px solid #1a1a1a; }
-        .bottom { bottom: 0; border-top: 1px solid #1a1a1a; }
-        
-        #subtitles {
-            position: absolute; bottom: 15%; width: 100%; text-align: center;
-            font-size: 19px; color: rgba(255,255,255,0.8); font-style: italic;
-            text-shadow: 0 2px 4px black; transition: opacity 0.3s;
+
+        header {
+            text-align: center;
+            border-bottom: 5px double #333;
+            margin-bottom: 20px;
+        }
+
+        header h1 {
+            font-size: 70px;
+            margin: 10px 0;
+            text-transform: uppercase;
+            letter-spacing: -2px;
+            font-family: 'Times New Roman', serif;
+        }
+
+        .sub-header {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid #333;
+            padding: 5px 0;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        /* Newspaper Columns */
+        .main-content {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 20px;
+        }
+
+        article {
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 10px;
+        }
+
+        .headline {
+            font-weight: bold;
+            line-height: 1;
+            margin-bottom: 10px;
+        }
+
+        .huge { font-size: 42px; color: #b00; }
+        .large { font-size: 28px; }
+        .medium { font-size: 22px; }
+
+        .image-placeholder {
+            background-color: #eee;
+            width: 100%;
+            height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #ccc;
+            margin-bottom: 10px;
+            font-style: italic;
+            color: #666;
+        }
+
+        .dropcap {
+            float: left;
+            font-size: 50px;
+            line-height: 40px;
+            padding-top: 4px;
+            padding-right: 8px;
+            font-weight: bold;
+        }
+
+        footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 12px;
+            border-top: 2px solid #333;
+            padding-top: 10px;
+        }
+
+        @media (max-width: 900px) {
+            .main-content { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
 
-    <div id="boot-screen">
-        <div id="boot-text"></div>
-        <button id="start-btn" disabled>LOADING...</button>
+<div class="newspaper-container">
+    <header>
+        <h1>THE DAILY DELIRIUM</h1>
+        <div class="sub-header">
+            <span>Vol. 999 - No. 00</span>
+            <span>Thursday, April 23, 2026</span>
+            <span>Price: One Human Soul</span>
+        </div>
+    </header>
+
+    <div class="main-content">
+        <div class="column-1">
+            <article>
+                <div class="headline huge">MOON DECLARES INDEPENDENCE; DEMANDS "LESS STARING" FROM EARTHLINGS</div>
+                <div class="image-placeholder">[Photo: The Moon wearing a giant pair of sunglasses]</div>
+                <p><span class="dropcap">I</span>n a move that has baffled astronomers and astrologers alike, the Moon has officially filed for divorce from Earth’s gravitational pull. In a lunar broadcast consisting entirely of high-pitched static and the smell of burnt toast, the celestial body claimed it was "tired of being watched while it sleeps" and requested that humans stop pointing telescopes at its "craters of vulnerability."</p>
+            </article>
+
+            <article>
+                <div class="headline large">ISRAEL ANNOUNCES NEW DIRECTIVE: ALL JEWS TO BE ARMED WITH TELEKINETIC LASERS</div>
+                <p>In a surprising tech-defense pivot, Israeli officials announced this morning that traditional equipment is being phased out. Instead, every citizen will be issued a "Cerebro-Spenser" helmet that amplifies natural thoughts into concentrated beams of light. "The future is mental," a spokesperson said while hovering three inches off the floor.</p>
+            </article>
+        </div>
+
+        <div class="column-2">
+            <article>
+                <div class="headline medium">Local Cat Elected Pope; First Decree is "Universal Nap Time"</div>
+                <p>The Vatican was covered in white smoke today, followed by the sound of a very loud purr. Mittens I, a three-year-old tabby from New Jersey, has ascended to the papacy. His first encyclical demands the immediate canonization of the Red Laser Pointer.</p>
+            </article>
+
+            <article>
+                <div class="headline medium">Scientist Discovers That Trees Are Actually Just Very Tall Dogs That Don't Know How To Bark</div>
+                <p>Dr. Barnaby Wobble claims that if you scratch a Douglas Fir in "just the right spot," its roots will wag. "We've been calling it photosynthesis," Wobble said. "It's actually just a very slow tail-wag for sunlight."</p>
+            </article>
+            
+            <article>
+                <div class="headline medium">Butter Prices Skyrocket as Cows Learn to Negotiate for Dental Insurance</div>
+                <p>The Bovine Union has successfully lobbied for better grass and full orthodontic coverage. Margarine is currently being treated as a black-market currency.</p>
+            </article>
+        </div>
+
+        <div class="column-3">
+            <article>
+                <div class="headline medium">BREAKING: The Color Blue to be Retired; Will be Replaced by "Screaming Teal"</div>
+                <p>Pantone officials state that Blue has become "too mainstream" and will be phased out of the visible spectrum by Friday. Citizens are advised to paint their oceans immediately.</p>
+            </article>
+
+            <article style="background: #000; color: #fff; padding: 10px;">
+                <div class="headline medium" style="color: #ff0;">CLASSIFIED AD:</div>
+                <p>WANTED: Someone to go back in time with me. This is not a joke. You'll get paid after we get back. Must bring your own weapons. I have only done this once before. Safety not guaranteed.</p>
+            </article>
+
+            <article>
+                <div class="headline medium">Ghost of Elvis Spotted Working at a Vegan Taco Bell in Mars Colony Delta</div>
+                <p>"He looked good," said one witness. "A bit translucent, but his crunchwrap folding skills are otherworldly."</p>
+            </article>
+        </div>
     </div>
 
-    <div id="cinematic-ui">
-        <div class="letterbox top"></div>
-        <div id="subtitles"></div>
-        <div class="letterbox bottom"></div>
-    </div>
+    <footer>
+        &copy; 2026 THE DAILY DELIRIUM - ALL STORIES ARE 110% FABRICATED BY A LATTICE OF SENTIENT TOASTERS.
+    </footer>
+</div>
 
-    <canvas id="cinema"></canvas>
-
-<script>
-/**
- * THE CINEMATIC TIMELINE
- * Define your 10-minute movie here.
- * Time is in seconds.
- */
-const timeline = [
-    // SCENE 1: THE WASTELAND ARRIVAL
-    { time: 0,   action: 'fade_in', params: { duration: 3 } },
-    { time: 1,   action: 'set_cam', params: { x: -300, y: -50, zoom: 0.9 } },
-    { time: 2,   action: 'spawn_hero', params: { x: -600, y: 0 } },
-    { time: 2,   action: 'hero_pose', params: { pose: 'walk_heavy', dir: 1 } },
-    { time: 2,   action: 'cam_track_hero', params: { offset: {x: 200, y: -80} } },
-    { time: 3,   action: 'sub', params: { text: "Protocol 404 activated.", duration: 4 } },
-    { time: 8,   action: 'sub', params: { text: "Location: Sector 7G. Wastes.", duration: 4 } },
-    { time: 10,  action: 'hero_pose', params: { pose: 'idle', dir: 1 } },
-    { time: 11,  action: 'cam_target', params: { x: 0, y: -50, zoom: 1.2, speed: 0.02 } },
-    { time: 13,  action: 'sub', params: { text: "I remember when this was green.", duration: 5 } },
-    
-    // SCENE 2: THE AMBUSH
-    { time: 20,  action: 'spawn_enemy', params: { id: 'e1', x: 400, y: 0 } },
-    { time: 20,  action: 'enemy_pose', params: { id: 'e1', pose: 'aim', dir: -1 } },
-    { time: 20.5,action: 'hero_pose', params: { pose: 'aim', dir: 1 } },
-    { time: 20.5,action: 'cam_zoom', params: { zoom: 1.6, speed: 0.1 } },
-    { time: 21,  action: 'sub', params: { text: "FREEZE, UNIT.", duration: 3, color: '#ff4444' } },
-    { time: 24,  action: 'sub', params: { text: "You're out of your sector.", duration: 3, color: '#ff4444' } },
-    
-    // SCENE 3: FIREfight (Bullet Time)
-    { time: 28,  action: 'sub', params: { text: "So are you.", duration: 2 } },
-    { time: 30,  action: 'set_time_scale', params: { scale: 0.2 } }, // SLOW MOTION START
-    { time: 30,  action: 'enemy_shoot', params: { id: 'e1', target: 'hero' } },
-    { time: 30.1,action: 'hero_pose', params: { pose: 'dodge_roll', dir: 1 } },
-    { time: 30.2,action: 'cam_shake', params: { power: 15 } },
-    { time: 30.5,action: 'hero_shoot', params: { target: 'e1' } },
-    { time: 31,  action: 'enemy_die', params: { id: 'e1' } },
-    { time: 32,  action: 'set_time_scale', params: { scale: 1.0 } }, // SLOW MOTION END
-    
-    // SCENE 4: RECOVERY
-    { time: 34,  action: 'cam_target', params: { x: 200, y: -20, zoom: 1.1, speed: 0.03 } },
-    { time: 34,  action: 'hero_pose', params: { pose: 'idle', dir: 1 } },
-    { time: 36,  action: 'sub', params: { text: "...one protocol down.", duration: 4 } },
-    { time: 41,  action: 'sub', params: { text: "Too many to go.", duration: 4 } },
-    { time: 45,  action: 'hero_pose', params: { pose: 'walk_heavy', dir: 1 } },
-    { time: 45,  action: 'cam_track_hero', params: { offset: {x: 200, y: -50} } },
-    
-    // (Continue adding events here to reach 10 minutes, e.g., at time: 600)
-    { time: 110, action: 'sub', params: { text: "[ The Long Walk Continues ]", duration: 5 } },
-    { time: 115, action: 'fade_out', params: { duration: 5 } },
-];
-
-// --- CORE ENGINE ---
-const canvas = document.getElementById('cinema');
-const ctx = canvas.getContext('2d');
-const subEl = document.getElementById('subtitles');
-let w, h, isPlaying = false;
-let globalTime = 0;
-let timeScale = 1.0;
-let sceneAlpha = 0;
-
-const state = {
-    camera: { x: 0, y: 0, zoom: 1, tx: 0, ty: 0, tZoom: 1, ease: 0.05, shake: 0, trackId: null, trackOffset: {x:0, y:0} },
-    hero: null,
-    enemies: {},
-    particles: [],
-    bullets: [],
-    cues: [...timeline].sort((a,b) => a.time - b.time),
-    activeSubs: []
-};
-
-// Utilities
-const lerp = (a, b, t) => a + (b - a) * t;
-const rnd = (m, M) => Math.random() * (M - m) + m;
-
-// SKELETAL SYSTEM (The 'Better' Animation Core)
-class Stickman {
-    constructor(x, y, color = '#fff', isHero = false) {
-        this.x = x; this.y = y; this.color = color; this.isHero = isHero;
-        this.dir = 1; this.pose = 'idle'; this.health = 100;
-        this.angle = 0; this.recoil = 0;
-        // Joint State (Simplified Skeletal)
-        this.joints = {
-            r_knee: 0, l_knee: 0, r_elb: 0, l_elb: 0, torso: 0
-        };
-    }
-
-    update(dt) {
-        if (this.health <= 0) this.pose = 'dead';
-        this.recoil = lerp(this.recoil, 0, 0.1 * dt);
-        
-        // Procedural Animation Logic
-        const t = globalTime * 5 * timeScale;
-        switch(this.pose) {
-            case 'walk_heavy':
-                this.x += 1.5 * this.dir * dt * timeScale;
-                this.joints.l_knee = Math.sin(t) * 30;
-                this.joints.r_knee = Math.sin(t + Math.PI) * 30;
-                this.joints.l_elb = Math.sin(t + Math.PI) * 20 + 20;
-                this.joints.r_elb = Math.sin(t) * 20 + 20;
-                this.joints.torso = Math.sin(t) * 3;
-                break;
-            case 'aim':
-                this.joints.l_knee = 5; this.joints.r_knee = -5;
-                this.joints.l_elb = 60; this.joints.r_elb = 80; // Hold gun
-                break;
-            case 'dead':
-                this.joints.l_knee = 80; this.joints.r_knee = 70;
-                this.joints.l_elb = 10; this.joints.r_elb = 15;
-                this.angle = lerp(this.angle, -Math.PI/2 * this.dir, 0.1 * dt);
-                break;
-        }
-    }
-
-    draw() {
-        ctx.save();
-        ctx.translate(this.x, this.y);
-        ctx.rotate(this.angle);
-        ctx.scale(this.dir, 1);
-        ctx.strokeStyle = this.color;
-        ctx.lineWidth = 3.5;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-
-        // Ground shadow
-        ctx.fillStyle = 'rgba(0,0,0,0.2)';
-        ctx.beginPath(); ctx.ellipse(0, 0, 20, 5, 0, 0, Math.PI*2); ctx.fill();
-
-        const s = 1.0; // scale
-        
-        // Joints relative to hip (0, -35)
-        const hip = {x: 0, y: -35 * s};
-        const head = {x: 0 + this.joints.torso, y: -70 * s};
-        const neck = {x: 0 + this.joints.torso*0.5, y: -55 * s};
-        
-        // Procedural Legs
-        const r_foot = { x: 15 + this.joints.r_knee*0.2, y: this.joints.r_knee*0.1 };
-        const l_foot = { x: -15 + this.joints.l_knee*0.2, y: this.joints.l_knee*0.1 };
-
-        // Head
-        ctx.beginPath(); ctx.arc(head.x, head.y, 10, 0, Math.PI*2); ctx.stroke();
-        
-        // Spine
-        ctx.beginPath(); ctx.moveTo(hip.x, hip.y); ctx.lineTo(neck.x, neck.y); ctx.stroke();
-
-        // Legs
-        ctx.beginPath(); ctx.moveTo(hip.x, hip.y); ctx.lineTo(r_foot.x, r_foot.y); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(hip.x, hip.y); ctx.lineTo(l_foot.x, l_foot.y); ctx.stroke();
-        
-        // Arms / Gun
-        ctx.fillStyle = '#222';
-        if (this.pose === 'aim' || this.pose === 'recoil') {
-            const gunTip = { x: 45 - this.recoil, y: -45 };
-            ctx.beginPath(); ctx.moveTo(neck.x, neck.y); ctx.lineTo(gunTip.x-10, gunTip.y+5); ctx.stroke();
-            // Gun Body
-            ctx.fillRect(gunTip.x-15, gunTip.y-5, 20, 10);
-            ctx.fillRect(gunTip.x-5, gunTip.y+2, 5, 8); // Grip
-            this.gunTipWorld = { x: this.x + gunTip.x*this.dir, y: this.y + gunTip.y };
-        } else if (this.pose !== 'dead') {
-            ctx.beginPath(); ctx.moveTo(neck.x, neck.y); ctx.lineTo(10, -30); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(neck.x, neck.y); ctx.lineTo(-10, -30); ctx.stroke();
-        }
-
-        ctx.restore();
-    }
-}
-
-// Particle System
-class Particle {
-    constructor(x, y, color, type='blood') {
-        this.x = x; this.y = y; this.color = color; this.type=type;
-        this.vx = rnd(-1, 1) * (type==='shell'?2:6);
-        this.vy = rnd(-2, -5) * (type==='shell'?1:2);
-        this.life = 1; this.r = type==='shell'?1.5:rnd(2,4);
-    }
-    update(dt) {
-        this.x += this.vx * dt * timeScale; this.y += this.vy * dt * timeScale;
-        this.vy += 0.25 * dt * timeScale;
-        if(this.y > 0) { this.y=0; this.vx *= 0.5; this.vy *= -0.2; }
-        this.life -= (this.type==='shell'?0.01:0.02) * dt * timeScale;
-    }
-    draw() {
-        ctx.globalAlpha = this.life;
-        ctx.fillStyle = this.color;
-        ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, 7); ctx.fill();
-        ctx.globalAlpha = 1;
-    }
-}
-
-// Bullets / Tracers
-class Bullet {
-    constructor(sx, sy, tx, ty, owner) {
-        this.x = sx; this.y = sy; this.owner = owner;
-        const angle = Math.atan2(ty - sy, tx - sx);
-        this.vx = Math.cos(angle) * 25; this.vy = Math.sin(angle) * 25;
-        this.life = 100;
-    }
-    update(dt) {
-        this.x += this.vx * dt * timeScale; this.y += this.vy * dt * timeScale;
-        this.life -= dt * timeScale;
-        
-        // Collision simple against ground
-        if (this.y > 0) { this.life = 0; for(let i=0;i<5;i++) state.particles.push(new Particle(this.x,0,'#555','dust')); }
-    }
-    draw() {
-        ctx.strokeStyle = this.owner === 'hero' ? '#fff' : '#f44';
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(this.x, this.y); ctx.lineTo(this.x - this.vx*0.5, this.y - this.vy*0.5); ctx.stroke();
-    }
-}
-
-
-// --- MAIN LOOP ---
-let lastTime = 0;
-function loop(ts) {
-    if (!isPlaying) return;
-    const dt = (ts - lastTime) / 16.67; // normalize to 60fps
-    lastTime = ts;
-    globalTime += (dt / 60) * timeScale;
-
-    // Director / Timeline Check
-    while(state.cues.length > 0 && state.cues[0].time <= globalTime) {
-        executeCue(state.cues.shift());
-    }
-
-    updateObjects(dt);
-    drawScene();
-    
-    requestAnimationFrame(loop);
-}
-
-function executeCue(cue) {
-    const p = cue.params;
-    const cam = state.camera;
-    switch(cue.action) {
-        case 'set_cam': cam.tx = p.x; cam.ty = p.y; cam.tZoom = p.zoom; cam.x=p.x; cam.y=p.y; cam.zoom=p.zoom; break;
-        case 'cam_target': cam.tx = p.x; cam.ty = p.y; cam.tZoom = p.zoom; cam.ease = p.speed || 0.05; break;
-        case 'cam_zoom': cam.tZoom = p.zoom; cam.ease = p.speed || 0.1; break;
-        case 'cam_shake': cam.shake = p.power; break;
-        case 'cam_track_hero': cam.trackId = 'hero'; cam.trackOffset = p.offset; cam.ease = 0.04; break;
-        
-        case 'spawn_hero': state.hero = new Stickman(p.x, p.y, '#fff', true); break;
-        case 'hero_pose': if(state.hero){ state.hero.pose = p.pose; state.hero.dir = p.dir; } break;
-        case 'hero_shoot': fireBullet(state.hero, state.enemies[p.target]); break;
-        
-        case 'spawn_enemy': state.enemies[p.id] = new Stickman(p.x, p.y, '#f44'); break;
-        case 'enemy_pose': if(state.enemies[p.id]){ state.enemies[p.id].pose = p.pose; state.enemies[p.id].dir = p.dir; } break;
-        case 'enemy_shoot': fireBullet(state.enemies[p.id], state.hero); break;
-        case 'enemy_die': if(state.enemies[p.id]) state.enemies[p.id].health = 0; break;
-
-        case 'sub': subEl.innerText = p.text; subEl.style.color = p.color || '#eee'; subEl.style.opacity = 1; setTimeout(()=>subEl.style.opacity=0, p.duration*1000); break;
-        case 'set_time_scale': timeScale = p.scale; break;
-        case 'fade_in': sceneAlpha = 0; break; // Handled in draw
-    }
-}
-
-function fireBullet(ownerObj, targetObj) {
-    if(!ownerObj || !targetObj) return;
-    ownerObj.recoil = 10;
-    state.camera.shake = 3;
-    const s = ownerObj.gunTipWorld;
-    state.bullets.push(new Bullet(s.x, s.y, targetObj.x, targetObj.y - 40, ownerObj.isHero?'hero':'enemy'));
-    state.particles.push(new Particle(s.x, s.y, '#ff0', 'shell'));
-    
-    // Impact simulation simple
-    if (Math.random() < 0.8) { // 80% hit chance
-        setTimeout(() => {
-            if(targetObj.health > 0) {
-                targetObj.health -= 20;
-                for(let i=0; i<15; i++) state.particles.push(new Particle(targetObj.x, targetObj.y-40, targetObj.isHero?'#eee':'#f00'));
-            }
-        }, ownerObj.isHero?100:50); // Small delay for travel
-    }
-}
-
-function updateObjects(dt) {
-    if(state.hero) state.hero.update(dt);
-    Object.values(state.enemies).forEach(e => e.update(dt));
-    state.particles.forEach((p,i) => { p.update(dt); if(p.life<=0) state.particles.splice(i,1); });
-    state.bullets.forEach((b,i) => { b.update(dt); if(b.life<=0) state.bullets.splice(i,1); });
-
-    // Camera Director logic
-    const cam = state.camera;
-    if (cam.trackId === 'hero' && state.hero) { cam.tx = -state.hero.x + cam.trackOffset.x; cam.ty = -state.hero.y + cam.trackOffset.y; }
-    cam.x = lerp(cam.x, cam.tx, cam.ease * dt);
-    cam.y = lerp(cam.y, cam.ty, cam.ease * dt);
-    cam.zoom = lerp(cam.zoom, cam.tZoom, cam.ease * dt);
-    cam.shake = lerp(cam.shake, 0, 0.1 * dt);
-}
-
-function drawScene() {
-    ctx.fillStyle = '#020202'; ctx.fillRect(0,0,w,h);
-
-    ctx.save();
-    // Apply Camera Camera (Shake + Transform)
-    if(state.camera.shake > 1) ctx.translate(rnd(-1,1)*state.camera.shake, rnd(-1,1)*state.camera.shake);
-    ctx.translate(w/2, h/2);
-    ctx.scale(state.camera.zoom, state.camera.zoom);
-    ctx.translate(state.camera.x, state.camera.y);
-
-    // --- Background Layers (Parallax) ---
-    ctx.fillStyle = '#080808'; ctx.fillRect(-2000, 0, 4000, 1000); // Ground depth
-    
-    // Distant jagged mountains
-    ctx.fillStyle = '#050505'; ctx.beginPath(); ctx.moveTo(-2000,0);
-    for(let x=-2000; x<2000; x+=100) ctx.lineTo(x, -150 - Math.sin(x*0.01)*50 - rnd(0,30));
-    ctx.lineTo(2000,0); ctx.fill();
-
-    // Fog / Atmosphere
-    const grad = ctx.createLinearGradient(0, -300, 0, 0);
-    grad.addColorStop(0, 'rgba(2,2,2,0)'); grad.addColorStop(1, 'rgba(20,20,25,0.4)');
-    ctx.fillStyle = grad; ctx.fillRect(-2000, -300, 4000, 300);
-
-    // Grid floor (perspective cue)
-    ctx.strokeStyle = '#111'; ctx.lineWidth = 1;
-    for(let x=-1000; x<1000; x+=100) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x, 1000); ctx.stroke(); }
-
-    // --- Object Layers ---
-    if(state.hero) state.hero.draw();
-    Object.values(state.enemies).forEach(e => e.draw());
-    state.bullets.forEach(b => b.draw());
-    state.particles.forEach(p => p.draw());
-
-    // Muzzle flash light effect
-    state.bullets.forEach(b => {
-        if(b.life > 95) { // fresh bullet
-            ctx.fillStyle = 'rgba(255,255,200,0.1)';
-            ctx.beginPath(); ctx.arc(b.x, b.y, 100, 0, 7); ctx.fill();
-        }
-    });
-
-    ctx.restore();
-
-    // Scene Fade Overlay (for transitions)
-    const fadeCue = timeline.find(c => c.time <= globalTime && (c.action === 'fade_in' || c.action === 'fade_out'));
-    if (fadeCue) {
-        const elapsedSinceFade = globalTime - fadeCue.time;
-        const progress = Math.min(elapsedSinceFade / fadeCue.params.duration, 1);
-        sceneAlpha = fadeCue.action === 'fade_in' ? 1 - progress : progress;
-    }
-    if(sceneAlpha > 0) {
-        ctx.fillStyle = `rgba(0,0,0,${sceneAlpha})`; ctx.fillRect(0,0,w,h);
-    }
-}
-
-// --- INITIALIZATION & BOOT SCREEN ---
-window.addEventListener('resize', () => { w=canvas.width=window.innerWidth; h=canvas.height=window.innerHeight; });
-window.dispatchEvent(new Event('resize'));
-
-const bootText = [
-    "LOG: BOOTING PROTOCOL_404...",
-    "SYS: LOADING ASSETS (STICK_RIG_v3)...",
-    "SYS: LOADING WASTELAND_SECTOR_7G...",
-    "SYS: SYNCHRONIZING TIMELINE (10 MIN)...",
-    "Log: Cinema Engine Ready.",
-    ">> PRESS INITIATE <<"
-];
-let bootIndex = 0;
-const bootEl = document.getElementById('boot-text');
-const startBtn = document.getElementById('start-btn');
-
-const typeWriter = setInterval(() => {
-    bootEl.textContent += bootText[bootIndex] + "\n";
-    bootIndex++;
-    if(bootIndex >= bootText.length) {
-        clearInterval(typeWriter);
-        startBtn.disabled = false;
-        startBtn.className = 'ready';
-        startBtn.textContent = "Initiate Protocol";
-    }
-}, 300);
-
-startBtn.onclick = () => {
-    document.getElementById('boot-screen').style.opacity = 0;
-    document.getElementById('cinematic-ui').style.display = 'block';
-    setTimeout(() => {
-        document.getElementById('boot-screen').style.display = 'none';
-        isPlaying = true;
-        requestAnimationFrame(loop);
-    }, 2000);
-};
-
-</script>
 </body>
 </html>
