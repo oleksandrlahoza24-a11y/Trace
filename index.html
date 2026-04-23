@@ -5,23 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Boat on Water</title>
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  html, body {
-    width:100%; height:100%;
-    overflow:hidden;
-    background:#04111a;
-    touch-action:none;
-    -webkit-user-select:none;
-    user-select:none;
-  }
-  canvas {
-    display:block;
-    position:fixed;
-    top:0; left:0;
-    touch-action:none;
-  }
-  #c { cursor:default; z-index:1; }
-  #boatCanvas { z-index:2; pointer-events:none; }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:100%;height:100%;overflow:hidden;background:#04111a;touch-action:none;-webkit-user-select:none;user-select:none;}
+  #c,#boatCanvas{display:block;position:fixed;top:0;left:0;width:100%;height:100%;}
+  #c{z-index:1;}
+  #boatCanvas{z-index:2;touch-action:none;}
 </style>
 </head>
 <body>
@@ -30,456 +18,247 @@
 <script>
 'use strict';
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   WATER SIMULATION  —  WebGL wave physics + rendering
-   Exposes window.waterSim for boat.js to inject wakes and read wave heights
-   ═══════════════════════════════════════════════════════════════════════════ */
-
 const canvas = document.getElementById('c');
+const bc     = document.getElementById('boatCanvas');
+const DPR    = Math.min(window.devicePixelRatio||1, 2);
+let W=0,H=0,CW=0,CH=0;
 
-const DPR = Math.min(window.devicePixelRatio || 1, 2);
-let W = 0, H = 0, CW = 0, CH = 0;
-
-function resize() {
-  CW = window.innerWidth;  CH = window.innerHeight;
-  W  = Math.round(CW * DPR); H  = Math.round(CH * DPR);
-  canvas.width = W; canvas.height = H;
-  canvas.style.width  = CW + 'px';
-  canvas.style.height = CH + 'px';
-  const bc = document.getElementById('boatCanvas');
-  bc.width  = W;  bc.height  = H;
-  bc.style.width  = CW + 'px'; bc.style.height = CH + 'px';
+function resize(){
+  CW=window.innerWidth; CH=window.innerHeight;
+  W=Math.round(CW*DPR); H=Math.round(CH*DPR);
+  canvas.width=W; canvas.height=H;
+  bc.width=W;     bc.height=H;
 }
 resize();
-window.addEventListener('resize', resize);
+window.addEventListener('resize',resize);
 
-const glOpts = { antialias:false, alpha:false, preserveDrawingBuffer:false, powerPreference:'high-performance' };
-const gl = canvas.getContext('webgl', glOpts) || canvas.getContext('experimental-webgl', glOpts);
+const glOpts={antialias:false,alpha:false,preserveDrawingBuffer:false,powerPreference:'high-performance'};
+const gl=canvas.getContext('webgl',glOpts)||canvas.getContext('experimental-webgl',glOpts);
+if(!gl){document.body.innerHTML='<p style="color:#7ad;font-family:serif;font-size:18px;text-align:center;padding:40px">WebGL not available</p>';throw 0;}
 
-if (!gl) {
-  document.body.innerHTML = '<p style="color:#7ad;font-family:serif;font-size:18px;text-align:center;padding:40px">WebGL not available</p>';
-  throw 0;
-}
-
-const extFloat    = gl.getExtension('OES_texture_float');
-const extHalfF    = gl.getExtension('OES_texture_half_float');
-const extFloatLin = gl.getExtension('OES_texture_float_linear');
-const extHalfLin  = gl.getExtension('OES_texture_half_float_linear');
+const extFloat=gl.getExtension('OES_texture_float');
+const extHalfF=gl.getExtension('OES_texture_half_float');
+const extFloatLin=gl.getExtension('OES_texture_float_linear');
+const extHalfLin=gl.getExtension('OES_texture_half_float_linear');
 gl.getExtension('WEBGL_color_buffer_float');
 gl.getExtension('EXT_color_buffer_half_float');
 
-function canRenderTo(type) {
-  const t = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, t);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 4, 4, 0, gl.RGBA, type, null);
-  const f = gl.createFramebuffer();
-  gl.bindFramebuffer(gl.FRAMEBUFFER, f);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
-  const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
-  gl.deleteFramebuffer(f); gl.deleteTexture(t);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+function canRenderTo(type){
+  const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,4,4,0,gl.RGBA,type,null);
+  const f=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,f);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);
+  const ok=gl.checkFramebufferStatus(gl.FRAMEBUFFER)===gl.FRAMEBUFFER_COMPLETE;
+  gl.deleteFramebuffer(f);gl.deleteTexture(t);gl.bindFramebuffer(gl.FRAMEBUFFER,null);
   return ok;
 }
 
-let FTYPE, USE_LINEAR, UINT8;
-if (extFloat && canRenderTo(gl.FLOAT)) {
-  FTYPE = gl.FLOAT; USE_LINEAR = !!extFloatLin; UINT8 = false;
-} else if (extHalfF && canRenderTo(extHalfF.HALF_FLOAT_OES)) {
-  FTYPE = extHalfF.HALF_FLOAT_OES; USE_LINEAR = !!extHalfLin; UINT8 = false;
-} else {
-  FTYPE = gl.UNSIGNED_BYTE; USE_LINEAR = true; UINT8 = true;
-}
+let FTYPE,USE_LINEAR,UINT8;
+if(extFloat&&canRenderTo(gl.FLOAT)){FTYPE=gl.FLOAT;USE_LINEAR=!!extFloatLin;UINT8=false;}
+else if(extHalfF&&canRenderTo(extHalfF.HALF_FLOAT_OES)){FTYPE=extHalfF.HALF_FLOAT_OES;USE_LINEAR=!!extHalfLin;UINT8=false;}
+else{FTYPE=gl.UNSIGNED_BYTE;USE_LINEAR=true;UINT8=true;}
 
-const S = 512;
+const S=512;
 
-const VERT = `
-attribute vec2 aPos;
-varying   vec2 vUV;
-void main() {
-  vUV = aPos * 0.5 + 0.5;
-  gl_Position = vec4(aPos, 0.0, 1.0);
-}`;
+const VERT=`attribute vec2 aPos;varying vec2 vUV;void main(){vUV=aPos*0.5+0.5;gl_Position=vec4(aPos,0.0,1.0);}`;
 
-const SIM_FRAG = (UINT8 ? '#define UINT8_MODE\n' : '') + `
+const SIM_FRAG=(UINT8?'#define UINT8_MODE\n':'')+`
 precision highp float;
-varying vec2  vUV;
+varying vec2 vUV;
 uniform sampler2D uState;
-uniform vec2  uTexel;
-
-/* multi-drop support: up to 8 disturbances per frame */
-uniform vec2  uDropPos[8];
+uniform vec2 uTexel;
+uniform vec2 uDropPos[8];
 uniform float uDropStr[8];
 uniform float uDropRad[8];
-uniform int   uDropCount;
-
+uniform int uDropCount;
 #ifdef UINT8_MODE
-  vec2 enc16(float v) {
-    float t = clamp(v * 0.5 + 0.5, 0.0, 0.99999);
-    float t255 = t * 255.0;
-    return vec2(floor(t255) / 255.0, fract(t255));
-  }
-  float dec16(vec2 v) { return (v.x + v.y / 255.0) * 2.0 - 1.0; }
-  float CURR(vec2 uv) { return dec16(texture2D(uState, uv).rg); }
-  float PREV(vec2 uv) { return dec16(texture2D(uState, uv).ba); }
+  vec2 enc16(float v){float t=clamp(v*0.5+0.5,0.0,0.99999);float t2=t*255.0;return vec2(floor(t2)/255.0,fract(t2));}
+  float dec16(vec2 v){return(v.x+v.y/255.0)*2.0-1.0;}
+  float CURR(vec2 uv){return dec16(texture2D(uState,uv).rg);}
+  float PREV(vec2 uv){return dec16(texture2D(uState,uv).ba);}
 #else
-  float CURR(vec2 uv) { return texture2D(uState, uv).r * 2.0 - 1.0; }
-  float PREV(vec2 uv) { return texture2D(uState, uv).g * 2.0 - 1.0; }
+  float CURR(vec2 uv){return texture2D(uState,uv).r*2.0-1.0;}
+  float PREV(vec2 uv){return texture2D(uState,uv).g*2.0-1.0;}
 #endif
-
-void main() {
-  float curr = CURR(vUV);
-  float prev = PREV(vUV);
-
-  float n = CURR(vUV + vec2( 0.0,      uTexel.y));
-  float s = CURR(vUV - vec2( 0.0,      uTexel.y));
-  float e = CURR(vUV + vec2( uTexel.x, 0.0     ));
-  float w = CURR(vUV - vec2( uTexel.x, 0.0     ));
-
-  float next = (-prev + (n + s + e + w) * 0.5) * 0.994;
-
-  float bx = min(vUV.x, 1.0 - vUV.x) * 14.0;
-  float by = min(vUV.y, 1.0 - vUV.y) * 14.0;
-  next *= mix(0.78, 1.0, clamp(min(bx, by), 0.0, 1.0));
-
-  /* apply all drops */
-  for (int i = 0; i < 8; i++) {
-    if (i >= uDropCount) break;
-    float d = length(vUV - uDropPos[i]);
-    next -= smoothstep(uDropRad[i], 0.0, d) * uDropStr[i];
+void main(){
+  float curr=CURR(vUV),prev=PREV(vUV);
+  float n=CURR(vUV+vec2(0.0,uTexel.y)),s=CURR(vUV-vec2(0.0,uTexel.y));
+  float e=CURR(vUV+vec2(uTexel.x,0.0)),w=CURR(vUV-vec2(uTexel.x,0.0));
+  float next=(-prev+(n+s+e+w)*0.5)*0.994;
+  float bx=min(vUV.x,1.0-vUV.x)*14.0,by=min(vUV.y,1.0-vUV.y)*14.0;
+  next*=mix(0.78,1.0,clamp(min(bx,by),0.0,1.0));
+  for(int i=0;i<8;i++){
+    if(i>=uDropCount)break;
+    float d=length(vUV-uDropPos[i]);
+    next-=smoothstep(uDropRad[i],0.0,d)*uDropStr[i];
   }
-
-  next = clamp(next, -1.0, 1.0);
-
+  next=clamp(next,-1.0,1.0);
   #ifdef UINT8_MODE
-    gl_FragColor = vec4(enc16(next), enc16(curr));
+    gl_FragColor=vec4(enc16(next),enc16(curr));
   #else
-    gl_FragColor = vec4(next * 0.5 + 0.5, curr * 0.5 + 0.5, 0.0, 1.0);
+    gl_FragColor=vec4(next*0.5+0.5,curr*0.5+0.5,0.0,1.0);
   #endif
 }`;
 
-const RENDER_FRAG = (UINT8 ? '#define UINT8_MODE\n' : '') + `
+const RENDER_FRAG=(UINT8?'#define UINT8_MODE\n':'')+`
 precision highp float;
-varying vec2  vUV;
+varying vec2 vUV;
 uniform sampler2D uWater;
-uniform vec2  uTexel;
-uniform float uTime;
-uniform float uAspect;
-
-float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
-float vnoise(vec2 p) {
-  vec2 i = floor(p), f = p - i;
-  f = f*f*(3.0 - 2.0*f);
-  return mix(mix(hash(i), hash(i+vec2(1,0)),f.x),
-             mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);
-}
-float fbm(vec2 p) {
-  float v=0.0, a=0.5;
-  for(int i=0;i<5;i++){ v+=vnoise(p)*a; p*=2.1; a*=0.5; }
-  return v;
-}
-vec3 getSky(vec2 dir) {
-  float t   = clamp(dir.y * 1.6, 0.0, 1.0);
-  vec3 sky  = mix(vec3(0.48,0.72,0.96), vec3(0.05,0.22,0.68), t*t);
-  vec2 sunD = normalize(vec2(0.35, 0.72));
-  float sd  = dot(normalize(dir), sunD);
-  sky += vec3(1.00,0.97,0.80) * pow(max(sd,0.0),200.0) * 4.0;
-  sky += vec3(1.00,0.78,0.42) * pow(max(sd,0.0),  5.0) * 0.45;
-  float cl  = fbm(dir*5.0+3.7) * fbm(dir*3.0+1.2);
-  sky = mix(sky, vec3(0.92,0.95,1.00), smoothstep(0.35,0.65,cl)*0.5*(1.0-t));
-  return sky;
-}
-vec3 getSeabed(vec2 uv) {
-  float dr  = uTime * 0.025;
-  float r1  = sin(uv.x*32.0 + fbm(uv*4.0+dr)*5.0)*0.5+0.5;
-  float r2  = sin(uv.y*26.0 + fbm(uv*3.5+1.7+dr)*4.0)*0.5+0.5;
-  float det = fbm(uv*16.0+dr*0.5);
-  vec3 base = mix(vec3(0.73,0.61,0.38), vec3(0.82,0.71,0.48), r1*r2*pow(det,0.5));
-  float rf  = smoothstep(0.55,0.75, fbm(uv*3.8+2.3));
-  base = mix(base, vec3(0.47,0.43,0.37)*(0.7+0.3*fbm(uv*9.0+4.1)), rf*0.7);
-  float wd  = smoothstep(0.60,0.82,fbm(uv*8.5+5.8))*smoothstep(0.50,0.68,fbm(uv*5.0+8.3));
-  base = mix(base, vec3(0.15,0.38,0.18), wd*0.60);
-  float pb  = step(0.78, hash(floor(uv*80.0)));
-  base = mix(base, vec3(vnoise(uv*80.0)*0.2+0.5)*0.6, pb*0.3);
-  return base;
-}
+uniform vec2 uTexel;
+uniform float uTime,uAspect;
+float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float vnoise(vec2 p){vec2 i=floor(p),f=p-i;f=f*f*(3.0-2.0*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
+float fbm(vec2 p){float v=0.0,a=0.5;for(int i=0;i<5;i++){v+=vnoise(p)*a;p*=2.1;a*=0.5;}return v;}
+vec3 getSky(vec2 d){float t=clamp(d.y*1.6,0.0,1.0);vec3 s=mix(vec3(0.48,0.72,0.96),vec3(0.05,0.22,0.68),t*t);vec2 sd=normalize(vec2(0.35,0.72));float k=dot(normalize(d),sd);s+=vec3(1.0,0.97,0.80)*pow(max(k,0.0),200.0)*4.0;s+=vec3(1.0,0.78,0.42)*pow(max(k,0.0),5.0)*0.45;float cl=fbm(d*5.0+3.7)*fbm(d*3.0+1.2);s=mix(s,vec3(0.92,0.95,1.0),smoothstep(0.35,0.65,cl)*0.5*(1.0-t));return s;}
+vec3 getSeabed(vec2 uv){float dr=uTime*0.025;float r1=sin(uv.x*32.0+fbm(uv*4.0+dr)*5.0)*0.5+0.5;float r2=sin(uv.y*26.0+fbm(uv*3.5+1.7+dr)*4.0)*0.5+0.5;float det=fbm(uv*16.0+dr*0.5);vec3 base=mix(vec3(0.73,0.61,0.38),vec3(0.82,0.71,0.48),r1*r2*pow(det,0.5));float rf=smoothstep(0.55,0.75,fbm(uv*3.8+2.3));base=mix(base,vec3(0.47,0.43,0.37)*(0.7+0.3*fbm(uv*9.0+4.1)),rf*0.7);float wd=smoothstep(0.6,0.82,fbm(uv*8.5+5.8))*smoothstep(0.5,0.68,fbm(uv*5.0+8.3));base=mix(base,vec3(0.15,0.38,0.18),wd*0.6);float pb=step(0.78,hash(floor(uv*80.0)));base=mix(base,vec3(vnoise(uv*80.0)*0.2+0.5)*0.6,pb*0.3);return base;}
 #ifdef UINT8_MODE
-  float H(vec2 uv) { vec4 s=texture2D(uWater,uv); return (s.r+s.g/255.0)*2.0-1.0; }
+  float H(vec2 uv){vec4 s=texture2D(uWater,uv);return(s.r+s.g/255.0)*2.0-1.0;}
 #else
-  float H(vec2 uv) { return texture2D(uWater,uv).r*2.0-1.0; }
+  float H(vec2 uv){return texture2D(uWater,uv).r*2.0-1.0;}
 #endif
-float GGX(float NdotH, float rough) {
-  float a2 = rough*rough*rough*rough;
-  float d  = NdotH*NdotH*(a2-1.0)+1.0;
-  return a2 / (3.14159*d*d + 1e-5);
-}
-
-void main() {
-  vec2 uv = vUV;
-  vec2 tx = uTexel * 2.0;
-
-  float hL  = H(uv - vec2(tx.x, 0.0));
-  float hR  = H(uv + vec2(tx.x, 0.0));
-  float hU  = H(uv + vec2(0.0,  tx.y));
-  float hD  = H(uv - vec2(0.0,  tx.y));
-  float hLU = H(uv + vec2(-tx.x,  tx.y));
-  float hRU = H(uv + vec2( tx.x,  tx.y));
-  float hLD = H(uv + vec2(-tx.x, -tx.y));
-  float hRD = H(uv + vec2( tx.x, -tx.y));
-
-  float ns = 4.8;
-  float dX = (hRD+2.0*hR+hRU-hLD-2.0*hL-hLU)*ns/uAspect;
-  float dY = (hLU+2.0*hU+hRU-hLD-2.0*hD-hRD)*ns;
-  vec3 normal = normalize(vec3(-dX,-dY,1.0));
-
-  float h  = H(uv);
-  vec3  V  = vec3(0.0,0.0,1.0);
-  vec3  L  = normalize(vec3(0.40,0.68,1.0));
-  vec3  Hv = normalize(V+L);
-
-  float cosI   = max(dot(normal,V),0.0);
-  float fresnel = clamp(0.020 + 0.980*pow(1.0-cosI,5.0),0.0,1.0);
-
-  vec2 refOff = vec2(normal.x/uAspect, normal.y) * 0.065;
-  vec2 refUV  = clamp(uv+refOff, 0.001, 0.999);
-  vec3 seabed = getSeabed(refUV + vec2(uTime*0.003, 0.0));
-  seabed *= exp(-vec3(0.70,0.12,0.04)*2.5);
-
-  float lap     = hU+hD+hL+hR-4.0*h;
-  float curvCaus = pow(max(0.0,-lap*9.0),1.6)*2.0;
-  vec2 cUV  = refUV*vec2(uAspect*12.0,12.0);
-  float ca  = sin(cUV.x*1.9+uTime*2.5)*sin(cUV.y*1.8+uTime*2.1)
-            + sin(cUV.x*1.3-uTime*1.7+1.1)*sin(cUV.y*1.4-uTime*2.0+0.8)
-            + sin((cUV.x+cUV.y)*1.1+uTime*1.4)*0.5;
-  float animCaus = pow(max(0.0,ca*0.2+0.5),3.8)*0.6;
-  seabed *= 1.0 + curvCaus + animCaus;
-
-  vec3 R   = reflect(-L, normal);
-  vec3 sky = getSky(R.xy*0.5+0.5);
-
-  vec3 deepCol    = vec3(0.008,0.07,0.20);
-  vec3 shallowCol = vec3(0.05, 0.36,0.62);
-  vec3 waterCol   = mix(deepCol, shallowCol, clamp(0.5+h*2.0,0.0,1.0));
-
-  vec3 col = mix(seabed, sky, clamp(fresnel*0.90+0.05,0.0,1.0));
-  col = mix(col, waterCol, 0.18);
-
-  float sss = smoothstep(-0.05,0.30,h)*max(0.0,dot(normal,L));
-  col += vec3(0.00,0.50,0.72)*sss*0.30;
-
-  float rough = max(0.012, 0.012+abs(h)*0.08);
-  float NdotH = max(dot(normal,Hv),0.0);
-  float NdotL = max(dot(normal,L), 0.0);
-  float spec  = GGX(NdotH,rough);
-  col += vec3(1.00,0.97,0.88)*spec*NdotL*0.20*fresnel;
-  float RdotV = max(dot(R,V),0.0);
-  col += vec3(0.82,0.91,1.00)*pow(RdotV,40.0)*0.22;
-
-  float crest = smoothstep(0.18,0.40,h);
-  float foamN = pow(fbm(uv*22.0+uTime*0.8),1.4);
-  col = mix(col, vec3(0.96,0.98,1.00), crest*foamN*0.85);
-  float wake = smoothstep(0.07,0.20,abs(h))*fbm(uv*16.0+uTime*0.4)*0.15;
-  col += vec3(0.72,0.86,1.00)*wake;
-
-  float fog = pow(clamp(1.0-vUV.y*1.6,0.0,1.0),4.0)*0.22;
-  col = mix(col, vec3(0.26,0.52,0.80), fog);
-
-  vec2 vd = (vUV*2.0-1.0)*vec2(uAspect,1.0);
-  col *= clamp(1.0-dot(vd,vd)*0.055,0.0,1.0);
-
-  col = col*(1.0+col*0.14)/(col+0.9)*1.08;
-  col = pow(max(col,vec3(0.0)),vec3(1.0/2.2));
-  gl_FragColor = vec4(col,1.0);
+float GGX(float n,float r){float a=r*r*r*r;float d=n*n*(a-1.0)+1.0;return a/(3.14159*d*d+1e-5);}
+void main(){
+  vec2 uv=vUV,tx=uTexel*2.0;
+  float hL=H(uv-vec2(tx.x,0.0)),hR=H(uv+vec2(tx.x,0.0));
+  float hU=H(uv+vec2(0.0,tx.y)),hD=H(uv-vec2(0.0,tx.y));
+  float hLU=H(uv+vec2(-tx.x,tx.y)),hRU=H(uv+vec2(tx.x,tx.y));
+  float hLD=H(uv+vec2(-tx.x,-tx.y)),hRD=H(uv+vec2(tx.x,-tx.y));
+  float ns=4.8;
+  vec3 normal=normalize(vec3(-(hRD+2.0*hR+hRU-hLD-2.0*hL-hLU)*ns/uAspect,-(hLU+2.0*hU+hRU-hLD-2.0*hD-hRD)*ns,1.0));
+  float h=H(uv);
+  vec3 V=vec3(0,0,1),L=normalize(vec3(0.4,0.68,1.0)),Hv=normalize(V+L);
+  float fresnel=clamp(0.02+0.98*pow(1.0-max(dot(normal,V),0.0),5.0),0.0,1.0);
+  vec2 refUV=clamp(uv+vec2(normal.x/uAspect,normal.y)*0.065,0.001,0.999);
+  vec3 seabed=getSeabed(refUV+vec2(uTime*0.003,0.0))*exp(-vec3(0.7,0.12,0.04)*2.5);
+  float lap=hU+hD+hL+hR-4.0*h;
+  float cc=pow(max(0.0,-lap*9.0),1.6)*2.0;
+  vec2 cUV=refUV*vec2(uAspect*12.0,12.0);
+  float ca=sin(cUV.x*1.9+uTime*2.5)*sin(cUV.y*1.8+uTime*2.1)+sin(cUV.x*1.3-uTime*1.7+1.1)*sin(cUV.y*1.4-uTime*2.0+0.8)+sin((cUV.x+cUV.y)*1.1+uTime*1.4)*0.5;
+  seabed*=1.0+cc+pow(max(0.0,ca*0.2+0.5),3.8)*0.6;
+  vec3 sky=getSky(reflect(-L,normal).xy*0.5+0.5);
+  vec3 col=mix(mix(seabed,sky,clamp(fresnel*0.9+0.05,0.0,1.0)),mix(vec3(0.008,0.07,0.2),vec3(0.05,0.36,0.62),clamp(0.5+h*2.0,0.0,1.0)),0.18);
+  col+=vec3(0.0,0.5,0.72)*smoothstep(-0.05,0.3,h)*max(0.0,dot(normal,L))*0.3;
+  float rough=max(0.012,0.012+abs(h)*0.08);
+  col+=vec3(1.0,0.97,0.88)*GGX(max(dot(normal,Hv),0.0),rough)*max(dot(normal,L),0.0)*0.2*fresnel;
+  col+=vec3(0.82,0.91,1.0)*pow(max(dot(reflect(-L,normal),V),0.0),40.0)*0.22;
+  col=mix(col,vec3(0.96,0.98,1.0),smoothstep(0.18,0.4,h)*pow(fbm(uv*22.0+uTime*0.8),1.4)*0.85);
+  col+=vec3(0.72,0.86,1.0)*smoothstep(0.07,0.2,abs(h))*fbm(uv*16.0+uTime*0.4)*0.15;
+  col=mix(col,vec3(0.26,0.52,0.8),pow(clamp(1.0-vUV.y*1.6,0.0,1.0),4.0)*0.22);
+  vec2 vd=(vUV*2.0-1.0)*vec2(uAspect,1.0);
+  col*=clamp(1.0-dot(vd,vd)*0.055,0.0,1.0);
+  col=col*(1.0+col*0.14)/(col+0.9)*1.08;
+  gl_FragColor=vec4(pow(max(col,vec3(0.0)),vec3(1.0/2.2)),1.0);
 }`;
 
-function mkShader(type, src) {
-  const s = gl.createShader(type);
-  gl.shaderSource(s, src);
-  gl.compileShader(s);
-  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
-    throw new Error('Shader compile: ' + gl.getShaderInfoLog(s));
-  return s;
-}
-function mkProg(fsrc) {
-  const p = gl.createProgram();
-  gl.attachShader(p, mkShader(gl.VERTEX_SHADER,   VERT));
-  gl.attachShader(p, mkShader(gl.FRAGMENT_SHADER, fsrc));
+function mkShader(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s;}
+function mkProg(fsrc){
+  const p=gl.createProgram();
+  gl.attachShader(p,mkShader(gl.VERTEX_SHADER,VERT));
+  gl.attachShader(p,mkShader(gl.FRAGMENT_SHADER,fsrc));
   gl.linkProgram(p);
-  if (!gl.getProgramParameter(p, gl.LINK_STATUS))
-    throw new Error('Program link: ' + gl.getProgramInfoLog(p));
-  const u = {};
-  const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
-  for (let i = 0; i < n; i++) {
-    const info = gl.getActiveUniform(p, i);
-    u[info.name] = gl.getUniformLocation(p, info.name);
-  }
-  return { p, u };
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));
+  const u={};const n=gl.getProgramParameter(p,gl.ACTIVE_UNIFORMS);
+  for(let i=0;i<n;i++){const info=gl.getActiveUniform(p,i);u[info.name]=gl.getUniformLocation(p,info.name);}
+  return{p,u};
 }
 
-let simProg, renderProg;
-try {
-  simProg    = mkProg(SIM_FRAG);
-  renderProg = mkProg(RENDER_FRAG);
-} catch (e) {
-  document.body.innerHTML = `<pre style="color:#f88;padding:20px">${e.message}</pre>`;
-  throw e;
-}
+let simProg,renderProg;
+try{simProg=mkProg(SIM_FRAG);renderProg=mkProg(RENDER_FRAG);}
+catch(e){document.body.innerHTML=`<pre style="color:#f88;padding:20px;font-size:10px;white-space:pre-wrap">${e.message}</pre>`;throw e;}
 
-const qbuf = gl.createBuffer();
-gl.bindBuffer(gl.ARRAY_BUFFER, qbuf);
-gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
-
-function bindQuad(prog) {
-  gl.bindBuffer(gl.ARRAY_BUFFER, qbuf);
-  const loc = gl.getAttribLocation(prog.p, 'aPos');
+const qbuf=gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER,qbuf);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+function bindQuad(prog){
+  gl.bindBuffer(gl.ARRAY_BUFFER,qbuf);
+  const loc=gl.getAttribLocation(prog.p,'aPos');
   gl.enableVertexAttribArray(loc);
-  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
 }
 
-function mkInitData() {
-  const n = S * S * 4;
-  if (!UINT8) {
-    if (FTYPE === gl.FLOAT) return new Float32Array(n).fill(0.5);
-    if (FTYPE === extHalfF.HALF_FLOAT_OES) return new Uint16Array(n).fill(0x3800);
-  }
-  const d = new Uint8Array(n);
-  for (let i = 0; i < n; i += 4) { d[i]=127; d[i+1]=128; d[i+2]=127; d[i+3]=128; }
-  return d;
+function mkInitData(){
+  const n=S*S*4;
+  if(!UINT8){if(FTYPE===gl.FLOAT)return new Float32Array(n).fill(0.5);if(FTYPE===extHalfF.HALF_FLOAT_OES)return new Uint16Array(n).fill(0x3800);}
+  const d=new Uint8Array(n);for(let i=0;i<n;i+=4){d[i]=127;d[i+1]=128;d[i+2]=127;d[i+3]=128;}return d;
 }
-function mkFBO() {
-  const tex = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, tex);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, S, S, 0, gl.RGBA, FTYPE, mkInitData());
-  const f = USE_LINEAR ? gl.LINEAR : gl.NEAREST;
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, f);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, f);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  const fbo = gl.createFramebuffer();
-  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  return { tex, fbo };
+function mkFBO(){
+  const tex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tex);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,S,S,0,gl.RGBA,FTYPE,mkInitData());
+  const f=USE_LINEAR?gl.LINEAR:gl.NEAREST;
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,f);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,f);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  const fbo=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tex,0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);return{tex,fbo};
 }
 
-let fboA = mkFBO();
-let fboB = mkFBO();
+let fboA=mkFBO(),fboB=mkFBO();
+const readBuf=new Uint8Array(4);
+const pendingDrops=[];
 
-/* ── pixel readback buffer for boat height sampling ── */
-const readPixBuf = new Uint8Array(4);
-
-/* ── pending disturbances from boat.js ── */
-const pendingDrops = [];  /* {x,y,str,rad} in UV space */
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   PUBLIC API  —  boat.js uses these
-   ═══════════════════════════════════════════════════════════════════════════ */
-window.waterSim = {
-  /* Inject a disturbance at UV coords (0-1, 0-1).
-     x/y are screen UV where 0,0=top-left, matching boat world coords below. */
-  addDrop(x, y, strength, radius) {
-    pendingDrops.push({ x, y: 1.0 - y, str: strength, rad: radius || 0.035 });
+/* ═══ PUBLIC API ═══ */
+window.waterSim={
+  /* x,y 0-1 where 0,0=top-left of screen */
+  addDrop(x,y,str,rad){
+    pendingDrops.push({x:Math.max(0.01,Math.min(0.99,x)),y:Math.max(0.01,Math.min(0.99,1.0-y)),str:str||0.1,rad:rad||0.03});
   },
-
-  /* Sample wave height at UV position. Returns approx float in [-1,1].
-     Uses a readPixels call — cheap but 1-frame latency is fine for buoyancy. */
-  getHeight(x, y) {
-    const px = Math.round(x * S);
-    const py = Math.round((1.0 - y) * S);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, fboA.fbo);
-    gl.readPixels(
-      Math.max(0, Math.min(S-1, px)),
-      Math.max(0, Math.min(S-1, py)),
-      1, 1, gl.RGBA, gl.UNSIGNED_BYTE, readPixBuf
-    );
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    if (UINT8) {
-      return (readPixBuf[0] / 255.0 + readPixBuf[1] / (255.0 * 255.0)) * 2.0 - 1.0;
-    } else {
-      return readPixBuf[0] / 255.0 * 2.0 - 1.0;
-    }
+  getHeight(x,y){
+    const px=Math.round(Math.max(0,Math.min(S-1,x*S)));
+    const py=Math.round(Math.max(0,Math.min(S-1,(1.0-y)*S)));
+    gl.bindFramebuffer(gl.FRAMEBUFFER,fboA.fbo);
+    gl.readPixels(px,py,1,1,gl.RGBA,gl.UNSIGNED_BYTE,readBuf);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+    if(UINT8)return(readBuf[0]/255.0+readBuf[1]/(255.0*255.0))*2.0-1.0;
+    return readBuf[0]/255.0*2.0-1.0;
   },
-
-  /* Let boat.js know canvas dimensions for coordinate mapping */
-  get screenW() { return CW; },
-  get screenH() { return CH; },
+  get W(){return CW;},
+  get H(){return CH;},
 };
 
-/* ── rain drops ── */
-const rainDrops = [];
-let lastRain = 0;
-function maybeSpawnRain(now) {
-  if (now - lastRain < 2000 + Math.random() * 1500) return;
-  lastRain = now;
-  rainDrops.push({ x: 0.1+Math.random()*0.8, y: 0.1+Math.random()*0.8,
-                   str: 0.08+Math.random()*0.12, born: now, ttl: 60+Math.random()*60 });
+const rain=[];let lastRain=0;
+function spawnRain(now){
+  if(now-lastRain<1500+Math.random()*1500)return;
+  lastRain=now;
+  rain.push({x:0.1+Math.random()*0.8,y:0.1+Math.random()*0.8,str:0.07+Math.random()*0.1,born:now,ttl:60+Math.random()*60});
 }
 
-/* ── simulation step ── */
-function simulate(src, dst, drops) {
-  gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fbo);
-  gl.viewport(0, 0, S, S);
-  gl.useProgram(simProg.p);
-  bindQuad(simProg);
-  const u = simProg.u;
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, src.tex);
-  gl.uniform1i(u.uState,  0);
-  gl.uniform2f(u.uTexel,  1.0/S, 1.0/S);
-
-  const count = Math.min(drops.length, 8);
-  gl.uniform1i(u.uDropCount, count);
-  for (let i = 0; i < 8; i++) {
-    const d = drops[i] || { x:0, y:0, str:0, rad:0.03 };
-    gl.uniform2f(gl.getUniformLocation(simProg.p, `uDropPos[${i}]`), d.x, d.y);
-    gl.uniform1f(gl.getUniformLocation(simProg.p, `uDropStr[${i}]`), d.str);
-    gl.uniform1f(gl.getUniformLocation(simProg.p, `uDropRad[${i}]`), d.rad);
+function simulate(src,dst,drops){
+  gl.bindFramebuffer(gl.FRAMEBUFFER,dst.fbo);gl.viewport(0,0,S,S);
+  gl.useProgram(simProg.p);bindQuad(simProg);
+  const u=simProg.u;
+  gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,src.tex);
+  gl.uniform1i(u['uState'],0);gl.uniform2f(u['uTexel'],1.0/S,1.0/S);
+  const cnt=Math.min(drops.length,8);gl.uniform1i(u['uDropCount'],cnt);
+  for(let i=0;i<8;i++){
+    const d=drops[i]||{x:0,y:0,str:0,rad:0.03};
+    gl.uniform2f(gl.getUniformLocation(simProg.p,`uDropPos[${i}]`),d.x,d.y);
+    gl.uniform1f(gl.getUniformLocation(simProg.p,`uDropStr[${i}]`),d.str);
+    gl.uniform1f(gl.getUniformLocation(simProg.p,`uDropRad[${i}]`),d.rad);
   }
-  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+}
+function renderWater(src){
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,W,H);
+  gl.useProgram(renderProg.p);bindQuad(renderProg);
+  const u=renderProg.u;
+  gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,src.tex);
+  gl.uniform1i(u['uWater'],0);gl.uniform2f(u['uTexel'],1.0/S,1.0/S);
+  gl.uniform1f(u['uTime'],time);gl.uniform1f(u['uAspect'],W/H);
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
 }
 
-function render(src) {
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  gl.viewport(0, 0, W, H);
-  gl.useProgram(renderProg.p);
-  bindQuad(renderProg);
-  const u = renderProg.u;
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, src.tex);
-  gl.uniform1i(u.uWater,  0);
-  gl.uniform2f(u.uTexel,  1.0/S, 1.0/S);
-  gl.uniform1f(u.uTime,   time);
-  gl.uniform1f(u.uAspect, W/H);
-  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+let time=0;
+function waterFrame(now){
+  requestAnimationFrame(waterFrame);
+  time=now*0.001;spawnRain(now);
+  const drops=[];
+  while(pendingDrops.length>0&&drops.length<7)drops.push(pendingDrops.shift());
+  if(rain.length>0){const r=rain[0];if(now-r.born<r.ttl)drops.push({x:r.x,y:r.y,str:r.str,rad:0.025});else rain.shift();}
+  for(let i=0;i<4;i++){simulate(fboA,fboB,drops);const tmp=fboA;fboA=fboB;fboB=tmp;}
+  renderWater(fboA);
 }
-
-let time = 0;
-
-function frame(now) {
-  requestAnimationFrame(frame);
-  time = now * 0.001;
-
-  maybeSpawnRain(now);
-
-  /* build drop list: pending wakes + rain */
-  const drops = [];
-  while (pendingDrops.length && drops.length < 7) drops.push(pendingDrops.shift());
-  if (rainDrops.length > 0) {
-    const r = rainDrops[0];
-    if (now - r.born < r.ttl) drops.push({ x:r.x, y:r.y, str:r.str, rad:0.025 });
-    else rainDrops.shift();
-  }
-
-  for (let i = 0; i < 4; i++) {
-    simulate(fboA, fboB, drops);
-    const tmp = fboA; fboA = fboB; fboB = tmp;
-  }
-  render(fboA);
-}
-
-requestAnimationFrame(frame);
+requestAnimationFrame(waterFrame);
 </script>
-
-<!-- Boat system loaded after water is ready -->
 <script src="boat.js"></script>
 </body>
 </html>
