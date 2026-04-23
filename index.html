@@ -1,89 +1,199 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>HELLDIVERS: WEB EDITION</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>HELLDIVERS MOBILE</title>
     <style>
-        body { margin: 0; background: #1a1a1a; color: #fbff00; font-family: sans-serif; overflow: hidden; }
-        #hud { position: absolute; bottom: 20px; left: 20px; text-transform: uppercase; }
-        .key { display: inline-block; width: 30px; height: 30px; border: 2px solid #fbff00; text-align: center; line-height: 30px; margin: 2px; }
-        #terminal { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; display: none;}
+        body { margin: 0; overflow: hidden; background: #050505; font-family: 'Courier New', monospace; touch-action: none; }
+        #ui-layer { position: absolute; width: 100%; height: 100%; pointer-events: none; color: #fbff00; }
+        
+        /* Mobile Joysticks */
+        .joystick-container { position: absolute; bottom: 40px; width: 120px; height: 120px; background: rgba(251, 255, 0, 0.1); border: 2px solid #fbff00; border-radius: 50%; pointer-events: auto; }
+        #move-stick { left: 40px; }
+        #aim-stick { right: 40px; }
+        .knob { position: absolute; width: 50px; height: 50px; background: #fbff00; border-radius: 50%; top: 35px; left: 35px; }
+
+        /* Stratagem HUD */
+        #stratagem-pad { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.7); padding: 10px; border: 1px solid #fbff00; pointer-events: auto; }
+        .s-btn { width: 45px; height: 45px; background: none; border: 1px solid #fbff00; color: #fbff00; margin: 2px; font-size: 20px; }
+        
+        #stats { position: absolute; top: 20px; right: 20px; text-align: right; }
+        #msg-log { position: absolute; bottom: 180px; width: 100%; text-align: center; font-weight: bold; font-size: 20px; }
     </style>
 </head>
 <body>
-    <div id="hud">
-        <div>Health: [||||||||||] 100%</div>
-        <div id="stratagem-display">Next Stratagem: ⬆️ ➡️ ⬇️ ⬇️ ⬇️</div>
+
+<div id="ui-layer">
+    <div id="stratagem-pad">
+        <div>STRATAGEM INPUT</div>
+        <button class="s-btn" onclick="inputCode('U')">⬆️</button><br>
+        <button class="s-btn" onclick="inputCode('L')">⬅️</button>
+        <button class="s-btn" onclick="inputCode('D')">⬇️</button>
+        <button class="s-btn" onclick="inputCode('R')">➡️</button>
+        <div id="code-buffer" style="margin-top:5px; letter-spacing: 3px;">----</div>
     </div>
-    <div id="terminal">
-        <h1 style="font-size: 50px;">REINFORCING...</h1>
+
+    <div id="stats">
+        REINFORCEMENTS: <span id="lives">5</span><br>
+        SAMPLES: <span id="samples">0</span>
     </div>
 
-    <script type="module">
-        import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+    <div id="msg-log">ESTABLISHING DEMOCRACY...</div>
 
-        // 1. Scene & Environment
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x111111);
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
+    <div id="move-stick" class="joystick-container"><div id="move-knob" class="knob"></div></div>
+    <div id="aim-stick" class="joystick-container"><div id="aim-knob" class="knob"></div></div>
+</div>
 
-        // 2. The "Helldiver" (Player)
-        const playerGeo = new THREE.CapsuleGeometry(0.5, 1, 4, 8);
-        const playerMat = new THREE.MeshStandardMaterial({ color: 0xffff00 });
-        const player = new THREE.Mesh(playerGeo, playerMat);
-        player.position.y = 1;
-        scene.add(player);
+<script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+</script>
 
-        // 3. Lighting (Atmospheric)
-        const light = new THREE.PointLight(0xffffff, 50, 100);
-        light.position.set(0, 10, 0);
-        scene.add(light);
-        scene.add(new THREE.AmbientLight(0x222222));
+<script type="module">
+    import * as THREE from 'three';
 
-        // 4. Stratagem Logic
-        const code = ['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowDown', 'ArrowDown'];
-        let inputBuffer = [];
+    // --- ENGINE SETUP ---
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x1a1a1a, 0.05);
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
 
-        window.addEventListener('keydown', (e) => {
-            // Player Movement
-            if(e.key === 'w') player.position.z -= 0.2;
-            if(e.key === 's') player.position.z += 0.2;
-            if(e.key === 'a') player.position.x -= 0.2;
-            if(e.key === 'd') player.position.x += 0.2;
+    // --- LIGHTS ---
+    const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+    sun.position.set(10, 20, 10);
+    sun.castShadow = true;
+    scene.add(sun);
+    scene.add(new THREE.AmbientLight(0x222244));
 
-            // Stratagem Inputs
-            if(e.key.includes('Arrow')) {
-                inputBuffer.push(e.key);
-                if(inputBuffer.join('') === code.join('')) {
-                    triggerOrbitalStrike();
-                    inputBuffer = [];
+    // --- WORLD ---
+    const groundGeo = new THREE.PlaneGeometry(200, 200);
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0x332211 });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // --- PLAYER & ENEMIES ---
+    const player = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 0.8, 4, 8), new THREE.MeshStandardMaterial({ color: 0x222222 }));
+    const cape = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1, 0.05), new THREE.MeshStandardMaterial({ color: 0xffee00 }));
+    cape.position.set(0, 0.2, -0.3);
+    player.add(body, cape);
+    player.position.y = 0.8;
+    scene.add(player);
+
+    const enemies = [];
+    function spawnBug() {
+        const bug = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), new THREE.MeshStandardMaterial({ color: 0xff4400 }));
+        bug.position.set(Math.random()*40-20, 0.5, Math.random()*40-20);
+        scene.add(bug);
+        enemies.push(bug);
+    }
+    for(let i=0; i<15; i++) spawnBug();
+
+    // --- MOBILE INPUT LOGIC ---
+    let moveData = { x: 0, y: 0 };
+    let aimData = { x: 0, y: 0 };
+    let sequence = "";
+    const COMBO = "UDRL"; // Example Stratagem: Up, Down, Right, Left
+
+    function setupJoystick(id, dataObj) {
+        const container = document.getElementById(id);
+        const knob = container.querySelector('.knob');
+        const limit = 40;
+
+        container.addEventListener('touchstart', (e) => handleMove(e), {passive: false});
+        container.addEventListener('touchmove', (e) => handleMove(e), {passive: false});
+        container.addEventListener('touchend', () => {
+            knob.style.transform = `translate(0px, 0px)`;
+            dataObj.x = 0; dataObj.y = 0;
+        });
+
+        function handleMove(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = container.getBoundingClientRect();
+            const centerX = rect.left + rect.width/2;
+            const centerY = rect.top + rect.height/2;
+            let dx = touch.clientX - centerX;
+            let dy = touch.clientY - centerY;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if(dist > limit) { dx *= limit/dist; dy *= limit/dist; }
+            knob.style.transform = `translate(${dx}px, ${dy}px)`;
+            dataObj.x = dx/limit; dataObj.y = dy/limit;
+        }
+    }
+    setupJoystick('move-stick', moveData);
+    setupJoystick('aim-stick', aimData);
+
+    window.inputCode = (dir) => {
+        sequence += dir;
+        document.getElementById('code-buffer').innerText = sequence;
+        if(sequence === COMBO) {
+            orbitalStrike();
+            sequence = "";
+            document.getElementById('code-buffer').innerText = "----";
+        } else if(sequence.length >= 4) {
+            sequence = "";
+            document.getElementById('code-buffer').innerText = "FAIL";
+        }
+    };
+
+    function orbitalStrike() {
+        document.getElementById('msg-log').innerText = "ORBITAL PRECISION STRIKE INCOMING!";
+        const beam = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 100), new THREE.MeshBasicMaterial({color:0x00ffff, transparent: true, opacity: 0.6}));
+        beam.position.set(player.position.x + (aimData.x*10), 50, player.position.z + (aimData.y*10));
+        scene.add(beam);
+        
+        setTimeout(() => {
+            // Kill enemies in radius
+            enemies.forEach((bug, index) => {
+                if(bug.position.distanceTo(beam.position) < 5) {
+                    bug.position.set(Math.random()*40-20, 0.5, Math.random()*40-20);
                 }
+            });
+            scene.remove(beam);
+            document.getElementById('msg-log').innerText = "DEMOCRACY DELIVERED.";
+        }, 1000);
+    }
+
+    // --- GAME LOOP ---
+    function animate() {
+        requestAnimationFrame(animate);
+
+        // Player Movement
+        player.position.x += moveData.x * 0.15;
+        player.position.z += moveData.y * 0.15;
+        
+        // Rotation
+        if(Math.abs(aimData.x) > 0.1) player.rotation.y = -Math.atan2(aimData.y, aimData.x) + Math.PI/2;
+
+        // Enemy AI (Simulated)
+        enemies.forEach(bug => {
+            const dir = new THREE.Vector3().subVectors(player.position, bug.position).normalize();
+            bug.position.addScaledVector(dir, 0.03);
+            if(bug.position.distanceTo(player.position) < 0.8) {
+                document.getElementById('msg-log').innerText = "SWEET LIBERTY, MY LEG!";
             }
         });
 
-        function triggerOrbitalStrike() {
-            const beamGeo = new THREE.CylinderGeometry(0.2, 0.2, 100, 12);
-            const beamMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.8 });
-            const beam = new THREE.Mesh(beamGeo, beamMat);
-            beam.position.set(player.position.x, 50, player.position.z - 5);
-            scene.add(beam);
-            
-            setTimeout(() => scene.remove(beam), 500);
-            console.log("500KG BOMB DELIVERED");
-        }
-
-        camera.position.set(0, 10, 15);
+        // Camera Follow
+        camera.position.lerp(new THREE.Vector3(player.position.x, player.position.y + 12, player.position.z + 10), 0.1);
         camera.lookAt(player.position);
 
-        function animate() {
-            requestAnimationFrame(animate);
-            camera.position.lerp(new THREE.Vector3(player.position.x, player.position.y + 8, player.position.z + 12), 0.1);
-            camera.lookAt(player.position);
-            renderer.render(scene, camera);
-        }
-        animate();
-    </script>
+        renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    animate();
+</script>
 </body>
 </html>
