@@ -3,68 +3,98 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>The Reproducing Box</title>
+    <title>Project: Super Earth</title>
     <style>
-        body {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
-            padding: 20px;
-            background-color: #f0f2f5;
-            font-family: sans-serif;
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', monospace; }
+        #ui {
+            position: absolute; top: 20px; left: 20px; color: #fbff00;
+            text-shadow: 2px 2px #000; pointer-events: none;
         }
-
-        .box {
-            width: 100px;
-            height: 100px;
-            background-color: #ff6b6b;
-            border-radius: 8px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            user-select: none;
-            transition: transform 0.1s ease, background-color 0.3s ease;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-
-        .box:hover {
-            background-color: #ee5253;
-            transform: scale(1.05);
-        }
-
-        .box:active {
-            transform: scale(0.95);
+        .crosshair {
+            position: absolute; top: 50%; left: 50%;
+            width: 20px; height: 20px; border: 2px solid #fbff00;
+            transform: translate(-50%, -50%); border-radius: 50%;
         }
     </style>
 </head>
 <body>
 
-    <div class="box" onclick="reproduce(this)">Click Me</div>
+    <div id="ui">
+        <h1>HELLPOD STATUS: DEPLOYING</h1>
+        <p>OBJECTIVE: SPREAD MANAGED DEMOCRACY</p>
+        <p>ALTITUDE: <span id="alt">5000</span>m</p>
+    </div>
+    <div class="crosshair"></div>
 
-    <script>
-        function reproduce(element) {
-            // 1. Create a new div element
-            const newBox = document.createElement('div');
-            
-            // 2. Give it the same class and text
-            newBox.className = 'box';
-            newBox.innerText = 'Click Me';
-            
-            // 3. Make sure the new box can also reproduce
-            newBox.onclick = function() {
-                reproduce(newBox);
-            };
-
-            // 4. Add a random color just for fun
-            const randomHue = Math.floor(Math.random() * 360);
-            newBox.style.backgroundColor = `hsl(${randomHue}, 70%, 60%)`;
-
-            // 5. Place it into the body
-            document.body.appendChild(newBox);
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+            }
         }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // --- SCENE SETUP ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // --- LIGHTING ---
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(5, 10, 7.5);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0x404040));
+
+        // --- PLANET SURFACE ---
+        const floorGeo = new THREE.PlaneGeometry(100, 100);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x442211 }); // Dusty red
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
+
+        // --- THE HELLPOD (Simple Placeholder) ---
+        const podGeo = new THREE.CylinderGeometry(0.5, 0.3, 2, 8);
+        const podMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8 });
+        const hellpod = new THREE.Mesh(podGeo, podMat);
+        hellpod.position.y = 50; 
+        scene.add(hellpod);
+
+        // --- CAMERA LOGIC ---
+        camera.position.set(0, 5, 10);
+        camera.lookAt(hellpod.position);
+
+        let altitude = 5000;
+
+        // --- ANIMATION LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Simulate Descent
+            if (hellpod.position.y > 1) {
+                hellpod.position.y -= 0.2;
+                altitude -= 20;
+                document.getElementById('alt').innerText = Math.max(0, altitude);
+                
+                // Camera follows pod
+                camera.position.y = hellpod.position.y + 5;
+                camera.lookAt(hellpod.position);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
     </script>
 </body>
 </html>
