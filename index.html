@@ -1,1283 +1,191 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>STICKMAN: LAST STAND — A 2D Action Film</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Share+Tech+Mono&display=swap');
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>PixelQuest 3D</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; width: 100vw; height: 100vh; font-family: 'Courier New', monospace; }
 
-  *{margin:0;padding:0;box-sizing:border-box}
-  body{background:#0a0a0a;color:#fff;font-family:'Share Tech Mono',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:20px}
-  h1{font-family:'Bebas Neue',sans-serif;font-size:3rem;letter-spacing:6px;color:#e8c84a;text-shadow:0 0 30px #e8c84a88;margin-bottom:4px}
-  .subtitle{font-size:.7rem;letter-spacing:4px;color:#888;margin-bottom:20px}
+    /* Pixel canvas - rendered at low res, upscaled via CSS */
+    #gameCanvas {
+      position: absolute; top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
 
-  /* PLAYER */
-  #player-wrap{width:100%;max-width:900px;background:#111;border:1px solid #333;border-radius:8px;overflow:hidden;box-shadow:0 0 60px #000}
-  canvas#stage{width:100%;display:block;background:#0d0d1a}
-  
-  /* CONTROLS */
-  #controls{background:#161616;padding:12px 16px;border-top:1px solid #222}
-  #timeline-wrap{position:relative;height:6px;background:#2a2a2a;border-radius:3px;cursor:pointer;margin-bottom:12px}
-  #timeline-fill{height:100%;background:linear-gradient(90deg,#e8c84a,#ff4444);border-radius:3px;width:0%;transition:width .1s linear;pointer-events:none}
-  #timeline-thumb{position:absolute;top:50%;transform:translate(-50%,-50%);width:14px;height:14px;background:#e8c84a;border-radius:50%;left:0%;cursor:grab;pointer-events:none;box-shadow:0 0 8px #e8c84a}
-  
-  /* Chapter markers */
-  .chapter-dot{position:absolute;top:50%;transform:translate(-50%,-50%);width:8px;height:8px;background:#555;border-radius:50%;cursor:pointer;pointer-events:all;z-index:2;transition:background .2s}
-  .chapter-dot:hover{background:#e8c84a}
-  .chapter-dot.passed{background:#e8c84a88}
+    /* HUD overlay */
+    #hud {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+    }
 
-  #ctrl-row{display:flex;align-items:center;gap:12px}
-  #btn-play{background:none;border:1px solid #e8c84a;color:#e8c84a;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
-  #btn-play:hover{background:#e8c84a;color:#000}
-  #time-display{font-size:.75rem;color:#888;min-width:90px}
-  #scene-label{font-size:.7rem;color:#e8c84a;letter-spacing:2px;flex:1;text-align:center}
-  #vol-wrap{display:flex;align-items:center;gap:6px;font-size:.7rem;color:#555}
-  input[type=range]#vol{width:60px;accent-color:#e8c84a}
-  
-  /* Chapter list */
-  #chapter-list{display:flex;gap:6px;flex-wrap:wrap;padding:10px 16px;border-top:1px solid #1a1a1a;background:#111}
-  .chap-btn{background:none;border:1px solid #2a2a2a;color:#555;font-family:'Share Tech Mono',monospace;font-size:.6rem;padding:4px 8px;border-radius:3px;cursor:pointer;letter-spacing:1px;transition:all .15s}
-  .chap-btn:hover{border-color:#e8c84a;color:#e8c84a}
-  .chap-btn.active{border-color:#e8c84a;color:#e8c84a;background:#e8c84a11}
+    /* Level title banner */
+    #levelBanner {
+      position: absolute; top: 40px; left: 50%;
+      transform: translateX(-50%);
+      color: #FFD700; font-size: 22px; font-weight: bold;
+      text-shadow: 3px 3px 0 #000, -1px -1px 0 #000;
+      letter-spacing: 4px; text-transform: uppercase;
+      opacity: 0; transition: opacity 0.5s;
+      pointer-events: none;
+    }
 
-  #credits{margin-top:16px;font-size:.6rem;color:#333;letter-spacing:2px;text-align:center}
-</style>
+    /* Health bar */
+    #healthBar {
+      position: absolute; top: 16px; left: 20px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    #healthLabel { color: #ff4444; font-size: 14px; font-weight: bold; text-shadow: 2px 2px 0 #000; }
+    #healthTrack {
+      width: 140px; height: 16px;
+      background: #222; border: 2px solid #555;
+      image-rendering: pixelated;
+    }
+    #healthFill { height: 100%; width: 100%; background: #e03030; transition: width 0.3s; }
+
+    /* Torch counter (level 1 specific) */
+    #torchCount {
+      position: absolute; top: 16px; right: 20px;
+      color: #FFD700; font-size: 16px; font-weight: bold;
+      text-shadow: 2px 2px 0 #000;
+      display: none;
+    }
+
+    /* Message box */
+    #msgBox {
+      position: absolute; bottom: 180px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.82); border: 2px solid #FFD700;
+      color: #fff; padding: 10px 22px; font-size: 15px;
+      text-align: center; max-width: 320px;
+      display: none; pointer-events: none;
+      text-shadow: 1px 1px 0 #000;
+    }
+
+    /* ── CONTROLS ── */
+    #controls { position: absolute; bottom: 0; left: 0; width: 100%; height: 160px; pointer-events: none; }
+
+    /* Joystick */
+    #joystickZone {
+      position: absolute; bottom: 24px; left: 32px;
+      width: 110px; height: 110px;
+      pointer-events: all; touch-action: none;
+    }
+    #joystickBase {
+      width: 110px; height: 110px; border-radius: 50%;
+      background: rgba(255,255,255,0.08);
+      border: 3px solid rgba(255,255,255,0.25);
+      position: absolute;
+    }
+    #joystickKnob {
+      width: 46px; height: 46px; border-radius: 50%;
+      background: rgba(255,255,255,0.55);
+      border: 3px solid rgba(255,255,255,0.9);
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      transition: none;
+    }
+
+    /* Buttons right side */
+    #btnZone {
+      position: absolute; bottom: 24px; right: 28px;
+      display: flex; flex-direction: column; gap: 14px;
+      align-items: flex-end;
+      pointer-events: all;
+    }
+    .gameBtn {
+      width: 68px; height: 68px; border-radius: 50%;
+      border: 3px solid rgba(255,255,255,0.6);
+      font-size: 13px; font-weight: bold; color: #fff;
+      font-family: 'Courier New', monospace;
+      cursor: pointer; touch-action: none;
+      user-select: none; -webkit-user-select: none;
+      text-shadow: 1px 1px 0 #000;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform 0.08s, opacity 0.08s;
+      letter-spacing: 1px;
+    }
+    .gameBtn:active, .gameBtn.pressed { transform: scale(0.88); opacity: 0.75; }
+    #btnAttack { background: rgba(200, 40, 40, 0.7); }
+    #btnUse    { background: rgba(40, 120, 200, 0.7); }
+
+    /* Screen flash */
+    #flash {
+      position: absolute; inset: 0;
+      background: #fff; opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.05s;
+    }
+
+    /* Loading screen */
+    #loadScreen {
+      position: absolute; inset: 0;
+      background: #0a0a0a; display: flex;
+      flex-direction: column; align-items: center; justify-content: center;
+      z-index: 100;
+    }
+    #loadTitle { color: #FFD700; font-size: 36px; font-weight: bold; letter-spacing: 6px; margin-bottom: 18px; text-shadow: 4px 4px 0 #000; }
+    #loadSub   { color: #aaa; font-size: 14px; letter-spacing: 3px; }
+    #loadDot   { color: #FFD700; animation: blink 0.9s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+  </style>
 </head>
 <body>
 
-<h1>STICKMAN: LAST STAND</h1>
-<div class="subtitle">A 2D ANIMATED ACTION FILM &nbsp;·&nbsp; 10 MINUTES</div>
+<canvas id="gameCanvas"></canvas>
 
-<div id="player-wrap">
-  <canvas id="stage" width="900" height="506"></canvas>
-  <div id="controls">
-    <div id="timeline-wrap" id="tl">
-      <div id="timeline-fill"></div>
-      <div id="timeline-thumb"></div>
-    </div>
-    <div id="ctrl-row">
-      <button id="btn-play">▶</button>
-      <span id="time-display">0:00 / 10:00</span>
-      <span id="scene-label">PRESS PLAY TO BEGIN</span>
-      <div id="vol-wrap">🔊<input type="range" id="vol" min="0" max="1" step=".05" value=".7"></div>
-    </div>
+<!-- HUD -->
+<div id="hud">
+  <div id="levelBanner">LEVEL 1 — THE DUNGEON</div>
+  <div id="healthBar">
+    <span id="healthLabel">HP</span>
+    <div id="healthTrack"><div id="healthFill"></div></div>
   </div>
-  <div id="chapter-list"></div>
+  <div id="torchCount">🔥 Torches: <span id="torchNum">3</span></div>
+  <div id="msgBox"></div>
+  <div id="flash"></div>
 </div>
-<div id="credits">CREATED WITH HTML5 CANVAS &nbsp;·&nbsp; NO EXTERNAL ASSETS &nbsp;·&nbsp; PURE CODE</div>
+
+<!-- Controls -->
+<div id="controls">
+  <div id="joystickZone">
+    <div id="joystickBase"></div>
+    <div id="joystickKnob"></div>
+  </div>
+  <div id="btnZone">
+    <button class="gameBtn" id="btnAttack">ATK</button>
+    <button class="gameBtn" id="btnUse">USE</button>
+  </div>
+</div>
+
+<!-- Loading -->
+<div id="loadScreen">
+  <div id="loadTitle">PIXELQUEST</div>
+  <div id="loadSub">LOADING<span id="loadDot">...</span></div>
+</div>
+
+<!-- Three.js from CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- Engine -->
+<script src="engine.js"></script>
+<!-- Levels -->
+<script src="Level/level1.js"></script>
+<script src="Level/level2.js"></script>
 
 <script>
-// ─────────────────────────────────────────────
-//  STICKMAN LAST STAND — Canvas Animation Engine
-//  Total duration: 600 seconds (10 minutes)
-// ─────────────────────────────────────────────
-
-const canvas = document.getElementById('stage');
-const ctx = canvas.getContext('2d');
-const W = canvas.width, H = canvas.height;
-const TOTAL = 600; // seconds
-
-// ── Chapters ──────────────────────────────────
-const CHAPTERS = [
-  { t:0,   label:'I. AWAKENING',      color:'#4af' },
-  { t:60,  label:'II. FIRST BLOOD',   color:'#f84' },
-  { t:120, label:'III. THE AMBUSH',   color:'#f44' },
-  { t:200, label:'IV. GUNFIGHT ALLEY',color:'#f44' },
-  { t:280, label:'V. THE BOSS',       color:'#c4f' },
-  { t:370, label:'VI. AFTERMATH',     color:'#4f8' },
-  { t:430, label:'VII. FINAL STAND',  color:'#f22' },
-  { t:520, label:'VIII. RECKONING',   color:'#e8c84a' },
-];
-
-// ── Player State ──────────────────────────────
-let playing = false, startedAt = 0, pausedAt = 0, animId = null;
-
-function currentTime(){
-  if(!playing) return pausedAt;
-  return Math.min((Date.now() - startedAt)/1000, TOTAL);
-}
-
-// ── Math helpers ──────────────────────────────
-const lerp=(a,b,t)=>a+(b-a)*t;
-const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const ease=(t)=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
-const wave=(t,freq=1,amp=1)=>Math.sin(t*Math.PI*2*freq)*amp;
-const rand=(a,b)=>a+Math.random()*(b-a);
-const randInt=(a,b)=>Math.floor(rand(a,b+1));
-
-// ── Noise / seed random for deterministic effects ──
-function seededRand(seed){
-  let s=seed%2147483647;if(s<=0)s+=2147483646;
-  return function(){s=s*16807%2147483647;return(s-1)/2147483646;}
-}
-
-// ── Draw helpers ──────────────────────────────
-function bg(color){ctx.fillStyle=color;ctx.fillRect(0,0,W,H);}
-
-function drawGround(y,color='#1a1a2e',lineColor='#2a2a4e'){
-  ctx.fillStyle=color;ctx.fillRect(0,y,W,H-y);
-  ctx.strokeStyle=lineColor;ctx.lineWidth=1;
-  // perspective grid
-  for(let i=0;i<=10;i++){
-    let x=i*(W/10);
-    ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(W/2+(x-W/2)*2,H);ctx.stroke();
-  }
-  for(let row=0;row<6;row++){
-    let ty=y+row*(H-y)/6;
-    ctx.beginPath();ctx.moveTo(0,ty);ctx.lineTo(W,ty);ctx.stroke();
-  }
-}
-
-function drawStars(t,count=120){
-  const r=seededRand(42);
-  ctx.fillStyle='rgba(255,255,255,0.8)';
-  for(let i=0;i<count;i++){
-    let x=r()*W,y=r()*(H*0.6);
-    let flicker=0.4+0.6*Math.abs(Math.sin(t*2+i*1.3));
-    ctx.globalAlpha=flicker*r()*0.9;
-    ctx.fillRect(x,y,r()<0.1?2:1,r()<0.1?2:1);
-  }
-  ctx.globalAlpha=1;
-}
-
-function drawMoon(x,y,r){
-  ctx.fillStyle='#f5f0d0';
-  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle='#0d0d1a';
-  ctx.beginPath();ctx.arc(x+r*0.3,y-r*0.1,r*0.82,0,Math.PI*2);ctx.fill();
-  ctx.globalAlpha=0.08;ctx.fillStyle='#fff';
-  ctx.beginPath();ctx.arc(x,y,r+4,0,Math.PI*2);ctx.fill();
-  ctx.globalAlpha=1;
-}
-
-function drawBuilding(x,w,h,color='#141428',winColor='#ffe08088'){
-  ctx.fillStyle=color;ctx.fillRect(x,H*0.55-h,w,h);
-  ctx.fillStyle=winColor;
-  for(let wy=H*0.55-h+10;wy<H*0.55-10;wy+=18){
-    for(let wx=x+6;wx<x+w-10;wx+=14){
-      ctx.globalAlpha=Math.random()<0.15?0.1:Math.random()<0.4?0.8:0.3;
-      ctx.fillRect(wx,wy,8,10);
-    }
-  }
-  ctx.globalAlpha=1;
-}
-
-// ── STICKMAN ──────────────────────────────────
-function drawStickman(x,y,scale=1,opts={}){
-  const {
-    color='#fff',headColor='#fff',
-    armAngle=0,legL=0,legR=0,
-    walk=0,run=false,lean=0,dead=false,
-    gun=false,gunAngle=0,shield=false,
-    flash=false,crouch=false
-  }=opts;
-
-  ctx.save();
-  ctx.translate(x,y);
-  ctx.scale(scale,scale);
-  ctx.rotate(lean);
-
-  const lw=2.5;
-  ctx.strokeStyle=flash?'#ffff88':color;
-  ctx.lineWidth=lw;
-  ctx.lineCap='round';
-
-  if(dead){
-    // fallen stickman
-    ctx.save();ctx.rotate(Math.PI/2);
-    _drawStickmanBody(0,0,lw,armAngle,0,0,gun,gunAngle,headColor,color,crouch);
-    ctx.restore();
-    ctx.restore();
-    return;
-  }
-
-  const legSwing=walk*0.6;
-  const crouchY=crouch?14:0;
-  _drawStickmanBody(0,crouchY,lw,armAngle,legSwing,run?legSwing*1.4:legSwing,gun,gunAngle,headColor,color,crouch);
-
-  if(shield){
-    ctx.strokeStyle='#4af8';ctx.lineWidth=4;
-    ctx.beginPath();ctx.arc(-18,0,20,Math.PI*0.7,Math.PI*1.3);ctx.stroke();
-  }
-
-  ctx.restore();
-}
-
-function _drawStickmanBody(x,cy,lw,armAngle,legL,legR,gun,gunAngle,headColor,color,crouch){
-  // head
-  ctx.strokeStyle=headColor;ctx.lineWidth=lw;
-  ctx.beginPath();ctx.arc(x,-38+cy,9,0,Math.PI*2);ctx.stroke();
-  // eyes
-  ctx.fillStyle=headColor;
-  ctx.beginPath();ctx.arc(x-3,-38+cy,1.5,0,Math.PI*2);ctx.fill();
-  ctx.beginPath();ctx.arc(x+3,-38+cy,1.5,0,Math.PI*2);ctx.fill();
-  // body
-  ctx.strokeStyle=color;
-  ctx.beginPath();ctx.moveTo(x,-29+cy);ctx.lineTo(x,-4+cy);ctx.stroke();
-  // arms
-  let a1=armAngle,a2=-armAngle*0.6;
-  ctx.beginPath();ctx.moveTo(x,-24+cy);
-  ctx.lineTo(x+Math.cos(a1)*22,-24+Math.sin(a1)*22+cy);ctx.stroke();
-  ctx.beginPath();ctx.moveTo(x,-24+cy);
-  ctx.lineTo(x+Math.cos(Math.PI+a2)*22,-24+Math.sin(Math.PI+a2)*22+cy);ctx.stroke();
-  // legs
-  ctx.beginPath();ctx.moveTo(x,-4+cy);
-  ctx.lineTo(x+Math.sin(legL)*16,-4+Math.cos(legL)*22+cy);ctx.stroke();
-  ctx.beginPath();ctx.moveTo(x,-4+cy);
-  ctx.lineTo(x+Math.sin(-legR)*16,-4+Math.cos(legR)*22+cy);ctx.stroke();
-  // gun
-  if(gun){
-    let gx=Math.cos(gunAngle)*26,gy=Math.sin(gunAngle)*26;
-    ctx.strokeStyle='#aaa';ctx.lineWidth=4;
-    ctx.beginPath();ctx.moveTo(x+Math.cos(gunAngle)*18,-24+cy);
-    ctx.lineTo(x+gx,-24+gy+cy);ctx.stroke();
-    // barrel
-    ctx.strokeStyle='#666';ctx.lineWidth=3;
-    ctx.beginPath();ctx.moveTo(x+gx,-24+gy+cy);
-    ctx.lineTo(x+gx+Math.cos(gunAngle)*14,-24+gy+Math.sin(gunAngle)*14+cy);ctx.stroke();
-  }
-}
-
-// ── Particle System ──────────────────────────
-class Particles{
-  constructor(){this.p=[];}
-  spawn(x,y,opts={}){
-    let count=opts.count||8;
-    for(let i=0;i<count;i++){
-      let a=opts.angle!==undefined?opts.angle:rand(0,Math.PI*2);
-      let spread=opts.spread||Math.PI*2;
-      a+=rand(-spread/2,spread/2);
-      this.p.push({
-        x,y,
-        vx:Math.cos(a)*rand(opts.speed||2,opts.speed2||6),
-        vy:Math.sin(a)*rand(opts.speed||2,opts.speed2||6),
-        life:1,decay:rand(0.01,0.04)*(opts.decayMult||1),
-        color:opts.color||'#ff4',
-        size:rand(opts.size||2,opts.size2||5),
-        gravity:opts.gravity!==undefined?opts.gravity:0.15,
-        type:opts.type||'dot'
-      });
-    }
-  }
-  update(dt){
-    this.p=this.p.filter(p=>{
-      p.x+=p.vx;p.y+=p.vy;p.vy+=p.gravity;p.life-=p.decay;
-      return p.life>0;
-    });
-  }
-  draw(){
-    this.p.forEach(p=>{
-      ctx.globalAlpha=p.life;
-      ctx.fillStyle=p.color;
-      if(p.type==='spark'){
-        ctx.strokeStyle=p.color;ctx.lineWidth=1;
-        ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p.x-p.vx*3,p.y-p.vy*3);ctx.stroke();
-      } else {
-        ctx.beginPath();ctx.arc(p.x,p.y,p.size*p.life,0,Math.PI*2);ctx.fill();
-      }
-    });
-    ctx.globalAlpha=1;
-  }
-}
-
-// ── Bullet System ─────────────────────────────
-class Bullets{
-  constructor(){this.b=[];}
-  fire(x,y,angle,speed=14,color='#ffee88',enemy=false){
-    this.b.push({x,y,angle,speed,color,enemy,life:1,trail:[]});
-  }
-  update(){
-    this.b=this.b.filter(b=>{
-      b.trail.push({x:b.x,y:b.y});
-      if(b.trail.length>8)b.trail.shift();
-      b.x+=Math.cos(b.angle)*b.speed;
-      b.y+=Math.sin(b.angle)*b.speed;
-      b.life-=0.008;
-      return b.life>0&&b.x>-20&&b.x<W+20&&b.y>-20&&b.y<H+20;
-    });
-  }
-  draw(){
-    this.b.forEach(b=>{
-      // trail
-      for(let i=0;i<b.trail.length;i++){
-        let a=(i/b.trail.length)*0.6*b.life;
-        ctx.globalAlpha=a;ctx.strokeStyle=b.color;ctx.lineWidth=2;
-        if(i>0){
-          ctx.beginPath();ctx.moveTo(b.trail[i-1].x,b.trail[i-1].y);
-          ctx.lineTo(b.trail[i].x,b.trail[i].y);ctx.stroke();
-        }
-      }
-      ctx.globalAlpha=b.life;
-      ctx.fillStyle=b.color;
-      ctx.beginPath();ctx.arc(b.x,b.y,3,0,Math.PI*2);ctx.fill();
-    });
-    ctx.globalAlpha=1;
-  }
-}
-
-// ── Explosions ────────────────────────────────
-class Explosions{
-  constructor(){this.e=[];}
-  add(x,y,size=40,color='#f84'){
-    this.e.push({x,y,size,color,life:1,rings:Array.from({length:3},(_,i)=>({r:0,maxR:size*(0.5+i*0.4),speed:size*0.04*(1+i*0.5)}))});
-  }
-  update(){
-    this.e=this.e.filter(e=>{
-      e.life-=0.02;
-      e.rings.forEach(r=>{r.r=Math.min(r.r+r.speed,r.maxR);});
-      return e.life>0;
-    });
-  }
-  draw(){
-    this.e.forEach(e=>{
-      e.rings.forEach((r,i)=>{
-        ctx.globalAlpha=e.life*(1-i*0.25)*0.7;
-        ctx.strokeStyle=i===0?'#fff':i===1?e.color:'#f440';
-        ctx.lineWidth=i===0?4:i===1?6:10;
-        ctx.beginPath();ctx.arc(e.x,e.y,r.r,0,Math.PI*2);ctx.stroke();
-      });
-      ctx.globalAlpha=e.life*0.4;
-      ctx.fillStyle='#fff';
-      ctx.beginPath();ctx.arc(e.x,e.y,e.size*0.2*e.life,0,Math.PI*2);ctx.fill();
-    });
-    ctx.globalAlpha=1;
-  }
-}
-
-// ── Text overlay ──────────────────────────────
-let textOverlays=[];
-function showText(msg,dur=3,size=28,color='#fff',y=H*0.12){
-  textOverlays.push({msg,dur,life:dur,size,color,y});
-}
-
-function drawTextOverlays(dt){
-  textOverlays=textOverlays.filter(o=>{
-    o.life-=dt;
-    let a=o.life<0.5?o.life/0.5:o.life>o.dur-0.3?1:1;
-    ctx.save();
-    ctx.globalAlpha=Math.min(1,o.life*3,a);
-    ctx.font=`bold ${o.size}px 'Bebas Neue',sans-serif`;
-    ctx.fillStyle=o.color;
-    ctx.textAlign='center';
-    ctx.letterSpacing='4px';
-    // shadow
-    ctx.shadowColor='#000';ctx.shadowBlur=10;
-    ctx.fillText(o.msg,W/2,o.y);
-    ctx.restore();
-    return o.life>0;
+  // Boot once DOM + scripts ready
+  window.addEventListener('load', () => {
+    PixelEngine.init();
+    setTimeout(() => {
+      document.getElementById('loadScreen').style.display = 'none';
+      PixelEngine.loadLevel(1);
+    }, 1200);
   });
-}
-
-// ── Screen flash ──────────────────────────────
-let screenFlash=0;
-function flash(intensity=1){screenFlash=Math.max(screenFlash,intensity);}
-function drawFlash(){
-  if(screenFlash<=0)return;
-  ctx.fillStyle=`rgba(255,255,200,${screenFlash*0.5})`;
-  ctx.fillRect(0,0,W,H);
-  screenFlash=Math.max(0,screenFlash-0.08);
-}
-
-// ── Camera shake ──────────────────────────────
-let shakeAmt=0,shakeX=0,shakeY=0;
-function shake(amt=8){shakeAmt=Math.max(shakeAmt,amt);}
-function applyShake(){
-  if(shakeAmt<=0)return;
-  shakeX=(Math.random()-0.5)*shakeAmt;
-  shakeY=(Math.random()-0.5)*shakeAmt;
-  ctx.translate(shakeX,shakeY);
-  shakeAmt=Math.max(0,shakeAmt-0.8);
-}
-
-// ── Letter-box bars ──────────────────────────
-function drawLetterbox(){
-  ctx.fillStyle='#000';
-  let bh=H*0.08;
-  ctx.fillRect(0,0,W,bh);
-  ctx.fillRect(0,H-bh,W,bh);
-}
-
-// ── Blood splatter ────────────────────────────
-let bloodSplatters=[];
-function spawnBlood(x,y,count=6){
-  for(let i=0;i<count;i++){
-    bloodSplatters.push({x,y,r:rand(2,8),life:rand(0.6,1),vx:rand(-4,4),vy:rand(-6,2)});
-  }
-}
-function updateBlood(){
-  bloodSplatters=bloodSplatters.filter(b=>{
-    b.x+=b.vx;b.y+=b.vy;b.vy+=0.3;b.life-=0.005;return b.life>0;
-  });
-}
-function drawBlood(){
-  bloodSplatters.forEach(b=>{
-    ctx.globalAlpha=b.life*0.8;ctx.fillStyle='#c00';
-    ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();
-  });
-  ctx.globalAlpha=1;
-}
-
-// ── Title card ────────────────────────────────
-function drawTitleCard(t,chap){
-  // Black bars
-  let barH=H*0.18;
-  ctx.fillStyle='#000';ctx.fillRect(0,0,W,barH);ctx.fillRect(0,H-barH,W,barH);
-  // Chapter name
-  ctx.font=`bold 36px 'Bebas Neue',sans-serif`;
-  ctx.fillStyle=chap.color;ctx.textAlign='center';
-  ctx.shadowColor=chap.color;ctx.shadowBlur=20;
-  ctx.fillText(chap.label,W/2,barH*0.65);
-  ctx.shadowBlur=0;
-  // Scanlines
-  ctx.globalAlpha=0.04;
-  for(let y=0;y<H;y+=3){ctx.fillStyle='#000';ctx.fillRect(0,y,W,1);}
-  ctx.globalAlpha=1;
-}
-
-// ── PARTICLES, BULLETS, EXPLOSIONS (global) ───
-const particles=new Particles();
-const bullets=new Bullets();
-const explosions=new Explosions();
-
-// ── Utility scene timer ──────────────────────
-function inRange(t,a,b){return t>=a&&t<b;}
-function phase(t,a,b){return clamp((t-a)/(b-a),0,1);}
-function easePhase(t,a,b){return ease(phase(t,a,b));}
-
-// ═══════════════════════════════════════════════
-//  SCENE RENDERING — one giant function that takes
-//  global time T and draws the current frame
-// ═══════════════════════════════════════════════
-let lastT=0;
-function renderFrame(T){
-  const dt=Math.max(0,T-lastT);lastT=T;
-  const sT=Math.round(T); // integer second
-
-  ctx.save();
-  applyShake();
-
-  // ─── CHAPTER I: AWAKENING (0–59s) ───────────
-  if(inRange(T,0,60)){
-    const t=T;
-
-    // Night city bg
-    let skyAlpha=easePhase(t,0,3);
-    bg('#050510');
-    drawStars(t);
-    drawMoon(W*0.8,H*0.12,50);
-
-    // Buildings silhouette
-    const buildings=[
-      {x:0,w:80,h:180},{x:90,w:50,h:130},{x:150,w:70,h:220},
-      {x:230,w:90,h:160},{x:330,w:60,h:200},{x:400,w:80,h:140},
-      {x:490,w:100,h:250},{x:600,w:90,h:180},{x:700,w:80,h:140},
-      {x:790,w:100,h:190},{x:840,w:60,h:120}
-    ];
-    buildings.forEach(b=>drawBuilding(b.x,b.w,b.h));
-
-    // Ground
-    drawGround(H*0.55,'#0d0d1e','#1a1a3a');
-
-    // Stickman wakes up (lying, then rising)
-    let risePhase=easePhase(t,2,7);
-    let stickX=W*0.5,stickY=H*0.55-5;
-
-    if(t<2){
-      // Lying still
-      drawStickman(stickX,stickY,1,{dead:true,color:'#ccc',headColor:'#ccc'});
-    } else if(t<7){
-      // Rising
-      ctx.save();ctx.translate(stickX,stickY);
-      ctx.rotate((1-risePhase)*Math.PI/2);
-      drawStickman(0,0,1,{color:'#ccc',headColor:'#ccc',armAngle:lerp(Math.PI/2,-0.3,risePhase)});
-      ctx.restore();
-    } else {
-      // Standing, looking around
-      let walkCycle=wave(t,1.5)*0.8;
-      let walkX=stickX+wave(t,0.3)*30;
-      drawStickman(walkX,stickY,1,{color:'#fff',headColor:'#dff',walk:walkCycle,armAngle:Math.PI*0.1});
-      
-      // Spotlight
-      if(t>8){
-        let sA=easePhase(t,8,10)*0.5;
-        ctx.save();
-        let grd=ctx.createRadialGradient(walkX,stickY-20,0,walkX,stickY-20,200);
-        grd.addColorStop(0,`rgba(255,255,200,${sA*0.25})`);
-        grd.addColorStop(1,'rgba(255,255,200,0)');
-        ctx.fillStyle=grd;ctx.fillRect(0,0,W,H);
-        ctx.restore();
-      }
-    }
-
-    // Title text
-    if(t<5){
-      ctx.font=`bold ${lerp(0,72,easePhase(t,0.5,2))}px 'Bebas Neue',sans-serif`;
-      ctx.fillStyle='#e8c84a';ctx.textAlign='center';
-      ctx.shadowColor='#e8c84a';ctx.shadowBlur=30;
-      ctx.globalAlpha=easePhase(t,0.5,2)*(1-easePhase(t,4,5));
-      ctx.fillText('STICKMAN',W/2,H*0.38);
-      ctx.font=`bold ${lerp(0,36,easePhase(t,1,2.5))}px 'Bebas Neue',sans-serif`;
-      ctx.fillStyle='#fff';ctx.shadowColor='#fff';ctx.shadowBlur=10;
-      ctx.fillText('LAST  STAND',W/2,H*0.48);
-      ctx.globalAlpha=1;ctx.shadowBlur=0;
-    }
-
-    // Chapter title
-    if(t>10&&t<15){
-      ctx.globalAlpha=easePhase(t,10,11)*(1-easePhase(t,14,15));
-      drawTitleCard(t,CHAPTERS[0]);
-      ctx.globalAlpha=1;
-    }
-
-    // Rain particles
-    if(t>5){
-      const rng=seededRand(sT*100+Math.floor(t*10));
-      ctx.strokeStyle='rgba(100,150,255,0.3)';ctx.lineWidth=1;
-      for(let i=0;i<60;i++){
-        let rx=rng()*W,ry=((rng()*H+t*300)%H);
-        ctx.beginPath();ctx.moveTo(rx,ry);ctx.lineTo(rx-2,ry+12);ctx.stroke();
-      }
-    }
-
-    // Gunshot sound text at t=55
-    if(t>55){
-      let ph=easePhase(t,55,56);
-      ctx.globalAlpha=ph;
-      ctx.font=`bold 22px 'Bebas Neue',sans-serif`;
-      ctx.fillStyle='#f44';ctx.textAlign='center';
-      ctx.fillText('*BANG*  *BANG*  *BANG*',W/2,H*0.3);
-      ctx.globalAlpha=1;
-      if(t>57&&t<58){flash(0.6);shake(5);}
-    }
-  }
-
-  // ─── CHAPTER II: FIRST BLOOD (60–119s) ──────
-  if(inRange(T,60,120)){
-    const t=T-60;
-
-    bg('#0a0510');
-    drawStars(T,60);
-    drawMoon(W*0.85,H*0.1,40);
-    buildings_bg();
-    drawGround(H*0.6,'#111120','#1a1a35');
-
-    // Chapter title
-    if(t<5){
-      ctx.globalAlpha=easePhase(t,0,0.8)*(1-easePhase(t,4,5));
-      drawTitleCard(T,CHAPTERS[1]);ctx.globalAlpha=1;
-    }
-
-    // Stickman hero with gun, enemy appears
-    let heroX=W*0.2+wave(t,0.4)*10,heroY=H*0.6-5;
-    let enemyX=W*0.8-easePhase(t,2,5)*W*0.35,enemyY=H*0.6-5;
-
-    // Enemy walks in
-    let eWalk=wave(T,3)*0.9;
-    drawStickman(enemyX,enemyY,1,{color:'#f55',headColor:'#f88',walk:eWalk,gun:true,gunAngle:-Math.PI+0.3,armAngle:0.2});
-
-    // Hero aims
-    drawStickman(heroX,heroY,1,{color:'#fff',headColor:'#dff',gun:true,gunAngle:-0.1,armAngle:-0.2});
-
-    // Exchange fire (t>8)
-    if(t>8&&t<50){
-      // Hero shoots every ~3s
-      if(Math.floor(t*2)%6===0&&Math.floor(t*2)!==Math.floor((t-0.05)*2)){
-        bullets.fire(heroX+26,heroY-24,-0.1,16,'#ffe066');
-        flash(0.3);shake(4);
-        particles.spawn(heroX+26,heroY-24,{count:8,color:'#ff8',angle:-0.1,spread:0.6,speed:3,speed2:7,type:'spark',gravity:0.1,decayMult:3});
-      }
-      // Enemy shoots every ~4s (offset)
-      if(Math.floor(t*2+1)%8===0&&Math.floor(t*2+1)!==Math.floor((t-0.05)*2+1)){
-        bullets.fire(enemyX-26,enemyY-24,Math.PI+0.2,14,'#f88');
-        particles.spawn(enemyX-26,enemyY-24,{count:6,color:'#f84',angle:Math.PI+0.2,spread:0.5,speed:2,speed2:5,type:'spark',gravity:0.1,decayMult:3});
-      }
-    }
-
-    // Enemy gets hit at t=40
-    if(t>38&&t<45){
-      let hitPhase=easePhase(t,38,40);
-      if(hitPhase>0&&hitPhase<0.05){spawnBlood(enemyX,enemyY-20,12);explosions.add(enemyX,enemyY-20,25,'#f44');flash(0.5);shake(8);}
-      if(t>40){
-        drawStickman(enemyX+wave(t,8)*5,enemyY,1,{color:'#f55',headColor:'#f88',dead:true,gun:true,gunAngle:0.3});
-      }
-    }
-
-    // Muzzle text
-    if(t>8&&t<50&&Math.floor(t)%3===0){
-      ctx.font=`bold 14px 'Bebas Neue',sans-serif`;
-      ctx.fillStyle='#ffe066';ctx.textAlign='center';
-      ctx.globalAlpha=0.7;
-      ctx.fillText('BANG',heroX,heroY-70);ctx.globalAlpha=1;
-    }
-
-    // Second wave enemies
-    if(t>48){
-      for(let i=0;i<3;i++){
-        let ex=W*0.65+i*60-wave(t,0.5+i*0.2)*15,ey=H*0.6-5;
-        let ew=wave(T+i,2+i*0.3)*0.8;
-        drawStickman(ex,ey,0.9,{color:'#f44',headColor:'#f88',walk:ew,gun:true,gunAngle:-Math.PI+0.2+i*0.1,armAngle:0.2});
-      }
-      showText('MORE ENEMIES!',0.1,22,'#f44');
-    }
-  }
-
-  // ─── CHAPTER III: THE AMBUSH (120–199s) ─────
-  if(inRange(T,120,200)){
-    const t=T-120;
-    bg('#080816');
-    drawStars(T,80);
-    buildings_bg();
-    drawGround(H*0.62,'#0f0f20','#1a1a38');
-
-    if(t<5){
-      ctx.globalAlpha=easePhase(t,0,0.8)*(1-easePhase(t,4,5));
-      drawTitleCard(T,CHAPTERS[2]);ctx.globalAlpha=1;
-    }
-
-    // Red searchlight from top
-    let beamAngle=Math.sin(T*0.4)*0.6;
-    ctx.save();
-    let grd=ctx.createLinearGradient(W*0.5,0,W*0.5+Math.sin(beamAngle)*300,H*0.6);
-    grd.addColorStop(0,'rgba(255,50,50,0.25)');
-    grd.addColorStop(1,'rgba(255,50,50,0)');
-    ctx.fillStyle=grd;
-    ctx.beginPath();ctx.moveTo(W*0.5,0);
-    ctx.lineTo(W*0.5+Math.sin(beamAngle)*320,H*0.62);
-    ctx.lineTo(W*0.5+Math.sin(beamAngle)*320+60,H*0.62);
-    ctx.lineTo(W*0.5+60,0);ctx.closePath();ctx.fill();
-    ctx.restore();
-
-    // Hero running left to right
-    let heroX=W*0.05+easePhase(t,0,20)*W*0.6;
-    let heroY=H*0.62-5;
-    let runCycle=wave(T,5)*1.2;
-    drawStickman(heroX,heroY,1,{color:'#fff',headColor:'#dff',walk:runCycle,run:true,lean:-0.15,gun:true,gunAngle:-0.1,armAngle:-0.3});
-
-    // Enemies dropping from above
-    if(t>10){
-      let dropCount=Math.min(5,Math.floor((t-10)/5));
-      for(let i=0;i<dropCount;i++){
-        let ex=W*0.45+i*70,ey=Math.max(H*0.62-5,H*0.1+easePhase(t,10+i*5,12+i*5)*H*0.52);
-        let ew=wave(T+i,2)*0.8;
-        // Rope
-        ctx.strokeStyle='#555';ctx.lineWidth=2;
-        ctx.beginPath();ctx.moveTo(ex,0);ctx.lineTo(ex,ey-20);ctx.stroke();
-        drawStickman(ex,ey,0.9,{color:'#f44',headColor:'#f88',walk:ew,gun:true,gunAngle:-Math.PI+0.2});
-      }
-    }
-
-    // Hero slides under
-    if(t>30&&t<40){
-      let slidePhase=easePhase(t,30,33);
-      ctx.save();ctx.translate(heroX,heroY);
-      ctx.rotate(slidePhase*Math.PI/2);
-      drawStickman(0,0,1,{color:'#fff',headColor:'#dff',gun:true,gunAngle:-Math.PI*0.5,crouch:true});
-      ctx.restore();
-    }
-
-    // Explosions at ambush points
-    if(t>25&&t<60&&Math.floor(t)%8===4){
-      let ex2=rand(W*0.3,W*0.9),ey2=rand(H*0.3,H*0.6);
-      explosions.add(ex2,ey2,50,'#f84');
-      particles.spawn(ex2,ey2,{count:20,color:'#f84',speed:3,speed2:10,type:'spark',gravity:0.2,decayMult:2});
-      shake(10);flash(0.6);
-    }
-
-    // Text
-    if(t>5&&t<15){showText('AN AMBUSH!',0.08,32,'#f44',H*0.2);}
-    if(t>60){showText('KEEP MOVING!',0.08,22,'#ff8',H*0.2);}
-  }
-
-  // ─── CHAPTER IV: GUNFIGHT ALLEY (200–279s) ──
-  if(inRange(T,200,280)){
-    const t=T-200;
-    bg('#060618');
-    drawStars(T,50);
-    buildings_bg2();
-    drawGround(H*0.65,'#0d0d22','#1a1a3a');
-
-    if(t<5){
-      ctx.globalAlpha=easePhase(t,0,0.8)*(1-easePhase(t,4,5));
-      drawTitleCard(T,CHAPTERS[3]);ctx.globalAlpha=1;
-    }
-
-    // Cover objects
-    const covers=[
-      {x:W*0.3,w:60,h:40,y:H*0.65-40},
-      {x:W*0.5,w:80,h:55,y:H*0.65-55},
-      {x:W*0.7,w:50,h:35,y:H*0.65-35}
-    ];
-    covers.forEach(c=>{
-      ctx.fillStyle='#222244';ctx.fillRect(c.x,c.y,c.w,c.h);
-      ctx.strokeStyle='#3a3a66';ctx.lineWidth=1;ctx.strokeRect(c.x,c.y,c.w,c.h);
-    });
-
-    // Hero behind first cover
-    let heroX=covers[0].x+30,heroY=H*0.65-5;
-    let crouchHero=t%6<3;
-    drawStickman(heroX,heroY,1,{color:'#fff',headColor:'#dff',gun:true,gunAngle:-0.05,crouch:crouchHero,armAngle:crouchHero?-0.2:-0.3});
-
-    // Wave of enemies
-    let waveCount=Math.min(6,2+Math.floor(t/25));
-    for(let i=0;i<waveCount;i++){
-      let ex=W*0.78+i*55-wave(T+i,0.3)*20,ey=H*0.65-5;
-      let shotCycle=Math.floor((t+i*2)*0.5)%4===0;
-      drawStickman(ex,ey,0.9,{color:'#f33',headColor:'#f66',walk:wave(T+i,1.5)*0.7,gun:true,gunAngle:-Math.PI+0.15+i*0.05});
-      if(shotCycle){
-        bullets.fire(ex-26,ey-24,Math.PI+0.15,13,'#f88');
-        particles.spawn(ex-26,ey-24,{count:4,color:'#f84',angle:Math.PI,spread:0.4,speed:2,speed2:5,type:'spark',gravity:0.1,decayMult:4});
-      }
-    }
-
-    // Hero periodic shots
-    let heroShotCycle=Math.floor(t*0.7)%5===0;
-    if(heroShotCycle){
-      bullets.fire(heroX+26,heroY-24,-0.05,16,'#ffe066');
-      particles.spawn(heroX+26,heroY-24,{count:8,color:'#ff8',angle:-0.05,spread:0.5,speed:3,speed2:8,type:'spark',gravity:0.1,decayMult:3});
-      flash(0.2);shake(3);
-    }
-
-    // Enemies falling
-    let deadCount=Math.min(4,Math.floor(t/20));
-    for(let i=0;i<deadCount;i++){
-      let dx=W*0.8+i*50,dy=H*0.65-5;
-      drawStickman(dx,dy,0.9,{color:'#933',headColor:'#955',dead:true});
-    }
-
-    // Grenade throw at t=40
-    if(t>38&&t<55){
-      let gph=easePhase(t,38,42);
-      let gx=heroX+gph*280,gy=heroY-80*Math.sin(gph*Math.PI)-20;
-      ctx.fillStyle='#0f0';ctx.beginPath();ctx.arc(gx,gy,6,0,Math.PI*2);ctx.fill();
-      ctx.strokeStyle='#0f0';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(gx,gy-6);ctx.lineTo(gx,gy-14);ctx.stroke();
-      if(t>42&&t<43){explosions.add(heroX+280,heroY-20,80,'#f84');shake(15);flash(0.8);spawnBlood(heroX+280,heroY-20,20);}
-    }
-
-    if(t>60){showText('CLEAR THE ALLEY!',0.05,26,'#ff8',H*0.15);}
-  }
-
-  // ─── CHAPTER V: THE BOSS (280–369s) ─────────
-  if(inRange(T,280,370)){
-    const t=T-280;
-    bg('#0a0008');
-    drawStars(T,40);
-    buildings_bg2();
-    drawGround(H*0.65,'#120012','#220022');
-
-    if(t<5){
-      ctx.globalAlpha=easePhase(t,0,0.8)*(1-easePhase(t,4,5));
-      drawTitleCard(T,CHAPTERS[4]);ctx.globalAlpha=1;
-    }
-
-    // Dramatic lightning
-    if(Math.floor(T*3)%40===0){
-      ctx.fillStyle='rgba(180,150,255,0.2)';ctx.fillRect(0,0,W,H);
-      // lightning bolt
-      ctx.strokeStyle='rgba(200,150,255,0.9)';ctx.lineWidth=2;
-      let lx=rand(W*0.2,W*0.8);
-      ctx.beginPath();ctx.moveTo(lx,0);
-      for(let i=1;i<8;i++){ctx.lineTo(lx+(rand(-30,30)),i*(H*0.6)/8);}
-      ctx.stroke();
-    }
-
-    // Boss intro
-    let bossX=W*0.7,bossY=H*0.65-5;
-    let bossScale=1+easePhase(t,0,3)*0.6; // grows bigger
-    let bossHealth=Math.max(0,1-easePhase(t,60,85));
-
-    // Boss glow
-    ctx.save();
-    let bgrd=ctx.createRadialGradient(bossX,bossY-50,0,bossX,bossY-50,120*bossScale);
-    bgrd.addColorStop(0,`rgba(180,0,255,${0.3*bossHealth})`);
-    bgrd.addColorStop(1,'rgba(180,0,255,0)');
-    ctx.fillStyle=bgrd;ctx.fillRect(0,0,W,H);
-    ctx.restore();
-
-    // BOSS character - bigger, scarier
-    if(bossHealth>0){
-      let bossWalk=wave(T,0.8)*0.5;
-      let bossLean=wave(t,0.2)*0.1;
-      drawStickman(bossX+wave(t,0.15)*20,bossY,bossScale,{
-        color:'#c08f',headColor:'#f08f',
-        walk:bossWalk,lean:bossLean,
-        gun:true,gunAngle:-Math.PI+0.1,
-        armAngle:0.3
-      });
-      // BOSS label
-      ctx.font=`bold 16px 'Bebas Neue',sans-serif`;
-      ctx.fillStyle='#c08f';ctx.textAlign='center';
-      ctx.fillText('THE OVERLORD',bossX,bossY-100*bossScale);
-      // Health bar
-      ctx.fillStyle='#300';ctx.fillRect(bossX-60,bossY-115,120,8);
-      ctx.fillStyle='#c08f';ctx.fillRect(bossX-60,bossY-115,120*bossHealth,8);
-      ctx.strokeStyle='#f0f';ctx.lineWidth=1;ctx.strokeRect(bossX-60,bossY-115,120,8);
-    } else {
-      drawStickman(bossX,bossY,bossScale,{color:'#906',headColor:'#a08',dead:true});
-    }
-
-    // Hero
-    let heroX2=W*0.2+wave(t,0.3)*8,heroY2=H*0.65-5;
-    drawStickman(heroX2,heroY2,1,{color:'#fff',headColor:'#dff',gun:true,gunAngle:-0.05,armAngle:-0.2});
-
-    // Epic exchange
-    if(t>10&&bossHealth>0){
-      // Boss fires 2 bullets at once
-      if(Math.floor(t*1.5)%5===0&&Math.floor(t*1.5)!==Math.floor((t-0.05)*1.5)){
-        bullets.fire(bossX-26*bossScale,bossY-24*bossScale,Math.PI+0.1,18,'#f0f');
-        bullets.fire(bossX-26*bossScale,bossY-28*bossScale,Math.PI-0.1,18,'#f0f');
-        particles.spawn(bossX-30,bossY-26,{count:12,color:'#f0f',angle:Math.PI,spread:0.4,speed:3,speed2:8,type:'spark',gravity:0,decayMult:3});
-        shake(4);
-      }
-      // Hero fires
-      if(Math.floor(t*2)%7===0&&Math.floor(t*2)!==Math.floor((t-0.05)*2)){
-        bullets.fire(heroX2+26,heroY2-24,-0.05,18,'#ff0');
-        flash(0.3);shake(4);
-        particles.spawn(heroX2+26,heroY2-24,{count:10,color:'#ff0',angle:-0.05,spread:0.4,speed:3,speed2:9,type:'spark',gravity:0,decayMult:3});
-      }
-    }
-
-    // Epic moment - hero dodges
-    if(t>45&&t<55){
-      showText('DODGE!',0.05,40,'#ff0',H*0.2);
-    }
-    if(t>55&&t<65){
-      showText('NOW!',0.05,50,'#f00',H*0.2);
-      if(t>60&&t<62){flash(1);shake(20);explosions.add(bossX,bossY-50,120,'#c0f');spawnBlood(bossX,bossY-30,30);}
-    }
-    if(t>65&&t<75){showText('BOSS DEFEATED!',0.05,36,'#c08f',H*0.2);}
-  }
-
-  // ─── CHAPTER VI: AFTERMATH (370–429s) ───────
-  if(inRange(T,370,430)){
-    const t=T-370;
-    // Dawn breaking
-    let dawn=easePhase(t,0,40);
-    let skyR=lerp(5,30,dawn),skyG=lerp(5,15,dawn),skyB=lerp(16,25,dawn);
-    bg(`rgb(${skyR},${skyG},${skyB})`);
-
-    // Faint sunrise glow
-    if(dawn>0.3){
-      ctx.save();
-      let grd2=ctx.createRadialGradient(W*0.5,H,0,W*0.5,H,H*1.2);
-      grd2.addColorStop(0,`rgba(255,150,50,${dawn*0.3})`);
-      grd2.addColorStop(1,'rgba(255,100,0,0)');
-      ctx.fillStyle=grd2;ctx.fillRect(0,0,W,H);
-      ctx.restore();
-    }
-
-    drawStars(T,80-Math.floor(dawn*80));
-    buildings_bg();
-    drawGround(H*0.65,`rgb(${lerp(13,25,dawn)},${lerp(13,20,dawn)},${lerp(26,18,dawn)})`,'#2a2a3a');
-
-    if(t<5){
-      ctx.globalAlpha=easePhase(t,0,0.8)*(1-easePhase(t,4,5));
-      drawTitleCard(T,CHAPTERS[5]);ctx.globalAlpha=1;
-    }
-
-    // Hero walking slowly among fallen enemies
-    let heroX3=W*0.1+easePhase(t,3,50)*W*0.7;
-    let heroY3=H*0.65-5;
-    let slowWalk=wave(T,0.7)*0.6;
-    drawStickman(heroX3,heroY3,1,{color:'#ddd',headColor:'#bdd',walk:slowWalk,armAngle:0.1,gun:true,gunAngle:-Math.PI*0.2});
-
-    // Bodies on ground
-    const bodies=[{x:W*0.25,c:'#833'},{x:W*0.4,c:'#833'},{x:W*0.55,c:'#833'},{x:W*0.7,c:'#622'}];
-    bodies.forEach(b=>drawStickman(b.x,H*0.65-5,0.9,{dead:true,color:b.c,headColor:b.c}));
-
-    // Smoking craters
-    if(t>5){
-      [W*0.35,W*0.6,W*0.75].forEach((cx,i)=>{
-        ctx.fillStyle='#111';
-        ctx.beginPath();ctx.ellipse(cx,H*0.65,30+i*10,8,0,0,Math.PI*2);ctx.fill();
-        // Smoke
-        for(let s=0;s<4;s++){
-          let sy=H*0.65-20-s*15-wave(T+s,0.5)*5;
-          let sr=8+s*4;
-          ctx.globalAlpha=(0.3-s*0.07)*Math.max(0,1-easePhase(t,40,50));
-          ctx.fillStyle='#888';
-          ctx.beginPath();ctx.arc(cx+wave(T+s,0.3)*8,sy,sr,0,Math.PI*2);ctx.fill();
-        }
-        ctx.globalAlpha=1;
-      });
-    }
-
-    // Reflective moment
-    if(t>25&&t<45){
-      ctx.font=`italic 18px 'Share Tech Mono',monospace`;
-      ctx.fillStyle='rgba(200,220,255,0.5)';ctx.textAlign='center';
-      ctx.fillText('"Is it over...?"',W/2,H*0.35);
-    }
-    if(t>45){showText('NOT YET...',0.05,28,'#f44',H*0.2);}
-  }
-
-  // ─── CHAPTER VII: FINAL STAND (430–519s) ────
-  if(inRange(T,430,520)){
-    const t=T-430;
-    bg('#050508');
-    buildingsOnFire(t);
-    drawGround(H*0.65,'#0a0a0f','#151520');
-
-    if(t<5){
-      ctx.globalAlpha=easePhase(t,0,0.8)*(1-easePhase(t,4,5));
-      drawTitleCard(T,CHAPTERS[6]);ctx.globalAlpha=1;
-    }
-
-    // Rapid fire sequence - hero vs army
-    let heroX4=W*0.15,heroY4=H*0.65-5;
-    let heroHealth=Math.max(0,1-easePhase(t,60,88));
-
-    // Hero health bar
-    ctx.fillStyle='#300';ctx.fillRect(20,H*0.08,150,10);
-    ctx.fillStyle='#0f4';ctx.fillRect(20,H*0.08,150*heroHealth,10);
-    ctx.strokeStyle='#0f4';ctx.lineWidth=1;ctx.strokeRect(20,H*0.08,150,10);
-    ctx.font=`12px 'Share Tech Mono',monospace`;ctx.fillStyle='#0f4';ctx.textAlign='left';
-    ctx.fillText(`HP: ${Math.round(heroHealth*100)}%`,20,H*0.08-5);
-
-    // Hero shoots dual guns
-    let heroShoot=Math.floor(t*3)%4===0;
-    drawStickman(heroX4,heroY4,1,{
-      color:'#fff',headColor:'#dff',
-      gun:true,gunAngle:-0.05,
-      armAngle: heroShoot?-0.4:-0.2,
-      flash:heroShoot
-    });
-    if(heroShoot&&t>5&&heroHealth>0){
-      bullets.fire(heroX4+26,heroY4-24,-0.05,18,'#ff0');
-      bullets.fire(heroX4+22,heroY4-22,-0.15,16,'#ff0');
-      flash(0.25);shake(3);
-      particles.spawn(heroX4+26,heroY4-24,{count:6,color:'#ff0',angle:-0.05,spread:0.4,speed:3,speed2:8,type:'spark',gravity:0,decayMult:4});
-    }
-
-    // Army wave — many enemies
-    let armyCount=Math.min(12,3+Math.floor(t/7));
-    for(let i=0;i<armyCount;i++){
-      let ex=W*0.4+i*40+wave(T+i*0.7,0.4+i*0.05)*15;
-      let ey=H*0.65-5;
-      let dead=i<Math.floor(t/12);
-      if(dead){
-        drawStickman(ex,ey,0.85,{dead:true,color:'#933',headColor:'#955'});
-      } else {
-        drawStickman(ex,ey,0.85,{color:'#f33',headColor:'#f55',walk:wave(T+i,1.5+i*0.1)*0.8,gun:true,gunAngle:-Math.PI+0.2+i*0.03});
-        if(Math.floor((t+i*3)*0.8)%6===0){
-          bullets.fire(ex-22,ey-22,Math.PI+0.2,13,'#f88');
-        }
-      }
-    }
-
-    // Shockwave special move at t=50
-    if(t>48&&t<52){
-      let swPhase=easePhase(t,48,52);
-      ctx.strokeStyle=`rgba(255,255,100,${1-swPhase})`;
-      ctx.lineWidth=8*(1-swPhase)+1;
-      ctx.beginPath();ctx.arc(heroX4,heroY4-30,swPhase*W*0.8,0,Math.PI*2);ctx.stroke();
-      if(t>48&&t<48.5){shake(20);flash(1);}
-    }
-
-    // Hero takes damage
-    if(t>60&&heroHealth<0.4){
-      ctx.fillStyle='rgba(255,0,0,0.08)';ctx.fillRect(0,0,W,H);
-    }
-
-    // Last stand text
-    if(t>70&&t<90){
-      ctx.font=`bold ${28+wave(T,3)*4}px 'Bebas Neue',sans-serif`;
-      ctx.fillStyle='#f22';ctx.textAlign='center';
-      ctx.shadowColor='#f22';ctx.shadowBlur=20;
-      ctx.fillText('FIGHT  TO  THE  LAST  BREATH',W/2,H*0.2);
-      ctx.shadowBlur=0;
-    }
-  }
-
-  // ─── CHAPTER VIII: RECKONING (520–600s) ─────
-  if(inRange(T,520,600)){
-    const t=T-520;
-    const endPhase=easePhase(t,65,78);
-
-    // Background transitions from dark to bright
-    let intensity=easePhase(t,0,40);
-    bg(`rgb(${lerp(5,20,intensity)},${lerp(5,15,intensity)},${lerp(8,5,intensity)})`);
-    drawStars(T,Math.floor(80*(1-intensity)));
-    if(intensity>0.2){
-      let grd3=ctx.createRadialGradient(W*0.5,H,0,W*0.5,H,H*1.5);
-      grd3.addColorStop(0,`rgba(255,220,100,${intensity*0.4})`);
-      grd3.addColorStop(1,'rgba(255,180,50,0)');
-      ctx.fillStyle=grd3;ctx.fillRect(0,0,W,H);
-    }
-    buildings_bg();
-    drawGround(H*0.65,`rgb(${lerp(10,30,intensity)},${lerp(10,25,intensity)},${lerp(15,15,intensity)})`,'#2a2a30');
-
-    if(t<5){
-      ctx.globalAlpha=easePhase(t,0,0.8)*(1-easePhase(t,4,5));
-      drawTitleCard(T,CHAPTERS[7]);ctx.globalAlpha=1;
-    }
-
-    // Hero vs Final Boss duel
-    let heroX5=lerp(W*0.2,W*0.45,easePhase(t,20,35));
-    let heroY5=H*0.65-5;
-    let bossX2=lerp(W*0.8,W*0.55,easePhase(t,20,35));
-    let bossY2=H*0.65-5;
-
-    // Both face each other
-    drawStickman(heroX5,heroY5,1,{color:'#fff',headColor:'#e8f',gun:true,gunAngle:-0.05,armAngle:-0.2});
-    drawStickman(bossX2,bossY2,1.2,{color:'#f0f',headColor:'#d0d',gun:true,gunAngle:-Math.PI+0.05,armAngle:0.2});
-
-    // Slow-mo duel at t=35
-    if(t>33&&t<45){
-      // Both fire simultaneously
-      if(t>35&&t<36){
-        bullets.fire(heroX5+26,heroY5-24,-0.05,8,'#ff0');
-        bullets.fire(bossX2-26*1.2,bossY2-24*1.2,Math.PI+0.05,8,'#f0f');
-        flash(1);shake(15);
-        particles.spawn(heroX5+26,heroY5-24,{count:20,color:'#ff0',angle:-0.05,spread:0.8,speed:4,speed2:12,type:'spark',gravity:0,decayMult:2});
-        particles.spawn(bossX2-30,bossY2-28,{count:20,color:'#f0f',angle:Math.PI,spread:0.8,speed:4,speed2:12,type:'spark',gravity:0,decayMult:2});
-      }
-      // SLOW MO text
-      ctx.font=`bold 14px 'Bebas Neue',sans-serif`;
-      ctx.fillStyle='rgba(255,255,200,0.6)';ctx.textAlign='center';
-      ctx.fillText('— SLOW MOTION —',W/2,H*0.15);
-    }
-
-    // Bullets meet in middle and explode
-    if(t>35.5&&t<40){
-      let bphase=easePhase(t,35.5,37);
-      let midX=lerp(heroX5+26,bossX2-30,bphase);
-      let midY=lerp(heroY5-24,bossY2-28,bphase);
-      if(t>37&&t<38){
-        explosions.add(midX,midY,90,'#fff');
-        explosions.add(midX,midY,60,'#ff0');
-        shake(25);flash(1);
-        particles.spawn(midX,midY,{count:40,color:'#fff',speed:2,speed2:14,type:'spark',gravity:0.1,decayMult:1.5});
-      }
-    }
-
-    // Final boss falls at t=45
-    if(t>45){
-      drawStickman(bossX2,bossY2,1.2,{color:'#906',headColor:'#808',dead:true,gun:true,gunAngle:0.4});
-      spawnBlood(bossX2,bossY2-20*1.2,1);
-    }
-
-    // Hero victory walk
-    if(t>50){
-      let vx=heroX5+easePhase(t,50,65)*W*0.3;
-      let vwalk=wave(T,1.2)*0.6;
-      drawStickman(vx,heroY5,1,{color:'#fff',headColor:'#e8f',walk:vwalk,armAngle:wave(T,0.5)*0.3,gun:false});
-      // Gun tossed
-      ctx.save();
-      ctx.translate(vx-40,heroY5-30);
-      ctx.rotate(T*5);
-      ctx.strokeStyle='#aaa';ctx.lineWidth=4;
-      ctx.beginPath();ctx.moveTo(-14,0);ctx.lineTo(14,0);ctx.stroke();
-      ctx.restore();
-    }
-
-    // Sunrise fully
-    if(t>60){
-      let sun=easePhase(t,60,75);
-      ctx.save();
-      let sgrd=ctx.createRadialGradient(W*0.5,H,0,W*0.5,H,H*sun*2);
-      sgrd.addColorStop(0,`rgba(255,200,80,${sun*0.6})`);
-      sgrd.addColorStop(0.5,`rgba(255,150,40,${sun*0.3})`);
-      sgrd.addColorStop(1,'rgba(255,100,20,0)');
-      ctx.fillStyle=sgrd;ctx.fillRect(0,0,W,H);
-      ctx.restore();
-    }
-
-    // Credits
-    if(t>65){
-      let ca=easePhase(t,65,70);
-      ctx.globalAlpha=ca;
-      ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(0,0,W,H);
-      ctx.font=`bold 56px 'Bebas Neue',sans-serif`;
-      ctx.fillStyle='#e8c84a';ctx.textAlign='center';
-      ctx.shadowColor='#e8c84a';ctx.shadowBlur=40;
-      ctx.fillText('THE END',W/2,H*0.35);
-      ctx.shadowBlur=0;
-      ctx.font=`18px 'Bebas Neue',sans-serif`;
-      ctx.fillStyle='#fff';
-      ctx.fillText('STICKMAN  :  LAST  STAND',W/2,H*0.45);
-      ctx.font=`12px 'Share Tech Mono',monospace`;
-      ctx.fillStyle='#888';
-      ctx.fillText('A  2D  ANIMATED  ACTION  FILM',W/2,H*0.52);
-      ctx.fillText('DIRECTED  BY  AI  ·  2025',W/2,H*0.57);
-      ctx.fillText('STARRING  STICKMAN  AS  "THE  HERO"',W/2,H*0.62);
-      ctx.globalAlpha=1;ctx.shadowBlur=0;
-    }
-  }
-
-  // ── Draw shared systems ──────────────────────
-  bullets.update();bullets.draw();
-  explosions.update();explosions.draw();
-  particles.update(dt);particles.draw();
-  updateBlood();drawBlood();
-  drawFlash();
-  drawLetterbox();
-  drawTextOverlays(dt);
-
-  // Scanlines
-  ctx.globalAlpha=0.03;
-  for(let y=0;y<H;y+=2){ctx.fillStyle='#000';ctx.fillRect(0,y,W,1);}
-  ctx.globalAlpha=1;
-
-  ctx.restore();
-}
-
-// ── Background helpers ────────────────────────
-function buildings_bg(){
-  const bldgs=[
-    {x:0,w:80,h:160},{x:90,w:55,h:110},{x:155,w:65,h:200},
-    {x:230,w:85,h:140},{x:325,w:60,h:190},{x:395,w:75,h:130},
-    {x:480,w:95,h:230},{x:585,w:80,h:160},{x:675,w:75,h:120},
-    {x:760,w:90,h:175},{x:855,w:55,h:100}
-  ];
-  bldgs.forEach(b=>drawBuilding(b.x,b.w,b.h,'#141428','#ffe08033'));
-}
-function buildings_bg2(){
-  const bldgs=[
-    {x:0,w:70,h:140},{x:80,w:60,h:190},{x:150,w:80,h:100},
-    {x:240,w:70,h:170},{x:320,w:55,h:220},{x:385,w:90,h:90},
-    {x:485,w:65,h:160},{x:560,w:80,h:200},{x:650,w:70,h:130},
-    {x:730,w:85,h:155},{x:825,w:75,h:180}
-  ];
-  bldgs.forEach(b=>drawBuilding(b.x,b.w,b.h,'#1a0a14','#ff604022'));
-}
-function buildingsOnFire(t){
-  const bldgs=[
-    {x:0,w:70,h:140},{x:80,w:60,h:190},{x:220,w:80,h:110},
-    {x:450,w:90,h:180},{x:650,w:70,h:150},{x:800,w:80,h:120}
-  ];
-  bldgs.forEach(b=>{
-    drawBuilding(b.x,b.w,b.h,'#1a0808','#ff330044');
-    // fire on top
-    let baseX=b.x+b.w/2,baseY=H*0.55-b.h;
-    for(let i=0;i<6;i++){
-      let fx=baseX+wave(t+i,1+i*0.3)*18;
-      let fh=20+wave(t+i*0.7,1.2)*12;
-      ctx.globalAlpha=0.6+wave(t+i,2)*0.3;
-      let grd=ctx.createLinearGradient(fx,baseY,fx,baseY-fh);
-      grd.addColorStop(0,'#f84');grd.addColorStop(0.5,'#f40');grd.addColorStop(1,'rgba(255,100,0,0)');
-      ctx.fillStyle=grd;
-      ctx.beginPath();ctx.ellipse(fx,baseY,6+i*1.5,fh,0,0,Math.PI*2);ctx.fill();
-    }
-    ctx.globalAlpha=1;
-  });
-}
-
-// ── Player logic ─────────────────────────────────
-const btnPlay=document.getElementById('btn-play');
-const timeDisp=document.getElementById('time-display');
-const tFill=document.getElementById('timeline-fill');
-const tThumb=document.getElementById('timeline-thumb');
-const sceneLbl=document.getElementById('scene-label');
-const tlWrap=document.getElementById('timeline-wrap');
-
-function fmtTime(s){
-  let m=Math.floor(s/60),sec=Math.floor(s%60);
-  return `${m}:${sec.toString().padStart(2,'0')}`;
-}
-function getCurrentChapter(t){
-  let ch=CHAPTERS[0];
-  for(let i=CHAPTERS.length-1;i>=0;i--){
-    if(t>=CHAPTERS[i].t){ch=CHAPTERS[i];break;}
-  }
-  return ch;
-}
-
-// Build chapter markers
-CHAPTERS.forEach((c,i)=>{
-  let pct=c.t/TOTAL*100;
-  let dot=document.createElement('div');
-  dot.className='chapter-dot';
-  dot.style.left=pct+'%';
-  dot.title=c.label;
-  dot.onclick=(e)=>{e.stopPropagation();seekTo(c.t);};
-  tlWrap.appendChild(dot);
-});
-
-// Build chapter buttons
-const chapList=document.getElementById('chapter-list');
-CHAPTERS.forEach((c,i)=>{
-  let btn=document.createElement('button');
-  btn.className='chap-btn';
-  btn.textContent=c.label;
-  btn.onclick=()=>seekTo(c.t);
-  chapList.appendChild(btn);
-});
-
-function updateUI(t){
-  let pct=t/TOTAL*100;
-  tFill.style.width=pct+'%';
-  tThumb.style.left=pct+'%';
-  timeDisp.textContent=fmtTime(t)+' / '+fmtTime(TOTAL);
-  let ch=getCurrentChapter(t);
-  sceneLbl.textContent=ch.label;
-  sceneLbl.style.color=ch.color;
-  // update chapter dots
-  document.querySelectorAll('.chapter-dot').forEach((d,i)=>{
-    d.classList.toggle('passed',t>=CHAPTERS[i].t);
-  });
-  document.querySelectorAll('.chap-btn').forEach((b,i)=>{
-    b.classList.toggle('active',getCurrentChapter(t)===CHAPTERS[i]);
-  });
-}
-
-function seekTo(sec){
-  let wasPlaying=playing;
-  pausedAt=sec;lastT=sec;
-  if(wasPlaying){startedAt=Date.now()-sec*1000;}
-  renderFrame(sec);
-  updateUI(sec);
-}
-
-// Timeline click/drag
-let dragging=false;
-function timelineSeek(e){
-  let rect=tlWrap.getBoundingClientRect();
-  let pct=clamp((e.clientX-rect.left)/rect.width,0,1);
-  seekTo(pct*TOTAL);
-}
-tlWrap.addEventListener('mousedown',e=>{dragging=true;timelineSeek(e);});
-document.addEventListener('mousemove',e=>{if(dragging)timelineSeek(e);});
-document.addEventListener('mouseup',()=>{dragging=false;});
-tlWrap.addEventListener('touchstart',e=>{dragging=true;timelineSeek(e.touches[0]);},{passive:true});
-document.addEventListener('touchmove',e=>{if(dragging)timelineSeek(e.touches[0]);},{passive:true});
-document.addEventListener('touchend',()=>{dragging=false;});
-
-// Play/Pause
-function play(){
-  playing=true;
-  startedAt=Date.now()-pausedAt*1000;
-  btnPlay.textContent='⏸';
-  loop();
-}
-function pause(){
-  playing=false;
-  pausedAt=currentTime();
-  btnPlay.textContent='▶';
-  if(animId){cancelAnimationFrame(animId);animId=null;}
-}
-btnPlay.onclick=()=>{playing?pause():play();};
-
-// Keyboard
-document.addEventListener('keydown',e=>{
-  if(e.code==='Space'){e.preventDefault();playing?pause():play();}
-  if(e.code==='ArrowRight'){seekTo(Math.min(TOTAL,currentTime()+10));}
-  if(e.code==='ArrowLeft'){seekTo(Math.max(0,currentTime()-10));}
-});
-
-// RAF loop
-function loop(){
-  if(!playing)return;
-  let t=currentTime();
-  if(t>=TOTAL){pause();seekTo(TOTAL-0.1);return;}
-  renderFrame(t);
-  updateUI(t);
-  animId=requestAnimationFrame(loop);
-}
-
-// Initial frame
-renderFrame(0);
-updateUI(0);
 </script>
 </body>
 </html>
