@@ -1,191 +1,663 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>PixelQuest 3D</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #000; overflow: hidden; width: 100vw; height: 100vh; font-family: 'Courier New', monospace; }
-
-    /* Pixel canvas - rendered at low res, upscaled via CSS */
-    #gameCanvas {
-      position: absolute; top: 0; left: 0;
-      width: 100vw; height: 100vh;
-      image-rendering: pixelated;
-      image-rendering: crisp-edges;
-    }
-
-    /* HUD overlay */
-    #hud {
-      position: absolute; top: 0; left: 0;
-      width: 100%; height: 100%;
-      pointer-events: none;
-    }
-
-    /* Level title banner */
-    #levelBanner {
-      position: absolute; top: 40px; left: 50%;
-      transform: translateX(-50%);
-      color: #FFD700; font-size: 22px; font-weight: bold;
-      text-shadow: 3px 3px 0 #000, -1px -1px 0 #000;
-      letter-spacing: 4px; text-transform: uppercase;
-      opacity: 0; transition: opacity 0.5s;
-      pointer-events: none;
-    }
-
-    /* Health bar */
-    #healthBar {
-      position: absolute; top: 16px; left: 20px;
-      display: flex; align-items: center; gap: 8px;
-    }
-    #healthLabel { color: #ff4444; font-size: 14px; font-weight: bold; text-shadow: 2px 2px 0 #000; }
-    #healthTrack {
-      width: 140px; height: 16px;
-      background: #222; border: 2px solid #555;
-      image-rendering: pixelated;
-    }
-    #healthFill { height: 100%; width: 100%; background: #e03030; transition: width 0.3s; }
-
-    /* Torch counter (level 1 specific) */
-    #torchCount {
-      position: absolute; top: 16px; right: 20px;
-      color: #FFD700; font-size: 16px; font-weight: bold;
-      text-shadow: 2px 2px 0 #000;
-      display: none;
-    }
-
-    /* Message box */
-    #msgBox {
-      position: absolute; bottom: 180px; left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.82); border: 2px solid #FFD700;
-      color: #fff; padding: 10px 22px; font-size: 15px;
-      text-align: center; max-width: 320px;
-      display: none; pointer-events: none;
-      text-shadow: 1px 1px 0 #000;
-    }
-
-    /* ── CONTROLS ── */
-    #controls { position: absolute; bottom: 0; left: 0; width: 100%; height: 160px; pointer-events: none; }
-
-    /* Joystick */
-    #joystickZone {
-      position: absolute; bottom: 24px; left: 32px;
-      width: 110px; height: 110px;
-      pointer-events: all; touch-action: none;
-    }
-    #joystickBase {
-      width: 110px; height: 110px; border-radius: 50%;
-      background: rgba(255,255,255,0.08);
-      border: 3px solid rgba(255,255,255,0.25);
-      position: absolute;
-    }
-    #joystickKnob {
-      width: 46px; height: 46px; border-radius: 50%;
-      background: rgba(255,255,255,0.55);
-      border: 3px solid rgba(255,255,255,0.9);
-      position: absolute;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      transition: none;
-    }
-
-    /* Buttons right side */
-    #btnZone {
-      position: absolute; bottom: 24px; right: 28px;
-      display: flex; flex-direction: column; gap: 14px;
-      align-items: flex-end;
-      pointer-events: all;
-    }
-    .gameBtn {
-      width: 68px; height: 68px; border-radius: 50%;
-      border: 3px solid rgba(255,255,255,0.6);
-      font-size: 13px; font-weight: bold; color: #fff;
-      font-family: 'Courier New', monospace;
-      cursor: pointer; touch-action: none;
-      user-select: none; -webkit-user-select: none;
-      text-shadow: 1px 1px 0 #000;
-      display: flex; align-items: center; justify-content: center;
-      transition: transform 0.08s, opacity 0.08s;
-      letter-spacing: 1px;
-    }
-    .gameBtn:active, .gameBtn.pressed { transform: scale(0.88); opacity: 0.75; }
-    #btnAttack { background: rgba(200, 40, 40, 0.7); }
-    #btnUse    { background: rgba(40, 120, 200, 0.7); }
-
-    /* Screen flash */
-    #flash {
-      position: absolute; inset: 0;
-      background: #fff; opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.05s;
-    }
-
-    /* Loading screen */
-    #loadScreen {
-      position: absolute; inset: 0;
-      background: #0a0a0a; display: flex;
-      flex-direction: column; align-items: center; justify-content: center;
-      z-index: 100;
-    }
-    #loadTitle { color: #FFD700; font-size: 36px; font-weight: bold; letter-spacing: 6px; margin-bottom: 18px; text-shadow: 4px 4px 0 #000; }
-    #loadSub   { color: #aaa; font-size: 14px; letter-spacing: 3px; }
-    #loadDot   { color: #FFD700; animation: blink 0.9s infinite; }
-    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
-  </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>Dungeon Runner</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background:#000;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    width:100vw;
+    height:100dvh;
+    overflow:hidden;
+    font-family:monospace;
+    touch-action:none;
+  }
+  #gameWrap {
+    position:relative;
+    width:100%;
+    height:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  /* The low-res canvas — pixel-art rendering */
+  #gameCanvas {
+    image-rendering:pixelated;
+    image-rendering:crisp-edges;
+    display:block;
+    background:#000;
+  }
+  /* HUD overlay */
+  #hud {
+    position:absolute;
+    top:10px; left:50%;
+    transform:translateX(-50%);
+    color:#ffe840;
+    font-size:14px;
+    font-family:monospace;
+    text-shadow:2px 2px 0 #000;
+    pointer-events:none;
+    z-index:10;
+    display:flex;
+    gap:20px;
+  }
+  /* Joystick */
+  #joystickZone {
+    position:absolute;
+    bottom:30px; left:30px;
+    width:110px; height:110px;
+    z-index:20;
+    touch-action:none;
+  }
+  #joystickBase {
+    position:absolute;
+    width:100px; height:100px;
+    left:5px; top:5px;
+    border-radius:50%;
+    background:rgba(255,255,255,0.08);
+    border:2px solid rgba(255,255,255,0.18);
+  }
+  #joystickKnob {
+    position:absolute;
+    width:40px; height:40px;
+    border-radius:50%;
+    background:rgba(232,112,64,0.85);
+    border:2px solid rgba(255,200,150,0.5);
+    left:35px; top:35px;
+    transition:none;
+    box-shadow:0 0 8px rgba(232,112,64,0.5);
+  }
+  /* Jump button */
+  #jumpBtn {
+    position:absolute;
+    bottom:50px; right:40px;
+    width:68px; height:68px;
+    border-radius:50%;
+    background:rgba(120,200,80,0.18);
+    border:2px solid rgba(120,200,80,0.5);
+    color:#7ec850;
+    font-size:22px;
+    font-family:monospace;
+    font-weight:bold;
+    z-index:20;
+    cursor:pointer;
+    user-select:none;
+    -webkit-user-select:none;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-shadow:0 0 6px #7ec850;
+    box-shadow:0 0 12px rgba(120,200,80,0.25);
+    touch-action:none;
+  }
+  /* Death / restart overlay */
+  #overlay {
+    position:absolute;
+    inset:0;
+    background:rgba(0,0,0,0.75);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    color:#ffe840;
+    font-family:monospace;
+    z-index:30;
+    gap:16px;
+    display:none;
+  }
+  #overlay h1 { font-size:32px; text-shadow:3px 3px 0 #a04000; letter-spacing:4px; }
+  #overlay p  { font-size:14px; color:#ccc; }
+  #overlay button {
+    padding:10px 28px;
+    background:#e87040;
+    border:none;
+    color:#fff;
+    font-family:monospace;
+    font-size:16px;
+    cursor:pointer;
+    letter-spacing:2px;
+    box-shadow:4px 4px 0 #7a2000;
+    margin-top:8px;
+  }
+  #overlay button:active { transform:translate(2px,2px); box-shadow:2px 2px 0 #7a2000; }
+</style>
 </head>
 <body>
 
-<canvas id="gameCanvas"></canvas>
+<div id="gameWrap">
+  <canvas id="gameCanvas"></canvas>
 
-<!-- HUD -->
-<div id="hud">
-  <div id="levelBanner">LEVEL 1 — THE DUNGEON</div>
-  <div id="healthBar">
-    <span id="healthLabel">HP</span>
-    <div id="healthTrack"><div id="healthFill"></div></div>
+  <div id="hud">
+    <span>COINS: <span id="coinCount">0</span></span>
+    <span>DIST: <span id="distCount">0</span></span>
   </div>
-  <div id="torchCount">🔥 Torches: <span id="torchNum">3</span></div>
-  <div id="msgBox"></div>
-  <div id="flash"></div>
-</div>
 
-<!-- Controls -->
-<div id="controls">
   <div id="joystickZone">
     <div id="joystickBase"></div>
     <div id="joystickKnob"></div>
   </div>
-  <div id="btnZone">
-    <button class="gameBtn" id="btnAttack">ATK</button>
-    <button class="gameBtn" id="btnUse">USE</button>
+
+  <div id="jumpBtn">▲</div>
+
+  <div id="overlay">
+    <h1>YOU DIED</h1>
+    <p id="deathScore"></p>
+    <button onclick="restartGame()">RESTART</button>
   </div>
 </div>
 
-<!-- Loading -->
-<div id="loadScreen">
-  <div id="loadTitle">PIXELQUEST</div>
-  <div id="loadSub">LOADING<span id="loadDot">...</span></div>
-</div>
-
-<!-- Three.js from CDN -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<!-- Engine -->
-<script src="engine.js"></script>
-<!-- Levels -->
-<script src="Level/level1.js"></script>
-<script src="Level/level2.js"></script>
-
+<!-- Load the rooms/assets file BEFORE the game script -->
+<script src="rooms.js"></script>
 <script>
-  // Boot once DOM + scripts ready
-  window.addEventListener('load', () => {
-    PixelEngine.init();
-    setTimeout(() => {
-      document.getElementById('loadScreen').style.display = 'none';
-      PixelEngine.loadLevel(1);
-    }, 1200);
-  });
+// ============================================
+//  ENGINE — reads everything from rooms.js
+// ============================================
+
+const canvas  = document.getElementById("gameCanvas");
+const ctx     = canvas.getContext("2d");
+const overlay = document.getElementById("overlay");
+
+// --- Low-res virtual canvas (the actual pixel resolution) ---
+const VW = 160, VH = 120;  // virtual resolution
+const lowRes = document.createElement("canvas");
+lowRes.width  = VW;
+lowRes.height = VH;
+const lx = lowRes.getContext("2d");
+lx.imageSmoothingEnabled = false;
+
+// ---- Resize to fill screen keeping aspect ratio ----
+function resizeCanvas() {
+  const scale = Math.min(
+    window.innerWidth  / VW,
+    window.innerHeight / VH
+  );
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width  = VW  * scale * dpr;
+  canvas.height = VH  * scale * dpr;
+  canvas.style.width  = (VW  * scale) + "px";
+  canvas.style.height = (VH  * scale) + "px";
+  ctx.imageSmoothingEnabled = false;
+}
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
+
+// ============================================
+//  WORLD / CHUNK SYSTEM
+//  Reads ROOMS[] from rooms.js automatically
+// ============================================
+const ROWS     = 10;
+const CHUNK_PX = VW;      // one chunk = one screen width in virtual px
+
+let worldTiles = [];      // {col, row, type, wx} — all active tiles
+let worldCoins = [];      // {wx, wy, collected}
+let worldSpikes = [];     // {wx, wy}
+
+let generatedUpTo = 0;    // rightmost virtual-pixel we've generated to
+let cameraX       = 0;    // camera scroll (virtual px)
+let totalDist     = 0;
+
+function pickRandomRoom() {
+  return ROOMS[Math.floor(Math.random() * ROOMS.length)];
+}
+
+function generateChunk(startX) {
+  const room = pickRandomRoom();
+  const ts   = TILE_SIZE;
+  for (let row = 0; row < room.tiles.length; row++) {
+    for (let col = 0; col < room.width; col++) {
+      const type = room.tiles[row][col];
+      if (type === 0) continue;
+      const wx = startX + col * ts;
+      const wy = row * ts;
+      if (type === 4) {
+        worldCoins.push({ wx, wy, collected: false });
+      } else if (type === 3) {
+        worldSpikes.push({ wx, wy });
+      } else {
+        worldTiles.push({ wx, wy, type });
+      }
+    }
+  }
+  return startX + room.width * ts;
+}
+
+function ensureGenerated() {
+  const rightEdge = cameraX + VW + CHUNK_PX;
+  while (generatedUpTo < rightEdge) {
+    generatedUpTo = generateChunk(generatedUpTo);
+  }
+  // Prune tiles far behind camera
+  const prune = cameraX - CHUNK_PX;
+  worldTiles  = worldTiles.filter(t => t.wx > prune);
+  worldCoins  = worldCoins.filter(c => c.wx > prune);
+  worldSpikes = worldSpikes.filter(s => s.wx > prune);
+}
+
+// ============================================
+//  PLAYER
+// ============================================
+const P = Object.assign({}, PLAYER_CONFIG);
+let player = {};
+
+function resetPlayer() {
+  player = {
+    x: 20,
+    y: 40,
+    vx: 0,
+    vy: 0,
+    onGround: false,
+    dead: false,
+    blinkTimer: 0,
+  };
+}
+
+// ============================================
+//  CONTROLS
+// ============================================
+const keys  = { left: false, right: false, jump: false };
+let joyDx   = 0;   // -1 to 1
+let jumpBuf = 0;   // jump buffer frames
+
+// Keyboard
+window.addEventListener("keydown", e => {
+  if (e.code === "ArrowLeft"  || e.code === "KeyA") keys.left  = true;
+  if (e.code === "ArrowRight" || e.code === "KeyD") keys.right = true;
+  if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") {
+    keys.jump = true; jumpBuf = 8;
+  }
+});
+window.addEventListener("keyup", e => {
+  if (e.code === "ArrowLeft"  || e.code === "KeyA") keys.left  = false;
+  if (e.code === "ArrowRight" || e.code === "KeyD") keys.right = false;
+  if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") keys.jump = false;
+});
+
+// Joystick
+const jZone = document.getElementById("joystickZone");
+const jKnob = document.getElementById("joystickKnob");
+const jBase = document.getElementById("joystickBase");
+let jTouch  = null;
+const JR    = 30; // max radius
+
+jZone.addEventListener("touchstart", e => {
+  e.preventDefault();
+  jTouch = e.changedTouches[0].identifier;
+  moveJoystick(e.changedTouches[0]);
+}, { passive: false });
+
+jZone.addEventListener("touchmove", e => {
+  e.preventDefault();
+  for (let t of e.changedTouches) {
+    if (t.identifier === jTouch) moveJoystick(t);
+  }
+}, { passive: false });
+
+jZone.addEventListener("touchend", e => {
+  e.preventDefault();
+  jTouch = null; joyDx = 0;
+  jKnob.style.left = "35px";
+  jKnob.style.top  = "35px";
+}, { passive: false });
+
+function moveJoystick(touch) {
+  const rect = jBase.getBoundingClientRect();
+  const cx   = rect.left + rect.width  / 2;
+  const cy   = rect.top  + rect.height / 2;
+  let dx = touch.clientX - cx;
+  let dy = touch.clientY - cy;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  if (dist > JR) { dx = dx/dist*JR; dy = dy/dist*JR; }
+  jKnob.style.left = (35 + dx) + "px";
+  jKnob.style.top  = (35 + dy) + "px";
+  joyDx = dx / JR;
+}
+
+// Jump button
+const jumpBtn = document.getElementById("jumpBtn");
+jumpBtn.addEventListener("touchstart", e => {
+  e.preventDefault();
+  keys.jump = true; jumpBuf = 8;
+}, { passive: false });
+jumpBtn.addEventListener("touchend", e => {
+  e.preventDefault();
+  keys.jump = false;
+}, { passive: false });
+jumpBtn.addEventListener("mousedown", () => { keys.jump = true; jumpBuf = 8; });
+jumpBtn.addEventListener("mouseup",   () => { keys.jump = false; });
+
+// ============================================
+//  COLLISION HELPERS
+// ============================================
+const TS = TILE_SIZE;
+
+function getTilesNear(wx, wy, pw, ph) {
+  return worldTiles.filter(t =>
+    t.wx < wx + pw + TS &&
+    t.wx + TS > wx - TS &&
+    t.wy < wy + ph + TS &&
+    t.wy + TS > wy - TS
+  );
+}
+
+function resolveCollision() {
+  const { x, y, vx, vy } = player;
+  const pw = P.width, ph = P.height;
+  player.onGround = false;
+
+  // Move X first
+  player.x += player.vx;
+  for (const t of getTilesNear(player.x, player.y, pw, ph)) {
+    if (t.type === 4) continue;
+    if (player.x < t.wx + TS && player.x + pw > t.wx &&
+        player.y < t.wy + TS && player.y + ph > t.wy) {
+      if (player.vx > 0) player.x = t.wx - pw;
+      else if (player.vx < 0) player.x = t.wx + TS;
+      player.vx = 0;
+    }
+  }
+
+  // Move Y
+  player.y += player.vy;
+  for (const t of getTilesNear(player.x, player.y, pw, ph)) {
+    if (t.type === 4) continue;
+    if (player.x < t.wx + TS && player.x + pw > t.wx &&
+        player.y < t.wy + TS && player.y + ph > t.wy) {
+      if (player.vy > 0) {
+        player.y = t.wy - ph;
+        player.onGround = true;
+      } else if (player.vy < 0) {
+        player.y = t.wy + TS;
+      }
+      player.vy = 0;
+    }
+  }
+}
+
+// ============================================
+//  COIN COLLECTION
+// ============================================
+let coins = 0;
+
+function checkCoins() {
+  const pw = P.width, ph = P.height;
+  for (const c of worldCoins) {
+    if (c.collected) continue;
+    if (player.x < c.wx + 8  && player.x + pw > c.wx &&
+        player.y < c.wy + 8  && player.y + ph > c.wy) {
+      c.collected = true;
+      coins++;
+    }
+  }
+}
+
+function checkSpikes() {
+  const pw = P.width, ph = P.height;
+  for (const s of worldSpikes) {
+    if (player.x < s.wx + TS && player.x + pw > s.wx &&
+        player.y < s.wy + TS && player.y + ph > s.wy) {
+      killPlayer();
+    }
+  }
+}
+
+// ============================================
+//  GAME STATE
+// ============================================
+let gameRunning = false;
+let frameId;
+let stars = [];
+let coinAnim = 0;
+
+function initStars() {
+  stars = [];
+  for (let i = 0; i < WORLD_CONFIG.bgStarCount; i++) {
+    stars.push({
+      x: Math.random() * VW,
+      y: Math.random() * VH * 0.6,
+      b: Math.random()
+    });
+  }
+}
+
+function killPlayer() {
+  if (player.dead) return;
+  player.dead = true;
+  setTimeout(() => {
+    overlay.style.display = "flex";
+    document.getElementById("deathScore").textContent =
+      `COINS: ${coins}  |  DIST: ${Math.floor(totalDist)}m`;
+  }, 600);
+}
+
+function restartGame() {
+  overlay.style.display = "none";
+  coins = 0;
+  totalDist = 0;
+  cameraX = 0;
+  generatedUpTo = 0;
+  worldTiles  = [];
+  worldCoins  = [];
+  worldSpikes = [];
+  resetPlayer();
+  initStars();
+  ensureGenerated();
+  gameRunning = true;
+}
+
+// ============================================
+//  UPDATE
+// ============================================
+const AUTO_SCROLL = WORLD_CONFIG.scrollSpeed;
+
+function update() {
+  if (!gameRunning || player.dead) return;
+
+  // Auto-scroll
+  cameraX += AUTO_SCROLL;
+  totalDist = cameraX / (TILE_SIZE * 4);
+
+  // Kill if scrolled off screen
+  if (player.x + P.width < cameraX - 4) { killPlayer(); return; }
+  // Kill if fell off
+  if (player.y > VH + 20) { killPlayer(); return; }
+
+  // Input
+  let moveX = joyDx;
+  if (keys.left)  moveX -= 1;
+  if (keys.right) moveX += 1;
+  moveX = Math.max(-1, Math.min(1, moveX));
+
+  player.vx = moveX * P.speed;
+
+  // Jump buffer
+  if (jumpBuf > 0) jumpBuf--;
+  if ((keys.jump || jumpBuf > 0) && player.onGround) {
+    player.vy = P.jumpForce;
+    jumpBuf = 0;
+    player.onGround = false;
+  }
+
+  // Gravity
+  player.vy += P.gravity;
+  if (player.vy > 12) player.vy = 12;
+
+  resolveCollision();
+  checkCoins();
+  checkSpikes();
+  ensureGenerated();
+
+  coinAnim = (coinAnim + 0.1) % (Math.PI * 2);
+
+  // Update HUD
+  document.getElementById("coinCount").textContent = coins;
+  document.getElementById("distCount").textContent = Math.floor(totalDist);
+}
+
+// ============================================
+//  DRAW HELPERS — pixel tile rendering
+// ============================================
+function drawTile(x, y, type) {
+  const c = TILE_COLORS[type];
+  if (!c) return;
+  const s = TS;
+
+  if (type === 3) {
+    // Spike = triangle
+    lx.fillStyle = c.mid;
+    lx.beginPath();
+    lx.moveTo(x + s/2, y);
+    lx.lineTo(x + s, y + s);
+    lx.lineTo(x, y + s);
+    lx.closePath();
+    lx.fill();
+    lx.fillStyle = c.top;
+    lx.fillRect(x + s/2 - 1, y, 2, 4);
+    return;
+  }
+
+  if (type === 2) {
+    // Platform = thin plank
+    lx.fillStyle = c.bot;
+    lx.fillRect(x, y, s, s);
+    lx.fillStyle = c.mid;
+    lx.fillRect(x, y, s, s - 4);
+    lx.fillStyle = c.top;
+    lx.fillRect(x, y, s, 4);
+    return;
+  }
+
+  if (type === 5) {
+    // Wall block
+    lx.fillStyle = c.bot;
+    lx.fillRect(x, y, s, s);
+    lx.fillStyle = c.mid;
+    lx.fillRect(x + 1, y + 1, s - 2, s - 2);
+    lx.fillStyle = c.top;
+    lx.fillRect(x + 1, y + 1, s - 2, 2);
+    lx.fillRect(x + 1, y + 1, 2, s - 2);
+    return;
+  }
+
+  // Ground (type 1)
+  lx.fillStyle = c.bot;
+  lx.fillRect(x, y, s, s);
+  lx.fillStyle = c.mid;
+  lx.fillRect(x, y + 3, s, s - 3);
+  lx.fillStyle = c.top;
+  lx.fillRect(x, y, s, 3);
+  // pixel detail
+  lx.fillStyle = "rgba(255,255,255,0.18)";
+  for (let i = 0; i < s; i += 4) lx.fillRect(x + i, y + 1, 2, 1);
+}
+
+function drawCoin(cx, cy, anim) {
+  const c = TILE_COLORS[4];
+  const w = Math.max(1, Math.round(Math.abs(Math.cos(anim)) * 6));
+  lx.fillStyle = c.bot;
+  lx.fillRect(cx + (8 - w)/2, cy, w, 8);
+  lx.fillStyle = c.top;
+  lx.fillRect(cx + (8 - w)/2, cy, w, 3);
+}
+
+function drawPlayer() {
+  const sx = Math.round(player.x - cameraX);
+  const sy = Math.round(player.y);
+  const pw = P.width, ph = P.height;
+
+  // Body
+  lx.fillStyle = P.color;
+  lx.fillRect(sx, sy, pw, ph);
+
+  // Head shade
+  lx.fillStyle = "rgba(255,200,150,0.35)";
+  lx.fillRect(sx, sy, pw, 5);
+
+  // Eyes
+  lx.fillStyle = P.eyeColor;
+  lx.fillRect(sx + 2, sy + 3, 3, 3);
+  lx.fillRect(sx + 7, sy + 3, 3, 3);
+  lx.fillStyle = "#222";
+  lx.fillRect(sx + 3, sy + 4, 1, 1);
+  lx.fillRect(sx + 8, sy + 4, 1, 1);
+
+  // Legs (simple walk cycle)
+  const lc = Math.floor(Date.now() / 100) % 2;
+  lx.fillStyle = "#7a3820";
+  if (player.vx !== 0) {
+    lx.fillRect(sx + 1, sy + ph - 4, 4, 4);
+    lx.fillRect(sx + pw - 5, sy + ph - (lc ? 4 : 2), 4, lc ? 4 : 2);
+  } else {
+    lx.fillRect(sx + 1, sy + ph - 4, 4, 4);
+    lx.fillRect(sx + pw - 5, sy + ph - 4, 4, 4);
+  }
+}
+
+// ============================================
+//  DRAW
+// ============================================
+function draw() {
+  // Clear virtual canvas
+  lx.fillStyle = WORLD_CONFIG.bgColor;
+  lx.fillRect(0, 0, VW, VH);
+
+  // Stars
+  for (const s of stars) {
+    const blink = Math.sin(Date.now() * 0.002 + s.b * 10);
+    lx.fillStyle = blink > 0.5 ? "#fff" : "rgba(255,255,255,0.4)";
+    lx.fillRect(Math.round(s.x), Math.round(s.y), 1, 1);
+  }
+
+  // Ground tiles
+  for (const t of worldTiles) {
+    const sx = Math.round(t.wx - cameraX);
+    if (sx + TS < 0 || sx > VW) continue;
+    drawTile(sx, Math.round(t.wy), t.type);
+  }
+
+  // Coins
+  for (const c of worldCoins) {
+    if (c.collected) continue;
+    const sx = Math.round(c.wx - cameraX);
+    if (sx + 8 < 0 || sx > VW) continue;
+    drawCoin(sx, Math.round(c.wy), coinAnim);
+  }
+
+  // Spikes (drawn via drawTile with type 3)
+  for (const s of worldSpikes) {
+    const sx = Math.round(s.wx - cameraX);
+    if (sx + TS < 0 || sx > VW) continue;
+    drawTile(sx, Math.round(s.wy), 3);
+  }
+
+  // Player
+  if (!player.dead) drawPlayer();
+
+  // --- Blit low-res to display canvas with pixel scaling ---
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(lowRes, 0, 0, canvas.width, canvas.height);
+}
+
+// ============================================
+//  GAME LOOP
+// ============================================
+function loop() {
+  update();
+  draw();
+  frameId = requestAnimationFrame(loop);
+}
+
+// ============================================
+//  BOOT
+// ============================================
+restartGame();
+loop();
 </script>
 </body>
 </html>
