@@ -2,903 +2,570 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🌿 Garden Grove</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>HOOK CUBE</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&display=swap');
-
-  :root {
-    --bg:        #0d1a08;
-    --panel:     #162410;
-    --border:    #3a6625;
-    --border2:   #5a9a35;
-    --text:      #b8e890;
-    --text2:     #7cc050;
-    --gold:      #f0c040;
-    --red:       #e05050;
-    --blue:      #60a0e0;
-    --highlight: #88ee44;
-    --sky1:      #5bb8f5;
-    --sky2:      #a8dff8;
-  }
-
-  * { box-sizing: border-box; margin: 0; padding: 0; image-rendering: pixelated; }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'VT323', monospace;
-    font-size: 18px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
-
-  /* ── Header ── */
-  #header {
-    width: 100%;
-    max-width: 1100px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 20px 6px;
-    border-bottom: 3px solid var(--border);
-    background: var(--panel);
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  #title {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 14px;
-    color: var(--highlight);
-    text-shadow: 2px 2px 0 #1a4a0a, 0 0 12px #44ff0055;
-    letter-spacing: 1px;
-  }
-  #stats {
-    display: flex;
-    gap: 20px;
-    flex-wrap: wrap;
-  }
-  .stat {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: #0d1a08;
-    border: 2px solid var(--border);
-    padding: 4px 10px;
-    border-radius: 2px;
-    font-size: 20px;
-  }
-  .stat-label { color: var(--text2); font-size: 16px; }
-  .stat-val   { color: var(--gold); font-weight: bold; }
-
-  /* ── Main Layout ── */
-  #main {
-    display: flex;
-    gap: 0;
-    width: 100%;
-    max-width: 1100px;
-    flex: 1;
-  }
-
-  /* ── Canvas ── */
-  #game-wrap {
-    flex: 1;
-    position: relative;
-    overflow: hidden;
-    background: var(--sky1);
-  }
-  #sky-canvas {
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    pointer-events: none;
-  }
-  #game-canvas {
-    display: block;
-    cursor: crosshair;
-    image-rendering: pixelated;
-  }
-  #tooltip {
-    position: absolute;
-    background: var(--panel);
-    border: 2px solid var(--border2);
-    color: var(--text);
-    font-size: 16px;
-    padding: 4px 10px;
-    pointer-events: none;
-    display: none;
-    z-index: 10;
-    white-space: nowrap;
-  }
-  #grow-overlay {
-    position: absolute;
-    top: 0; left: 0;
-    pointer-events: none;
-    z-index: 5;
-    overflow: hidden;
-  }
-
-  /* ── Side Panel ── */
-  #panel {
-    width: 220px;
-    min-width: 180px;
-    background: var(--panel);
-    border-left: 3px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-    max-height: calc(100vh - 70px);
-  }
-  .panel-section {
-    border-bottom: 2px solid var(--border);
-    padding: 8px 8px 10px;
-  }
-  .panel-title {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 7px;
-    color: var(--text2);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 8px;
-    padding-bottom: 4px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  /* Tool selector */
-  #tool-btns {
-    display: flex;
-    gap: 4px;
-    margin-bottom: 8px;
-    flex-wrap: wrap;
-  }
-  .tool-btn {
-    flex: 1;
-    min-width: 60px;
-    background: #0d1a08;
-    border: 2px solid var(--border);
-    color: var(--text);
-    font-family: 'VT323', monospace;
-    font-size: 16px;
-    padding: 4px 6px;
-    cursor: pointer;
-    text-align: center;
-    transition: background 0.1s, border-color 0.1s;
-  }
-  .tool-btn:hover    { background: #1a3010; border-color: var(--border2); }
-  .tool-btn.active   { background: #1a4010; border-color: var(--highlight); color: var(--highlight); }
-
-  /* Plant buttons */
-  #plant-list {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-  }
-  .plant-btn {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: #0d1a08;
-    border: 2px solid var(--border);
-    color: var(--text);
-    font-family: 'VT323', monospace;
-    font-size: 17px;
-    padding: 4px 6px;
-    cursor: pointer;
-    text-align: left;
-    transition: background 0.1s, border-color 0.1s;
-    position: relative;
-  }
-  .plant-btn:hover   { background: #1a3010; border-color: var(--border2); }
-  .plant-btn.active  { background: #1a4010; border-color: var(--highlight); color: var(--highlight); }
-  .plant-btn.locked  { opacity: 0.4; cursor: not-allowed; }
-  .plant-icon-canvas { width: 28px; height: 28px; image-rendering: pixelated; flex-shrink: 0; }
-  .plant-info { flex: 1; min-width: 0; }
-  .plant-name { font-size: 15px; line-height: 1.1; }
-  .plant-cost { color: var(--gold); font-size: 14px; }
-  .plant-score { color: var(--blue); font-size: 13px; }
-  .plant-section-head {
-    font-size: 13px;
-    color: var(--text2);
-    padding: 2px 0;
-    letter-spacing: 1px;
-  }
-
-  /* Help */
-  #help-text {
-    font-size: 15px;
-    color: var(--text2);
-    line-height: 1.5;
-    padding: 4px 0;
-  }
-  #help-text span { color: var(--highlight); }
-
-  /* Notifs */
-  #notif-container {
-    position: fixed;
-    top: 80px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    pointer-events: none;
-    z-index: 100;
-  }
-  .notif {
-    background: var(--panel);
-    border: 2px solid var(--highlight);
-    color: var(--text);
-    font-family: 'VT323', monospace;
-    font-size: 20px;
-    padding: 6px 18px;
-    animation: notifAnim 2.2s ease forwards;
-    white-space: nowrap;
-  }
-  @keyframes notifAnim {
-    0%   { opacity: 0; transform: translateY(-10px); }
-    15%  { opacity: 1; transform: translateY(0); }
-    70%  { opacity: 1; }
-    100% { opacity: 0; transform: translateY(-16px); }
-  }
-
-  /* Progress bar for grow timer */
-  .grow-bar-wrap {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: 4px;
-    background: #1a3010;
-    pointer-events: none;
-  }
-  .grow-bar {
-    height: 100%;
-    background: var(--highlight);
-    transition: width 0.5s linear;
-  }
-
-  /* Footer */
-  #footer {
-    width: 100%;
-    max-width: 1100px;
-    background: var(--panel);
-    border-top: 3px solid var(--border);
-    padding: 6px 20px;
-    display: flex;
-    gap: 20px;
-    font-size: 15px;
-    color: var(--text2);
-    flex-wrap: wrap;
-  }
-  #footer span { color: var(--text); }
-
-  /* Scrollbar */
-  ::-webkit-scrollbar { width: 6px; }
-  ::-webkit-scrollbar-track { background: var(--bg); }
-  ::-webkit-scrollbar-thumb { background: var(--border); }
-
-  /* Speed buttons */
-  #speed-btns { display: flex; gap: 4px; }
-  .speed-btn {
-    background: #0d1a08;
-    border: 2px solid var(--border);
-    color: var(--text2);
-    font-family: 'VT323', monospace;
-    font-size: 16px;
-    padding: 2px 8px;
-    cursor: pointer;
-  }
-  .speed-btn.active { border-color: var(--highlight); color: var(--highlight); }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a0f; overflow: hidden; font-family: 'Courier New', monospace; touch-action: none; }
+canvas { display: block; }
+#ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+#hud { position: fixed; top: 30px; left: 30px; color: #00ffcc; font-size: 18px; letter-spacing: 2px; text-shadow: 0 0 10px #00ffcc; }
+#crosshair { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 20px; height: 20px; pointer-events: none; }
+#crosshair::before, #crosshair::after { content: ''; position: absolute; background: rgba(0,255,204,0.8); box-shadow: 0 0 6px #00ffcc; }
+#crosshair::before { width: 2px; height: 20px; left: 9px; top: 0; }
+#crosshair::after { width: 20px; height: 2px; top: 9px; left: 0; }
+#instructions { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); color: rgba(0,255,204,0.6); font-size: 13px; letter-spacing: 1px; text-align: center; line-height: 1.8; }
+#joystick-area { position: fixed; bottom: 0; left: 0; width: 50%; height: 45%; pointer-events: all; }
+#look-area { position: fixed; bottom: 0; right: 0; width: 50%; height: 100%; pointer-events: all; }
+#fire-btn { position: fixed; bottom: 60px; right: 40px; width: 80px; height: 80px; border-radius: 50%; background: rgba(0,255,204,0.15); border: 2px solid #00ffcc; color: #00ffcc; font-size: 11px; letter-spacing: 1px; display: flex; align-items: center; justify-content: center; pointer-events: all; cursor: pointer; text-shadow: 0 0 8px #00ffcc; box-shadow: 0 0 20px rgba(0,255,204,0.3), inset 0 0 20px rgba(0,255,204,0.05); transition: all 0.1s; user-select: none; }
+#fire-btn:active, #fire-btn.active { background: rgba(0,255,204,0.35); box-shadow: 0 0 40px rgba(0,255,204,0.6), inset 0 0 30px rgba(0,255,204,0.2); transform: scale(0.95); }
+#retract-btn { position: fixed; bottom: 160px; right: 40px; width: 60px; height: 60px; border-radius: 50%; background: rgba(255,100,0,0.15); border: 2px solid #ff6400; color: #ff6400; font-size: 10px; letter-spacing: 1px; display: flex; align-items: center; justify-content: center; pointer-events: all; cursor: pointer; text-shadow: 0 0 8px #ff6400; box-shadow: 0 0 15px rgba(255,100,0,0.3); user-select: none; }
+#retract-btn:active { background: rgba(255,100,0,0.35); }
+#jump-btn { position: fixed; bottom: 160px; right: 120px; width: 60px; height: 60px; border-radius: 50%; background: rgba(180,0,255,0.15); border: 2px solid #b400ff; color: #b400ff; font-size: 11px; display: flex; align-items: center; justify-content: center; pointer-events: all; cursor: pointer; text-shadow: 0 0 8px #b400ff; box-shadow: 0 0 15px rgba(180,0,255,0.3); user-select: none; }
+#jump-btn:active { background: rgba(180,0,255,0.35); }
+#joystick-vis { position: fixed; bottom: 80px; left: 80px; width: 100px; height: 100px; border-radius: 50%; border: 2px solid rgba(0,255,204,0.3); pointer-events: none; }
+#joystick-knob { position: absolute; width: 40px; height: 40px; border-radius: 50%; background: rgba(0,255,204,0.4); border: 2px solid #00ffcc; top: 50%; left: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 15px #00ffcc; transition: none; }
+#score { position: fixed; top: 30px; right: 30px; color: #00ffcc; font-size: 24px; text-shadow: 0 0 15px #00ffcc; }
+#hook-status { position: fixed; top: 70px; left: 30px; color: rgba(0,255,204,0.5); font-size: 13px; letter-spacing: 1px; }
 </style>
 </head>
 <body>
-
-<!-- Header -->
-<div id="header">
-  <div id="title">🌿 Garden Grove</div>
-  <div id="stats">
-    <div class="stat"><span class="stat-label">🌱 Seeds:</span><span class="stat-val" id="stat-seeds">25</span></div>
-    <div class="stat"><span class="stat-label">🏆 Score:</span><span class="stat-val" id="stat-score">0</span></div>
-    <div class="stat"><span class="stat-label">🌳 Plants:</span><span class="stat-val" id="stat-plants">0</span></div>
-    <div class="stat"><span class="stat-label">⏱ Speed:</span>
-      <span id="speed-btns">
-        <button class="speed-btn active" data-speed="1">1x</button>
-        <button class="speed-btn" data-speed="3">3x</button>
-        <button class="speed-btn" data-speed="8">8x</button>
-      </span>
-    </div>
-  </div>
+<canvas id="c"></canvas>
+<div id="ui">
+  <div id="hud">HOOK CUBE</div>
+  <div id="hook-status">HOOK: READY</div>
+  <div id="score">SCORE: 0</div>
+  <div id="crosshair"></div>
+  <div id="joystick-area"></div>
+  <div id="look-area"></div>
+  <div id="joystick-vis"><div id="joystick-knob"></div></div>
+  <button id="fire-btn">HOOK</button>
+  <button id="retract-btn">REEL</button>
+  <button id="jump-btn">JUMP</button>
+  <div id="instructions">TAP RIGHT SIDE TO LOOK &nbsp;|&nbsp; LEFT JOYSTICK TO MOVE<br>HOOK TO LATCH &nbsp;|&nbsp; REEL TO SWING &nbsp;|&nbsp; COLLECT ORBS</div>
 </div>
+<script>
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl');
+let W, H;
 
-<!-- Main -->
-<div id="main">
-  <div id="game-wrap">
-    <canvas id="sky-canvas"></canvas>
-    <canvas id="game-canvas"></canvas>
-    <div id="tooltip"></div>
-    <canvas id="grow-overlay"></canvas>
-  </div>
-
-  <!-- Side Panel -->
-  <div id="panel">
-    <div class="panel-section">
-      <div class="panel-title">🛠 Tool</div>
-      <div id="tool-btns">
-        <button class="tool-btn active" data-tool="plant">🌱 Plant</button>
-        <button class="tool-btn" data-tool="remove">✂️ Remove</button>
-        <button class="tool-btn" data-tool="info">🔍 Info</button>
-      </div>
-    </div>
-    <div class="panel-section">
-      <div class="panel-title">🌻 Plants</div>
-      <div id="plant-list"></div>
-    </div>
-    <div class="panel-section">
-      <div class="panel-title">❓ Help</div>
-      <div id="help-text">
-        <span>Click</span> a tile to plant.<br>
-        Plants <span>grow</span> over time.<br>
-        Grown plants earn <span>seeds</span>.<br>
-        Fill your garden to<br>boost your <span>score</span>!<br><br>
-        <span>Remove</span> tool refunds<br>half the seed cost.<br><br>
-        Water tiles <span>block</span> planting.
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Footer -->
-<div id="footer">
-  <span>Garden Grove</span> — Grow a magnificent garden! Plant trees, flowers & more.
-  Bigger plants = more seeds & score. 🌱→🌳
-</div>
-
-<!-- Notifs -->
-<div id="notif-container"></div>
-
-<script type="module">
-import {
-  buildSprite,
-  SPRITE_GRASS, SPRITE_DIRT, SPRITE_PATH, SPRITE_WATER,
-  SPRITE_CLOUD, SPRITE_SUN, SPRITE_BIRD,
-  SPRITE_SAPLING,
-  SPRITE_FLOWER_PINK, SPRITE_FLOWER_YELLOW, SPRITE_FLOWER_RED,
-  SPRITE_FLOWER_PURPLE, SPRITE_FLOWER_BLUE,
-  SPRITE_BUSH_SMALL, SPRITE_BUSH_FLOWER, SPRITE_BERRY_BUSH,
-  SPRITE_TREE_OAK, SPRITE_TREE_PINE, SPRITE_TREE_BIG,
-  SPRITE_MUSHROOM, SPRITE_SUNFLOWER, SPRITE_CACTUS,
-  SPRITE_STONE, SPRITE_FENCE, SPRITE_WELL, SPRITE_GNOME,
-  UI_ICONS, PLANT_COSTS, PLANT_REWARDS, PLANT_GROW_TIME,
-  PLANT_SCORES, PLANT_LABELS, PLANTS, DECORATIONS,
-  TERRAIN, DEFAULT_MAP, PALETTE,
-} from './sprites.js';
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-const TS = 20; // tile size in canvas pixels (20px rendered)
-const MAP_W = 25;
-const MAP_H = 18;
-
-// ─── State ────────────────────────────────────────────────────────────────────
-let seeds = 25;
-let score = 0;
-let plantCount = 0;
-let selectedPlant = 'flower_pink';
-let selectedTool = 'plant';
-let gameSpeed = 1;
-
-// Grid of placed items: null or { type, stage, plantedAt, growthTime, grown, spriteCanvas }
-const grid = Array.from({ length: MAP_H }, () => Array(MAP_W).fill(null));
-
-// Parse terrain map
-const terrain = DEFAULT_MAP.map(row => row.split('').map(c => {
-  if (c === 'D') return TERRAIN.DIRT;
-  if (c === 'P') return TERRAIN.PATH;
-  if (c === 'W') return TERRAIN.WATER;
-  return TERRAIN.GRASS;
-}));
-
-// Pre-build terrain canvases
-const terrainSprites = {
-  [TERRAIN.GRASS]: buildSprite(SPRITE_GRASS),
-  [TERRAIN.DIRT]:  buildSprite(SPRITE_DIRT),
-  [TERRAIN.PATH]:  buildSprite(SPRITE_PATH),
-  [TERRAIN.WATER]: buildSprite(SPRITE_WATER),
-};
-
-// Pre-build plant sprites
-const SPRITE_MAP = {
-  flower_pink:   [buildSprite(SPRITE_SAPLING), buildSprite(SPRITE_FLOWER_PINK)],
-  flower_yellow: [buildSprite(SPRITE_SAPLING), buildSprite(SPRITE_FLOWER_YELLOW)],
-  flower_red:    [buildSprite(SPRITE_SAPLING), buildSprite(SPRITE_FLOWER_RED)],
-  flower_purple: [buildSprite(SPRITE_SAPLING), buildSprite(SPRITE_FLOWER_PURPLE)],
-  flower_blue:   [buildSprite(SPRITE_SAPLING), buildSprite(SPRITE_FLOWER_BLUE)],
-  bush:          [buildSprite(SPRITE_SAPLING), buildSprite(SPRITE_BUSH_SMALL)],
-  bush_flower:   [buildSprite(SPRITE_SAPLING), buildSprite(SPRITE_BUSH_FLOWER)],
-  berry_bush:    [buildSprite(SPRITE_SAPLING), buildSprite(SPRITE_BERRY_BUSH)],
-  tree_oak:      [buildSprite(SPRITE_SAPLING), buildSprite(SPRITE_TREE_OAK)],
-  tree_pine:     [buildSprite(SPRITE_SAPLING), buildSprite(SPRITE_TREE_PINE)],
-  tree_big:      [buildSprite(SPRITE_SAPLING), buildSprite(SPRITE_TREE_OAK), buildSprite(SPRITE_TREE_BIG)],
-  mushroom:      [buildSprite(SPRITE_MUSHROOM)],
-  sunflower:     [buildSprite(SPRITE_SAPLING), buildSprite(SPRITE_SUNFLOWER)],
-  cactus:        [buildSprite(SPRITE_SAPLING), buildSprite(SPRITE_CACTUS)],
-  stone:         [buildSprite(SPRITE_STONE)],
-  fence:         [buildSprite(SPRITE_FENCE)],
-  well:          [buildSprite(SPRITE_WELL)],
-  gnome:         [buildSprite(SPRITE_GNOME)],
-};
-
-// ─── Canvas Setup ─────────────────────────────────────────────────────────────
-const gameWrap   = document.getElementById('game-wrap');
-const canvas     = document.getElementById('game-canvas');
-const ctx        = canvas.getContext('2d');
-const skyCanvas  = document.getElementById('sky-canvas');
-const skyCtx     = skyCanvas.getContext('2d');
-const overlayEl  = document.getElementById('grow-overlay');
-const overlayCtx = overlayEl.getContext('2d');
-
-canvas.width  = MAP_W * TS;
-canvas.height = MAP_H * TS;
-
-function resizeSky() {
-  skyCanvas.width  = gameWrap.clientWidth;
-  skyCanvas.height = gameWrap.clientHeight;
-  overlayEl.width  = canvas.width;
-  overlayEl.height = canvas.height;
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  gl.viewport(0, 0, W, H);
 }
-resizeSky();
-window.addEventListener('resize', resizeSky);
+resize();
+window.addEventListener('resize', resize);
 
-// ─── Sky / Ambient ────────────────────────────────────────────────────────────
-const clouds = Array.from({ length: 5 }, (_, i) => ({
-  x: Math.random() * 600,
-  y: 20 + Math.random() * 60,
-  speed: 0.15 + Math.random() * 0.15,
-  scale: 0.8 + Math.random() * 0.8,
-}));
-const birds = Array.from({ length: 3 }, () => ({
-  x: Math.random() * 600,
-  y: 30 + Math.random() * 80,
-  speed: 0.4 + Math.random() * 0.3,
-  flap: 0,
-}));
+const vsSource = `
+attribute vec3 aPos;
+attribute vec3 aNorm;
+attribute vec3 aColor;
+uniform mat4 uMVP;
+uniform mat4 uModel;
+uniform vec3 uLightDir;
+uniform vec3 uBaseColor;
+uniform int uUseVertColor;
+varying vec3 vColor;
+varying float vLight;
+void main(){
+  vec4 worldPos = uModel * vec4(aPos, 1.0);
+  gl_Position = uMVP * vec4(aPos, 1.0);
+  vec3 norm = normalize((uModel * vec4(aNorm, 0.0)).xyz);
+  float diff = max(dot(norm, normalize(uLightDir)), 0.0);
+  vLight = 0.3 + 0.7 * diff;
+  if(uUseVertColor == 1) vColor = aColor;
+  else vColor = uBaseColor;
+}`;
 
-const cloudSprite = buildSprite(SPRITE_CLOUD);
-const sunSprite   = buildSprite(SPRITE_SUN);
-const birdSprite  = buildSprite(SPRITE_BIRD);
+const fsSource = `
+precision mediump float;
+varying vec3 vColor;
+varying float vLight;
+void main(){
+  gl_FragColor = vec4(vColor * vLight, 1.0);
+}`;
 
-function drawSky(ts) {
-  const W = skyCanvas.width, H = skyCanvas.height;
-  // Sky gradient
-  const grad = skyCtx.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0, '#4a9cd4');
-  grad.addColorStop(1, '#b8e4f8');
-  skyCtx.fillStyle = grad;
-  skyCtx.fillRect(0, 0, W, H);
-
-  // Sun
-  skyCtx.save();
-  skyCtx.translate(W - 80, 40);
-  skyCtx.scale(3, 3);
-  skyCtx.drawImage(sunSprite, 0, 0);
-  skyCtx.restore();
-
-  // Clouds
-  for (const c of clouds) {
-    c.x += c.speed * gameSpeed;
-    if (c.x > W + 100) c.x = -120;
-    skyCtx.save();
-    skyCtx.translate(c.x, c.y);
-    skyCtx.scale(c.scale * 2, c.scale * 2);
-    skyCtx.globalAlpha = 0.85;
-    skyCtx.drawImage(cloudSprite, 0, 0);
-    skyCtx.globalAlpha = 1;
-    skyCtx.restore();
-  }
-
-  // Birds
-  for (const b of birds) {
-    b.x += b.speed * gameSpeed;
-    b.flap += 0.18 * gameSpeed;
-    if (b.x > W + 40) b.x = -40;
-    skyCtx.save();
-    skyCtx.translate(b.x, b.y + Math.sin(b.flap) * 4);
-    skyCtx.scale(2, 2);
-    skyCtx.drawImage(birdSprite, 0, 0);
-    skyCtx.restore();
-  }
+function compileShader(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  return s;
 }
 
-// ─── Game Drawing ─────────────────────────────────────────────────────────────
-function drawGame() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+const prog = gl.createProgram();
+gl.attachShader(prog, compileShader(gl.VERTEX_SHADER, vsSource));
+gl.attachShader(prog, compileShader(gl.FRAGMENT_SHADER, fsSource));
+gl.linkProgram(prog);
+gl.useProgram(prog);
 
-  // Draw terrain
-  for (let y = 0; y < MAP_H; y++) {
-    for (let x = 0; x < MAP_W; x++) {
-      ctx.drawImage(terrainSprites[terrain[y][x]], x * TS, y * TS, TS, TS);
-    }
-  }
+const aPos = gl.getAttribLocation(prog, 'aPos');
+const aNorm = gl.getAttribLocation(prog, 'aNorm');
+const aColor = gl.getAttribLocation(prog, 'aColor');
+const uMVP = gl.getUniformLocation(prog, 'uMVP');
+const uModel = gl.getUniformLocation(prog, 'uModel');
+const uLightDir = gl.getUniformLocation(prog, 'uLightDir');
+const uBaseColor = gl.getUniformLocation(prog, 'uBaseColor');
+const uUseVertColor = gl.getUniformLocation(prog, 'uUseVertColor');
 
-  // Draw grid items
-  const now = Date.now();
-  for (let y = 0; y < MAP_H; y++) {
-    for (let x = 0; x < MAP_W; x++) {
-      const item = grid[y][x];
-      if (!item) continue;
-
-      const sprites = SPRITE_MAP[item.type];
-      const stageIdx = Math.min(item.stage, sprites.length - 1);
-      const sp = sprites[stageIdx];
-      if (!sp) continue;
-
-      // Center the sprite on the tile (handle multi-tile tall sprites)
-      const sh = sp.height;
-      const sw = sp.width;
-      const drawX = x * TS + (TS - sw) / 2;
-      const drawY = (y + 1) * TS - sh; // anchor to bottom of tile
-
-      ctx.drawImage(sp, drawX, drawY);
-
-      // Grow progress bar for growing plants
-      if (!item.grown && item.growthTime > 0) {
-        const elapsed = (now - item.plantedAt) * gameSpeed;
-        const pct = Math.min(elapsed / item.growthTime, 1);
-        ctx.fillStyle = '#0d2008';
-        ctx.fillRect(x * TS + 1, (y + 1) * TS - 3, TS - 2, 2);
-        ctx.fillStyle = pct > 0.66 ? '#88ee44' : pct > 0.33 ? '#f0c040' : '#e05050';
-        ctx.fillRect(x * TS + 1, (y + 1) * TS - 3, Math.floor((TS - 2) * pct), 2);
-      }
-    }
-  }
+function mat4() { return new Float32Array(16); }
+function identity(m) { m.fill(0); m[0]=m[5]=m[10]=m[15]=1; return m; }
+function multiply(a, b) {
+  const r = mat4();
+  for(let i=0;i<4;i++) for(let j=0;j<4;j++) for(let k=0;k<4;k++) r[j*4+i]+=a[k*4+i]*b[j*4+k];
+  return r;
 }
-
-// ─── Hover highlight ──────────────────────────────────────────────────────────
-let hoverTile = null;
-canvas.addEventListener('mousemove', e => {
-  const rect = canvas.getBoundingClientRect();
-  const scaleX = canvas.width  / rect.width;
-  const scaleY = canvas.height / rect.height;
-  const cx = (e.clientX - rect.left) * scaleX;
-  const cy = (e.clientY - rect.top)  * scaleY;
-  const tx = Math.floor(cx / TS);
-  const ty = Math.floor(cy / TS);
-  hoverTile = { x: tx, y: ty };
-
-  // Tooltip
-  const tooltip = document.getElementById('tooltip');
-  const item = grid[ty]?.[tx];
-  if (item) {
-    const label = PLANT_LABELS[item.type] || item.type;
-    const state = item.grown ? '✅ Grown' : '🌱 Growing...';
-    tooltip.style.display = 'block';
-    tooltip.style.left = (e.clientX - rect.left + 12) + 'px';
-    tooltip.style.top  = (e.clientY - rect.top  - 10) + 'px';
-    tooltip.textContent = `${label} — ${state}`;
-  } else {
-    tooltip.style.display = 'none';
-  }
-});
-canvas.addEventListener('mouseleave', () => {
-  hoverTile = null;
-  document.getElementById('tooltip').style.display = 'none';
-});
-
-function drawOverlay() {
-  overlayCtx.clearRect(0, 0, overlayEl.width, overlayEl.height);
-  if (!hoverTile) return;
-  const { x, y } = hoverTile;
-  if (x < 0 || x >= MAP_W || y < 0 || y >= MAP_H) return;
-
-  const isWater = terrain[y][x] === TERRAIN.WATER;
-  const hasItem = !!grid[y][x];
-  let color = 'rgba(136,238,68,0.25)';
-  if (selectedTool === 'remove') color = 'rgba(220,80,80,0.25)';
-  else if (isWater || (hasItem && selectedTool === 'plant')) color = 'rgba(220,80,80,0.18)';
-
-  overlayCtx.fillStyle = color;
-  overlayCtx.fillRect(x * TS, y * TS, TS, TS);
-  overlayCtx.strokeStyle = selectedTool === 'remove' ? 'rgba(220,80,80,0.8)' : 'rgba(136,238,68,0.8)';
-  overlayCtx.lineWidth = 1;
-  overlayCtx.strokeRect(x * TS + 0.5, y * TS + 0.5, TS - 1, TS - 1);
+function perspective(fov, asp, near, far) {
+  const m = mat4(); const f = 1/Math.tan(fov/2);
+  m[0]=f/asp; m[5]=f; m[10]=(far+near)/(near-far); m[11]=-1; m[14]=2*far*near/(near-far);
+  return m;
 }
-
-// ─── Click Handler ────────────────────────────────────────────────────────────
-canvas.addEventListener('click', e => {
-  const rect = canvas.getBoundingClientRect();
-  const scaleX = canvas.width  / rect.width;
-  const scaleY = canvas.height / rect.height;
-  const cx = (e.clientX - rect.left) * scaleX;
-  const cy = (e.clientY - rect.top)  * scaleY;
-  const tx = Math.floor(cx / TS);
-  const ty = Math.floor(cy / TS);
-  if (tx < 0 || tx >= MAP_W || ty < 0 || ty >= MAP_H) return;
-
-  if (selectedTool === 'info') {
-    const item = grid[ty][tx];
-    if (item) {
-      const label = PLANT_LABELS[item.type];
-      const cost  = PLANT_COSTS[item.type];
-      const rew   = PLANT_REWARDS[item.type];
-      const sc    = PLANT_SCORES[item.type];
-      const state = item.grown ? 'Fully Grown ✅' : 'Still Growing 🌱';
-      notify(`${label} | Cost:${cost}🌱 Reward:${rew}🌱 Score:+${sc} | ${state}`, '#60c0e0');
-    } else {
-      notify(`Empty tile — ${terrain[ty][tx]}`, '#888');
-    }
-    return;
-  }
-
-  if (selectedTool === 'remove') {
-    const item = grid[ty][tx];
-    if (item) {
-      const refund = Math.floor((PLANT_COSTS[item.type] || 0) / 2);
-      grid[ty][tx] = null;
-      if (item.grown) score = Math.max(0, score - PLANT_SCORES[item.type]);
-      plantCount--;
-      seeds += refund;
-      updateStats();
-      notify(`Removed! +${refund}🌱 refunded`, '#f0c040');
-    }
-    return;
-  }
-
-  // Plant tool
-  if (terrain[ty][tx] === TERRAIN.WATER) { notify('Cannot plant in water! 💧', '#e05050'); return; }
-  if (grid[ty][tx]) { notify('Tile already occupied!', '#e05050'); return; }
-
-  const cost = PLANT_COSTS[selectedPlant] || 0;
-  if (seeds < cost) { notify(`Need ${cost}🌱 seeds! (have ${seeds})`, '#e05050'); return; }
-
-  seeds -= cost;
-  plantCount++;
-
-  const isDecor = DECORATIONS.includes(selectedPlant);
-  const growTime = PLANT_GROW_TIME[selectedPlant] || 0;
-
-  grid[ty][tx] = {
-    type:       selectedPlant,
-    stage:      0,
-    plantedAt:  Date.now(),
-    growthTime: growTime,
-    grown:      isDecor || growTime === 0,
-  };
-
-  if (isDecor) {
-    score += PLANT_SCORES[selectedPlant];
-    notify(`Placed ${PLANT_LABELS[selectedPlant]}! +${PLANT_SCORES[selectedPlant]} score`, '#88ee44');
-  } else {
-    notify(`Planted ${PLANT_LABELS[selectedPlant]}! Growing...`, '#b8e890');
-  }
-
-  updateStats();
-  updatePanelLocks();
-});
-
-// ─── Growth Loop ──────────────────────────────────────────────────────────────
-let lastGrowthCheck = Date.now();
-function checkGrowth() {
-  const now = Date.now();
-  const delta = now - lastGrowthCheck;
-  lastGrowthCheck = now;
-
-  for (let y = 0; y < MAP_H; y++) {
-    for (let x = 0; x < MAP_W; x++) {
-      const item = grid[y][x];
-      if (!item || item.grown || item.growthTime === 0) continue;
-
-      const elapsed = (now - item.plantedAt) * gameSpeed;
-      const pct = elapsed / item.growthTime;
-
-      const sprites = SPRITE_MAP[item.type];
-      if (sprites.length > 2) {
-        // Multi-stage (tree_big has 3 stages)
-        if (pct >= 1) {
-          if (item.stage < sprites.length - 1) {
-            item.stage++;
-            if (item.stage === sprites.length - 1) {
-              item.grown = true;
-              const reward = PLANT_REWARDS[item.type];
-              seeds += reward;
-              score += PLANT_SCORES[item.type];
-              updateStats();
-              notify(`${PLANT_LABELS[item.type]} fully grown! +${reward}🌱 +${PLANT_SCORES[item.type]}pts`, '#f0c040');
-            } else {
-              item.plantedAt = now; // reset for next stage
-            }
-          }
-        } else if (pct >= 0.5 && item.stage === 0) {
-          item.stage = 1;
-        }
-      } else {
-        if (pct >= 1) {
-          item.stage = sprites.length - 1;
-          item.grown = true;
-          const reward = PLANT_REWARDS[item.type];
-          seeds += reward;
-          score += PLANT_SCORES[item.type];
-          updateStats();
-          notify(`${PLANT_LABELS[item.type]} grew! +${reward}🌱 +${PLANT_SCORES[item.type]}pts`, '#88ee44');
-          updatePanelLocks();
-        }
-      }
-    }
-  }
+function lookAt(eye, center, up) {
+  const z = norm3(sub3(eye, center));
+  const x = norm3(cross3(up, z));
+  const y = cross3(z, x);
+  const m = mat4();
+  m[0]=x[0];m[1]=y[0];m[2]=z[0];
+  m[4]=x[1];m[5]=y[1];m[6]=z[1];
+  m[8]=x[2];m[9]=y[2];m[10]=z[2];
+  m[12]=-dot3(x,eye);m[13]=-dot3(y,eye);m[14]=-dot3(z,eye);m[15]=1;
+  return m;
 }
+function translationMat(x,y,z) { const m=identity(mat4()); m[12]=x;m[13]=y;m[14]=z; return m; }
+function scaleMat(x,y,z) { const m=mat4(); m[0]=x;m[5]=y;m[10]=z;m[15]=1; return m; }
+function rotY(a) { const m=identity(mat4()),c=Math.cos(a),s=Math.sin(a); m[0]=c;m[2]=s;m[8]=-s;m[10]=c; return m; }
+function add3(a,b){return[a[0]+b[0],a[1]+b[1],a[2]+b[2]];}
+function sub3(a,b){return[a[0]-b[0],a[1]-b[1],a[2]-b[2]];}
+function scale3(a,s){return[a[0]*s,a[1]*s,a[2]*s];}
+function dot3(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
+function len3(a){return Math.sqrt(dot3(a,a));}
+function norm3(a){const l=len3(a)||1;return scale3(a,1/l);}
+function cross3(a,b){return[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
 
-// ─── Stats / UI ───────────────────────────────────────────────────────────────
-function updateStats() {
-  document.getElementById('stat-seeds').textContent  = seeds;
-  document.getElementById('stat-score').textContent  = score;
-  document.getElementById('stat-plants').textContent = plantCount;
-}
+const cubeVerts = new Float32Array([
+  -1,-1,-1, 1,-1,-1, 1,1,-1, -1,1,-1,
+  -1,-1,1, 1,-1,1, 1,1,1, -1,1,1,
+]);
+const cubeIdx = new Uint16Array([0,1,2,2,3,0,4,5,6,6,7,4,0,1,5,5,4,0,2,3,7,7,6,2,0,3,7,7,4,0,1,2,6,6,5,1]);
+const cubeNorms = new Float32Array([
+  0,0,-1,0,0,-1,0,0,-1,0,0,-1,
+  0,0,1,0,0,1,0,0,1,0,0,1,
+  0,-1,0,0,-1,0,0,-1,0,0,-1,0,
+  0,1,0,0,1,0,0,1,0,0,1,0,
+  -1,0,0,-1,0,0,-1,0,0,-1,0,0,
+  1,0,0,1,0,0,1,0,0,1,0,0,
+]);
 
-function notify(msg, color = '#b8e890') {
-  const container = document.getElementById('notif-container');
-  const el = document.createElement('div');
-  el.className = 'notif';
-  el.style.borderColor = color;
-  el.style.color = color;
-  el.textContent = msg;
-  container.appendChild(el);
-  setTimeout(() => el.remove(), 2400);
-}
-
-function updatePanelLocks() {
-  document.querySelectorAll('.plant-btn').forEach(btn => {
-    const type = btn.dataset.type;
-    const cost = PLANT_COSTS[type] || 0;
-    btn.classList.toggle('locked', seeds < cost);
-  });
-}
-
-// ─── Panel Setup ─────────────────────────────────────────────────────────────
-function buildPanel() {
-  const list = document.getElementById('plant-list');
-  list.innerHTML = '';
-
-  const sections = [
-    { label: '── Flowers ──', items: ['flower_pink','flower_yellow','flower_red','flower_purple','flower_blue','sunflower','mushroom'] },
-    { label: '── Bushes ──',  items: ['bush','bush_flower','berry_bush','cactus'] },
-    { label: '── Trees ──',   items: ['tree_oak','tree_pine','tree_big'] },
-    { label: '── Decor ──',   items: ['stone','fence','well','gnome'] },
+function buildCubeMesh() {
+  const pos=[], norm=[], color=[], idx=[];
+  const faces=[
+    {n:[0,0,-1],verts:[0,1,2,3]},{n:[0,0,1],verts:[4,5,6,7]},
+    {n:[0,-1,0],verts:[0,1,5,4]},{n:[0,1,0],verts:[3,2,6,7]},
+    {n:[-1,0,0],verts:[0,3,7,4]},{n:[1,0,0],verts:[1,2,6,5]},
   ];
-
-  for (const sec of sections) {
-    const head = document.createElement('div');
-    head.className = 'plant-section-head';
-    head.textContent = sec.label;
-    list.appendChild(head);
-
-    for (const type of sec.items) {
-      const btn = document.createElement('button');
-      btn.className = 'plant-btn';
-      btn.dataset.type = type;
-      if (type === selectedPlant) btn.classList.add('active');
-
-      // Tiny canvas icon
-      const iconRows = UI_ICONS[type];
-      const iconCanvas = document.createElement('canvas');
-      iconCanvas.className = 'plant-icon-canvas';
-      const iconSprite = buildSprite(iconRows);
-      iconCanvas.width  = iconSprite.width;
-      iconCanvas.height = iconSprite.height;
-      const ic = iconCanvas.getContext('2d');
-      ic.drawImage(iconSprite, 0, 0);
-
-      const info = document.createElement('div');
-      info.className = 'plant-info';
-      const cost  = PLANT_COSTS[type];
-      const rew   = PLANT_REWARDS[type];
-      const sc    = PLANT_SCORES[type];
-      const isD   = DECORATIONS.includes(type);
-      info.innerHTML = `<div class="plant-name">${PLANT_LABELS[type]}</div>
-        <div class="plant-cost">${cost > 0 ? `💰${cost}🌱` : 'Free'} ${rew > 0 ? `→+${rew}🌱` : ''}</div>
-        <div class="plant-score">${sc > 0 ? `+${sc}pts` : ''}</div>`;
-
-      btn.appendChild(iconCanvas);
-      btn.appendChild(info);
-
-      btn.addEventListener('click', () => {
-        selectedPlant = type;
-        selectedTool = 'plant';
-        document.querySelectorAll('.plant-btn').forEach(b => b.classList.remove('active'));
-        document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        document.querySelector('[data-tool="plant"]').classList.add('active');
-      });
-
-      list.appendChild(btn);
-    }
-  }
-  updatePanelLocks();
-}
-
-// Tool buttons
-document.querySelectorAll('.tool-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    selectedTool = btn.dataset.tool;
-    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+  const vp=[[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]];
+  const cols=[[0.0,0.8,1.0],[0.0,1.0,0.8],[0.0,0.6,1.0],[0.0,1.0,0.6],[0.2,0.9,1.0],[0.1,0.7,0.9]];
+  let vi=0;
+  faces.forEach((f,fi)=>{
+    f.verts.forEach(v=>{ pos.push(...vp[v]); norm.push(...f.n); color.push(...cols[fi]); });
+    idx.push(vi,vi+1,vi+2,vi+2,vi+3,vi); vi+=4;
   });
-});
+  return {pos:new Float32Array(pos),norm:new Float32Array(norm),color:new Float32Array(color),idx:new Uint16Array(idx)};
+}
 
-// Speed buttons
-document.querySelectorAll('.speed-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    gameSpeed = parseInt(btn.dataset.speed);
-    document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+const cubeMesh = buildCubeMesh();
+const cubePosBuf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, cubePosBuf);
+gl.bufferData(gl.ARRAY_BUFFER, cubeMesh.pos, gl.STATIC_DRAW);
+const cubeNormBuf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, cubeNormBuf);
+gl.bufferData(gl.ARRAY_BUFFER, cubeMesh.norm, gl.STATIC_DRAW);
+const cubeColBuf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, cubeColBuf);
+gl.bufferData(gl.ARRAY_BUFFER, cubeMesh.color, gl.STATIC_DRAW);
+const cubeIdxBuf = gl.createBuffer();
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cubeIdxBuf);
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, cubeMesh.idx, gl.STATIC_DRAW);
+
+function buildPlatformMesh(w, h, d) {
+  const hx=w/2,hy=h/2,hz=d/2;
+  const vp=[[-hx,-hy,-hz],[hx,-hy,-hz],[hx,hy,-hz],[-hx,hy,-hz],[-hx,-hy,hz],[hx,-hy,hz],[hx,hy,hz],[-hx,hy,hz]];
+  const pos=[],norm=[],color=[],idx=[];
+  const faces=[
+    {n:[0,0,-1],verts:[0,1,2,3]},{n:[0,0,1],verts:[4,5,6,7]},
+    {n:[0,-1,0],verts:[0,1,5,4]},{n:[0,1,0],verts:[3,2,6,7]},
+    {n:[-1,0,0],verts:[0,3,7,4]},{n:[1,0,0],verts:[1,2,6,5]},
+  ];
+  const cols=[[0.1,0.15,0.25],[0.1,0.15,0.25],[0.05,0.1,0.2],[0.15,0.2,0.3],[0.08,0.12,0.22],[0.08,0.12,0.22]];
+  let vi=0;
+  faces.forEach((f,fi)=>{
+    f.verts.forEach(v=>{ pos.push(...vp[v]); norm.push(...f.n); color.push(...cols[fi]); });
+    idx.push(vi,vi+1,vi+2,vi+2,vi+3,vi); vi+=4;
   });
-});
-
-// ─── Canvas Scaling ───────────────────────────────────────────────────────────
-function scaleCanvas() {
-  const wrapW = gameWrap.clientWidth;
-  const wrapH = gameWrap.clientHeight;
-  const scaleX = wrapW / canvas.width;
-  const scaleY = wrapH / canvas.height;
-  const scale  = Math.min(scaleX, scaleY);
-  canvas.style.width    = (canvas.width  * scale) + 'px';
-  canvas.style.height   = (canvas.height * scale) + 'px';
-  overlayEl.style.width  = canvas.style.width;
-  overlayEl.style.height = canvas.style.height;
-}
-window.addEventListener('resize', scaleCanvas);
-
-// ─── Main Loop ────────────────────────────────────────────────────────────────
-let lastTime = 0;
-function loop(ts) {
-  const dt = ts - lastTime;
-  lastTime = ts;
-
-  drawSky(dt);
-  checkGrowth();
-  drawGame();
-  drawOverlay();
-
-  requestAnimationFrame(loop);
+  return {pos:new Float32Array(pos),norm:new Float32Array(norm),color:new Float32Array(color),idx:new Uint16Array(idx)};
 }
 
-// ─── Init ─────────────────────────────────────────────────────────────────────
-buildPanel();
-updateStats();
-scaleCanvas();
-resizeSky();
+function createMeshBuffers(mesh) {
+  const p=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,p); gl.bufferData(gl.ARRAY_BUFFER,mesh.pos,gl.STATIC_DRAW);
+  const n=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,n); gl.bufferData(gl.ARRAY_BUFFER,mesh.norm,gl.STATIC_DRAW);
+  const c=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,c); gl.bufferData(gl.ARRAY_BUFFER,mesh.color,gl.STATIC_DRAW);
+  const i=gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,i); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,mesh.idx,gl.STATIC_DRAW);
+  return {p,n,c,i,count:mesh.idx.length};
+}
 
-// Place a few starter decorations to give it life
-const starters = [
-  { type: 'stone',         x: 2,  y: 1  },
-  { type: 'flower_pink',   x: 4,  y: 1, grown: true },
-  { type: 'flower_yellow', x: 5,  y: 1, grown: true },
-  { type: 'bush',          x: 20, y: 1, grown: true },
-  { type: 'tree_oak',      x: 22, y: 2, grown: true },
-  { type: 'gnome',         x: 1,  y: 13 },
+const platforms = [
+  {x:0,y:-4,z:0,w:20,h:1,d:20},
+  {x:12,y:0,z:0,w:6,h:1,d:6},
+  {x:20,y:5,z:0,w:5,h:1,d:5},
+  {x:10,y:8,z:10,w:6,h:1,d:6},
+  {x:0,y:12,z:15,w:5,h:1,d:5},
+  {x:-10,y:7,z:10,w:6,h:1,d:6},
+  {x:-15,y:3,z:0,w:5,h:1,d:5},
+  {x:-8,y:8,z:-12,w:5,h:1,d:5},
+  {x:5,y:14,z:-8,w:4,h:1,d:4},
+  {x:18,y:10,z:-10,w:5,h:1,d:5},
+  {x:25,y:15,z:5,w:4,h:1,d:4},
+  {x:0,y:18,z:0,w:4,h:1,d:4},
 ];
-for (const s of starters) {
-  const sprites = SPRITE_MAP[s.type];
-  if (terrain[s.y]?.[s.x] !== TERRAIN.WATER) {
-    grid[s.y][s.x] = {
-      type:       s.type,
-      stage:      s.grown ? sprites.length - 1 : 0,
-      plantedAt:  Date.now() - 999999,
-      growthTime: PLANT_GROW_TIME[s.type] || 0,
-      grown:      s.grown ?? DECORATIONS.includes(s.type),
-    };
-    if (s.grown) {
-      score += PLANT_SCORES[s.type];
-      plantCount++;
-    } else {
-      plantCount++;
+
+platforms.forEach(p=>{
+  const mesh=buildPlatformMesh(p.w,p.h,p.d);
+  p.buf=createMeshBuffers(mesh);
+  p.top=p.y+0.5;
+});
+
+const orbs = [];
+function spawnOrbs() {
+  for(let i=1;i<platforms.length;i++){
+    const p=platforms[i];
+    orbs.push({x:p.x,y:p.y+1.5,z:p.z,r:0.5,collected:false,angle:0});
+  }
+}
+spawnOrbs();
+
+const sphereMesh = (function(){
+  const pos=[],norm=[],color=[],idx=[];
+  const segs=8,rings=8;
+  for(let r=0;r<=rings;r++){
+    const phi=Math.PI*r/rings;
+    for(let s=0;s<=segs;s++){
+      const theta=2*Math.PI*s/segs;
+      const x=Math.sin(phi)*Math.cos(theta),y=Math.cos(phi),z=Math.sin(phi)*Math.sin(theta);
+      pos.push(x,y,z); norm.push(x,y,z); color.push(1.0,0.8,0.0);
+    }
+  }
+  for(let r=0;r<rings;r++){
+    for(let s=0;s<segs;s++){
+      const a=r*(segs+1)+s,b=a+segs+1;
+      idx.push(a,b,a+1,b,b+1,a+1);
+    }
+  }
+  return {pos:new Float32Array(pos),norm:new Float32Array(norm),color:new Float32Array(color),idx:new Uint16Array(idx)};
+})();
+
+const sphereBuf = createMeshBuffers(sphereMesh);
+
+const lineProg = gl.createProgram();
+const lineVS = `attribute vec3 aPos; uniform mat4 uMVP; void main(){ gl_Position = uMVP * vec4(aPos, 1.0); }`;
+const lineFS = `precision mediump float; uniform vec4 uColor; void main(){ gl_FragColor = uColor; }`;
+function compileShader2(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);return s;}
+gl.attachShader(lineProg, compileShader2(gl.VERTEX_SHADER, lineVS));
+gl.attachShader(lineProg, compileShader2(gl.FRAGMENT_SHADER, lineFS));
+gl.linkProgram(lineProg);
+const lineAPos = gl.getAttribLocation(lineProg,'aPos');
+const lineMVP = gl.getUniformLocation(lineProg,'uMVP');
+const lineColor = gl.getUniformLocation(lineProg,'uColor');
+const lineBuf = gl.createBuffer();
+
+const player = {
+  x:0, y:0, z:0,
+  vx:0, vy:0, vz:0,
+  yaw:0, pitch:0,
+  onGround:false,
+  size:0.5,
+};
+
+const hook = {
+  active:false,
+  attached:false,
+  x:0,y:0,z:0,
+  tx:0,ty:0,tz:0,
+  speed:30,
+  maxLen:25,
+  len:0,
+};
+
+let score=0;
+let joystick={active:false,startX:0,startY:0,dx:0,dy:0,id:-1};
+let lookTouch={active:false,startX:0,startY:0,lastX:0,lastY:0,id:-1};
+
+const joystickVis=document.getElementById('joystick-vis');
+const joystickKnob=document.getElementById('joystick-knob');
+const scoreEl=document.getElementById('score');
+const hookStatusEl=document.getElementById('hook-status');
+const fireBtn=document.getElementById('fire-btn');
+const retractBtn=document.getElementById('retract-btn');
+const jumpBtn=document.getElementById('jump-btn');
+
+fireBtn.addEventListener('touchstart',e=>{e.stopPropagation();fireHook();});
+retractBtn.addEventListener('touchstart',e=>{e.stopPropagation();retractHook();});
+jumpBtn.addEventListener('touchstart',e=>{e.stopPropagation();if(player.onGround){player.vy=10;}});
+
+document.addEventListener('touchstart', handleTouchStart, {passive:false});
+document.addEventListener('touchmove', handleTouchMove, {passive:false});
+document.addEventListener('touchend', handleTouchEnd, {passive:false});
+
+function handleTouchStart(e) {
+  e.preventDefault();
+  for(let i=0;i<e.changedTouches.length;i++){
+    const t=e.changedTouches[i];
+    if(t.clientX < W*0.5 && t.clientY > H*0.55 && joystick.id===-1){
+      joystick.active=true; joystick.startX=t.clientX; joystick.startY=t.clientY;
+      joystick.dx=0; joystick.dy=0; joystick.id=t.identifier;
+      joystickVis.style.left=(t.clientX-50)+'px'; joystickVis.style.bottom='auto'; joystickVis.style.top=(t.clientY-50)+'px';
+    } else if(t.clientX > W*0.5 && lookTouch.id===-1){
+      lookTouch.active=true; lookTouch.startX=t.clientX; lookTouch.startY=t.clientY;
+      lookTouch.lastX=t.clientX; lookTouch.lastY=t.clientY; lookTouch.id=t.identifier;
     }
   }
 }
-updateStats();
 
-requestAnimationFrame(loop);
+function handleTouchMove(e) {
+  e.preventDefault();
+  for(let i=0;i<e.changedTouches.length;i++){
+    const t=e.changedTouches[i];
+    if(t.identifier===joystick.id){
+      const dx=t.clientX-joystick.startX, dy=t.clientY-joystick.startY;
+      const l=Math.min(Math.sqrt(dx*dx+dy*dy),50);
+      const a=Math.atan2(dy,dx);
+      joystick.dx=Math.cos(a)*l/50; joystick.dy=Math.sin(a)*l/50;
+      joystickKnob.style.left=(50+Math.cos(a)*l*0.4)+'px';
+      joystickKnob.style.top=(50+Math.sin(a)*l*0.4)+'px';
+    } else if(t.identifier===lookTouch.id){
+      const dx=t.clientX-lookTouch.lastX, dy=t.clientY-lookTouch.lastY;
+      player.yaw -= dx*0.003;
+      player.pitch -= dy*0.003;
+      player.pitch = Math.max(-1.4, Math.min(1.4, player.pitch));
+      lookTouch.lastX=t.clientX; lookTouch.lastY=t.clientY;
+    }
+  }
+}
+
+function handleTouchEnd(e) {
+  for(let i=0;i<e.changedTouches.length;i++){
+    const t=e.changedTouches[i];
+    if(t.identifier===joystick.id){ joystick.active=false; joystick.dx=0; joystick.dy=0; joystick.id=-1; joystickKnob.style.left='30px'; joystickKnob.style.top='30px'; }
+    if(t.identifier===lookTouch.id){ lookTouch.active=false; lookTouch.id=-1; }
+  }
+}
+
+function fireHook() {
+  if(hook.attached) { retractHook(); return; }
+  const dir = getCameraDir();
+  hook.active=true; hook.attached=false;
+  hook.x=player.x; hook.y=player.y; hook.z=player.z;
+  hook.tx=dir[0]; hook.ty=dir[1]; hook.tz=dir[2];
+  hook.len=0;
+  hookStatusEl.textContent='HOOK: FLYING';
+}
+
+function retractHook() {
+  hook.active=false; hook.attached=false;
+  hookStatusEl.textContent='HOOK: READY';
+}
+
+function getCameraDir() {
+  const cy=Math.cos(player.yaw), sy=Math.sin(player.yaw);
+  const cp=Math.cos(player.pitch), sp=Math.sin(player.pitch);
+  return [-sy*cp, sp, -cy*cp];
+}
+
+function rayAABB(ox,oy,oz,dx,dy,dz,minx,miny,minz,maxx,maxy,maxz){
+  let tmin=-Infinity,tmax=Infinity;
+  const ds=[dx,dy,dz],os=[ox,oy,oz],mn=[minx,miny,minz],mx=[maxx,maxy,maxz];
+  for(let i=0;i<3;i++){
+    if(Math.abs(ds[i])<1e-8){if(os[i]<mn[i]||os[i]>mx[i])return null;}
+    else{let t1=(mn[i]-os[i])/ds[i],t2=(mx[i]-os[i])/ds[i];if(t1>t2){let tmp=t1;t1=t2;t2=tmp;}tmin=Math.max(tmin,t1);tmax=Math.min(tmax,t2);}
+  }
+  if(tmax<tmin||tmax<0)return null;
+  return Math.max(tmin,0);
+}
+
+function checkPlatformCollision(px,py,pz,vx,vy,vz,dt){
+  let newx=px+vx*dt, newy=py+vy*dt, newz=pz+vz*dt;
+  const s=player.size;
+  player.onGround=false;
+  for(const p of platforms){
+    const hw=p.w/2, hh=0.5, hd=p.d/2;
+    const minx=p.x-hw,miny=p.y-hh,minz=p.z-hd;
+    const maxx=p.x+hw,maxy=p.y+hh,maxz=p.z+hd;
+    const ox=newx>=minx-s&&newx<=maxx+s&&newy>=miny-s&&newy<=maxy+s&&newz>=minz-s&&newz<=maxz+s;
+    if(ox){
+      const overY1=maxy+s-py, overY2=py-(miny-s);
+      if(overY1>0&&overY1<1.2&&vy<=0){newy=maxy+s;vy=0;player.onGround=true;}
+      else if(overY2>0&&overY2<1.2&&vy>=0){newy=miny-s;vy=0;}
+      else{
+        const overX1=maxx+s-px,overX2=px-(minx-s);
+        if(overX1<overX2&&vx>0){newx=minx-s;vx=0;}
+        else if(overX2<overX1&&vx<0){newx=maxx+s;vx=0;}
+        const overZ1=maxz+s-pz,overZ2=pz-(minz-s);
+        if(overZ1<overZ2&&vz>0){newz=minz-s;vz=0;}
+        else if(overZ2<overZ1&&vz<0){newz=maxz+s;vz=0;}
+      }
+    }
+  }
+  return {x:newx,y:newy,z:newz,vx,vy,vz};
+}
+
+let lastTime=0;
+function update(ts) {
+  const dt=Math.min((ts-lastTime)/1000,0.05);
+  lastTime=ts;
+
+  const cy=Math.cos(player.yaw), sy=Math.sin(player.yaw);
+  const spd=8;
+  let mx=0,mz=0;
+  if(joystick.active){
+    mx=joystick.dx*spd;
+    mz=joystick.dy*spd;
+  }
+  const fwdX=-sy,fwdZ=-cy,rtX=cy,rtZ=-sy;
+  const dvx=(fwdX*(-mz)+rtX*mx)*0.15;
+  const dvz=(fwdZ*(-mz)+rtZ*mx)*0.15;
+  player.vx=player.vx*0.85+dvx*spd;
+  player.vz=player.vz*0.85+dvz*spd;
+  player.vy-=20*dt;
+
+  if(hook.attached){
+    const hx=hook.x,hy=hook.y,hz=hook.z;
+    const dx=hx-player.x,dy=hy-player.y,dz=hz-player.z;
+    const dist=Math.sqrt(dx*dx+dy*dy+dz*dz);
+    if(dist>hook.maxLen){
+      const pull=norm3([dx,dy,dz]);
+      player.vx+=pull[0]*15*dt;
+      player.vy+=pull[1]*15*dt;
+      player.vz+=pull[2]*15*dt;
+    }
+    const ropeDir=norm3([dx,dy,dz]);
+    const vel=[player.vx,player.vy,player.vz];
+    const perp=sub3(vel,scale3(ropeDir,dot3(vel,ropeDir)));
+    player.vx=player.vx*0.98+perp[0]*0.5*dt;
+    player.vy=player.vy*0.98+perp[1]*0.5*dt;
+    player.vz=player.vz*0.98+perp[2]*0.5*dt;
+    hookStatusEl.textContent='HOOK: ATTACHED';
+  }
+
+  if(hook.active&&!hook.attached){
+    const spd2=hook.speed*dt;
+    hook.x+=hook.tx*spd2; hook.y+=hook.ty*spd2; hook.z+=hook.tz*spd2;
+    hook.len+=spd2;
+    if(hook.len>hook.maxLen){retractHook();}
+    else{
+      for(const p of platforms){
+        const hw=p.w/2,hh=0.5,hd=p.d/2;
+        const t=rayAABB(hook.x-hook.tx*spd2,hook.y-hook.ty*spd2,hook.z-hook.tz*spd2,hook.tx,hook.ty,hook.tz,p.x-hw,p.y-hh,p.z-hd,p.x+hw,p.y+hh,p.z+hd);
+        if(t!==null&&t<=spd2){
+          hook.x=hook.x-hook.tx*spd2+hook.tx*(t||0);
+          hook.y=hook.y-hook.ty*spd2+hook.ty*(t||0);
+          hook.z=hook.z-hook.tz*spd2+hook.tz*(t||0);
+          hook.attached=true;
+          hookStatusEl.textContent='HOOK: ATTACHED';
+          break;
+        }
+      }
+    }
+  }
+
+  const res=checkPlatformCollision(player.x,player.y,player.z,player.vx,player.vy,player.vz,dt);
+  player.x=res.x; player.y=res.y; player.z=res.z;
+  player.vx=res.vx; player.vy=res.vy; player.vz=res.vz;
+
+  if(player.y < -20){ player.x=0;player.y=0;player.z=0;player.vx=0;player.vy=0;player.vz=0;retractHook();}
+
+  for(const o of orbs){
+    if(o.collected) continue;
+    o.angle+=dt*2;
+    const dx=player.x-o.x, dy=player.y-o.y, dz=player.z-o.z;
+    if(Math.sqrt(dx*dx+dy*dy+dz*dz)<1.2){
+      o.collected=true; score++; scoreEl.textContent='SCORE: '+score;
+    }
+  }
+}
+
+function drawMesh(buf, model, baseColor, useVertColor) {
+  gl.uniformMatrix4fv(uModel, false, model);
+  gl.uniform3fv(uBaseColor, baseColor);
+  gl.uniform1i(uUseVertColor, useVertColor?1:0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf.p); gl.enableVertexAttribArray(aPos); gl.vertexAttribPointer(aPos,3,gl.FLOAT,false,0,0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf.n); gl.enableVertexAttribArray(aNorm); gl.vertexAttribPointer(aNorm,3,gl.FLOAT,false,0,0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf.c); gl.enableVertexAttribArray(aColor); gl.vertexAttribPointer(aColor,3,gl.FLOAT,false,0,0);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buf.i);
+  gl.drawElements(gl.TRIANGLES, buf.count, gl.UNSIGNED_SHORT, 0);
+}
+
+function drawLine(x1,y1,z1,x2,y2,z2,mvp,r,g,b,a){
+  gl.useProgram(lineProg);
+  gl.uniformMatrix4fv(lineMVP,false,mvp);
+  gl.uniform4f(lineColor,r,g,b,a);
+  const verts=new Float32Array([x1,y1,z1,x2,y2,z2]);
+  gl.bindBuffer(gl.ARRAY_BUFFER,lineBuf);
+  gl.bufferData(gl.ARRAY_BUFFER,verts,gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(lineAPos);
+  gl.vertexAttribPointer(lineAPos,3,gl.FLOAT,false,0,0);
+  gl.drawArrays(gl.LINES,0,2);
+  gl.useProgram(prog);
+}
+
+function render(ts) {
+  update(ts);
+  gl.clearColor(0.04,0.04,0.08,1);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST);
+  gl.enable(gl.CULL_FACE);
+
+  const eye=[player.x,player.y+0.6,player.z];
+  const dir=getCameraDir();
+  const center=[eye[0]+dir[0],eye[1]+dir[1],eye[2]+dir[2]];
+  const view=lookAt(eye,center,[0,1,0]);
+  const proj=perspective(Math.PI/2.5,W/H,0.1,200);
+  const vp=multiply(proj,view);
+
+  gl.uniform3f(uLightDir,0.5,1,0.3);
+
+  for(const p of platforms){
+    const model=translationMat(p.x,p.y,p.z);
+    const mvp=multiply(vp,model);
+    gl.uniformMatrix4fv(uMVP,false,mvp);
+    drawMesh(p.buf,model,[0.1,0.15,0.25],true);
+  }
+
+  const playerModel=multiply(translationMat(player.x,player.y,player.z),scaleMat(player.size,player.size,player.size));
+  const playerMVP=multiply(vp,playerModel);
+  gl.uniformMatrix4fv(uMVP,false,playerMVP);
+  drawMesh({p:cubePosBuf,n:cubeNormBuf,c:cubeColBuf,i:cubeIdxBuf,count:36},playerModel,[0,0.9,1],true);
+
+  for(const o of orbs){
+    if(o.collected) continue;
+    const oy=o.y+Math.sin(o.angle)*0.3;
+    const sm=multiply(translationMat(o.x,oy,o.z),scaleMat(o.r,o.r,o.r));
+    const omvp=multiply(vp,sm);
+    gl.uniformMatrix4fv(uMVP,false,omvp);
+    drawMesh(sphereBuf,sm,[1,0.8,0],true);
+  }
+
+  if(hook.active||hook.attached){
+    const flatMVP=multiply(proj,view);
+    drawLine(player.x,player.y,player.z,hook.x,hook.y,hook.z,flatMVP,0,1,0.8,1);
+    const hm=multiply(translationMat(hook.x,hook.y,hook.z),scaleMat(0.15,0.15,0.15));
+    const hmvp=multiply(vp,hm);
+    gl.uniformMatrix4fv(uMVP,false,hmvp);
+    drawMesh(sphereBuf,hm,[0,1,0.6],true);
+  }
+
+  requestAnimationFrame(render);
+}
+
+requestAnimationFrame(render);
 </script>
 </body>
 </html>
