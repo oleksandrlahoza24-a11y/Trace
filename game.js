@@ -55,7 +55,7 @@ function hitCircle(c) {
   const pts = Math.round(10 * combo);
   score += pts;
   totalPtsEarned += pts;
-  combo = Math.min(combo + 1, 16);
+  combo = Math.min(combo + 1, 16000);
   comboTimer = 2200 + (fx.comboSpeed || 0) * 300;
   updateHUD();
 
