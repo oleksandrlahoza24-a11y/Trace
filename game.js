@@ -181,11 +181,11 @@ function updateHUD() {
 // ── SCREEN HELPERS ───────────────────────────────────────────────────────────
 function show(id) {
   const el = document.getElementById(id);
-  el.classList.remove('hidden');
-  requestAnimationFrame(() => el.classList.remove('hidden'));
+  if (el) el.classList.remove('hidden');
 }
 function hide(id) {
-  document.getElementById(id).classList.add('hidden');
+  const el = document.getElementById(id);
+  if (el) el.classList.add('hidden');
 }
 
 // ── START GAME ───────────────────────────────────────────────────────────────
@@ -498,43 +498,40 @@ canvas.addEventListener('pointercancel', (e) => {
 
 // ── MENU / NAV BUTTONS ────────────────────────────────────────────────────────
 
-document.getElementById('btn-play').addEventListener('click', startGame);
-document.getElementById('btn-retry').addEventListener('click', startGame);
+let skillTreeFrom = 'menu';
 
-document.getElementById('btn-skills').addEventListener('click', () => {
+function openSkillTree(from) {
+  skillTreeFrom = from;
   state = 'skilltree';
   hide('menu');
-  show('skilltree');
-  show('st-close');
-  renderSkillTree();
-  document.getElementById('_stback').dataset.from = 'menu';
-});
-
-document.getElementById('btn-skills2').addEventListener('click', () => {
-  state = 'skilltree';
   hide('gameover');
   show('skilltree');
   show('st-close');
   renderSkillTree();
-  document.getElementById('_stback').dataset.from = 'gameover';
-});
+}
 
+function closeSkillTree() {
+  hide('skilltree');
+  hide('st-close');
+  if (skillTreeFrom === 'gameover') {
+    show('gameover');
+  } else {
+    state = 'menu';
+    show('menu');
+  }
+}
+
+document.getElementById('btn-play').addEventListener('click', startGame);
+document.getElementById('btn-retry').addEventListener('click', startGame);
+document.getElementById('btn-skills').addEventListener('click', () => openSkillTree('menu'));
+document.getElementById('btn-skills2').addEventListener('click', () => openSkillTree('gameover'));
 document.getElementById('btn-menu').addEventListener('click', () => {
   state = 'menu';
   hide('gameover');
   show('menu');
 });
-
-// Build the back button properly
-const stCloseBtn = document.getElementById('st-close');
-stCloseBtn.id = '_stback';
-stCloseBtn.addEventListener('click', () => {
-  hide('skilltree');
-  hide('_stback');
-  const from = stCloseBtn.dataset.from || 'menu';
-  if (from === 'gameover') show('gameover');
-  else { state = 'menu'; show('menu'); }
-});
+document.getElementById('st-close').addEventListener('click', closeSkillTree);
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
+// All screens start hidden via CSS class; just reveal the menu
 show('menu');
