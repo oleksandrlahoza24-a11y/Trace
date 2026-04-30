@@ -1,4 +1,3 @@
-cat > /home/claude/flames/game.js << 'JSEOF'
 const canvas = document.getElementById('gameCanvas');
 const ctx    = canvas.getContext('2d');
 
