@@ -3,569 +3,362 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>HOOK CUBE</title>
+<title>TRACE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: #0a0a0f; overflow: hidden; font-family: 'Courier New', monospace; touch-action: none; }
-canvas { display: block; }
-#ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-#hud { position: fixed; top: 30px; left: 30px; color: #00ffcc; font-size: 18px; letter-spacing: 2px; text-shadow: 0 0 10px #00ffcc; }
-#crosshair { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 20px; height: 20px; pointer-events: none; }
-#crosshair::before, #crosshair::after { content: ''; position: absolute; background: rgba(0,255,204,0.8); box-shadow: 0 0 6px #00ffcc; }
-#crosshair::before { width: 2px; height: 20px; left: 9px; top: 0; }
-#crosshair::after { width: 20px; height: 2px; top: 9px; left: 0; }
-#instructions { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); color: rgba(0,255,204,0.6); font-size: 13px; letter-spacing: 1px; text-align: center; line-height: 1.8; }
-#joystick-area { position: fixed; bottom: 0; left: 0; width: 50%; height: 45%; pointer-events: all; }
-#look-area { position: fixed; bottom: 0; right: 0; width: 50%; height: 100%; pointer-events: all; }
-#fire-btn { position: fixed; bottom: 60px; right: 40px; width: 80px; height: 80px; border-radius: 50%; background: rgba(0,255,204,0.15); border: 2px solid #00ffcc; color: #00ffcc; font-size: 11px; letter-spacing: 1px; display: flex; align-items: center; justify-content: center; pointer-events: all; cursor: pointer; text-shadow: 0 0 8px #00ffcc; box-shadow: 0 0 20px rgba(0,255,204,0.3), inset 0 0 20px rgba(0,255,204,0.05); transition: all 0.1s; user-select: none; }
-#fire-btn:active, #fire-btn.active { background: rgba(0,255,204,0.35); box-shadow: 0 0 40px rgba(0,255,204,0.6), inset 0 0 30px rgba(0,255,204,0.2); transform: scale(0.95); }
-#retract-btn { position: fixed; bottom: 160px; right: 40px; width: 60px; height: 60px; border-radius: 50%; background: rgba(255,100,0,0.15); border: 2px solid #ff6400; color: #ff6400; font-size: 10px; letter-spacing: 1px; display: flex; align-items: center; justify-content: center; pointer-events: all; cursor: pointer; text-shadow: 0 0 8px #ff6400; box-shadow: 0 0 15px rgba(255,100,0,0.3); user-select: none; }
-#retract-btn:active { background: rgba(255,100,0,0.35); }
-#jump-btn { position: fixed; bottom: 160px; right: 120px; width: 60px; height: 60px; border-radius: 50%; background: rgba(180,0,255,0.15); border: 2px solid #b400ff; color: #b400ff; font-size: 11px; display: flex; align-items: center; justify-content: center; pointer-events: all; cursor: pointer; text-shadow: 0 0 8px #b400ff; box-shadow: 0 0 15px rgba(180,0,255,0.3); user-select: none; }
-#jump-btn:active { background: rgba(180,0,255,0.35); }
-#joystick-vis { position: fixed; bottom: 80px; left: 80px; width: 100px; height: 100px; border-radius: 50%; border: 2px solid rgba(0,255,204,0.3); pointer-events: none; }
-#joystick-knob { position: absolute; width: 40px; height: 40px; border-radius: 50%; background: rgba(0,255,204,0.4); border: 2px solid #00ffcc; top: 50%; left: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 15px #00ffcc; transition: none; }
-#score { position: fixed; top: 30px; right: 30px; color: #00ffcc; font-size: 24px; text-shadow: 0 0 15px #00ffcc; }
-#hook-status { position: fixed; top: 70px; left: 30px; color: rgba(0,255,204,0.5); font-size: 13px; letter-spacing: 1px; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --black: #0a0a0a;
+    --white: #f5f2ec;
+    --grey: #3a3a3a;
+    --mid: #888;
+    --accent: #f5f2ec;
+    --danger: #c0392b;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--black);
+    color: var(--white);
+    font-family: 'DM Mono', monospace;
+    overflow: hidden;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+
+  /* ── SCREENS ── */
+  .screen {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    transition: opacity 0.5s ease;
+  }
+  .screen.hidden { opacity: 0; pointer-events: none; }
+
+  /* ── MENU ── */
+  #menu {
+    gap: 48px;
+    background: var(--black);
+  }
+  #menu .logo {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(72px, 14vw, 120px);
+    letter-spacing: -4px;
+    line-height: 1;
+  }
+  #menu .logo em {
+    font-style: italic;
+    color: var(--mid);
+  }
+  #menu .tagline {
+    font-size: 11px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--mid);
+  }
+  .btn-group { display: flex; flex-direction: column; gap: 14px; align-items: center; }
+  .btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    background: none;
+    border: 1px solid var(--white);
+    color: var(--white);
+    padding: 14px 48px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    -webkit-appearance: none;
+    border-radius: 0;
+  }
+  .btn:active { background: var(--white); color: var(--black); }
+  .btn.ghost { border-color: var(--grey); color: var(--mid); }
+  .btn.ghost:active { background: var(--grey); color: var(--white); }
+
+  /* ── HUD ── */
+  #hud {
+    position: fixed; inset: 0;
+    pointer-events: none;
+    z-index: 10;
+  }
+  #hud-top {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 32px 36px 0;
+  }
+  .hud-score {
+    font-family: 'DM Serif Display', serif;
+    font-size: 52px;
+    line-height: 1;
+    letter-spacing: -2px;
+  }
+  .hud-label {
+    font-size: 9px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--mid);
+    margin-top: 4px;
+  }
+  .hud-right { text-align: right; }
+  .hud-lives { display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 6px; }
+  .life-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--white);
+    transition: background 0.3s, transform 0.3s;
+  }
+  .life-dot.dead { background: var(--grey); transform: scale(0.6); }
+
+  /* ── CANVAS ── */
+  #gameCanvas {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    touch-action: none;
+  }
+
+  /* ── GAME OVER ── */
+  #gameover {
+    gap: 36px;
+    background: rgba(10,10,10,0.96);
+    z-index: 20;
+  }
+  #gameover .go-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(52px, 10vw, 88px);
+    letter-spacing: -3px;
+    line-height: 1;
+  }
+  #gameover .go-title em { font-style: italic; color: var(--mid); }
+  .score-display { text-align: center; }
+  .score-display .big { font-family: 'DM Serif Display', serif; font-size: 64px; letter-spacing: -2px; }
+  .score-display .label { font-size: 9px; letter-spacing: 4px; text-transform: uppercase; color: var(--mid); }
+  .pts-earned { font-size: 11px; letter-spacing: 2px; color: var(--mid); text-align: center; }
+
+  /* ── SKILL TREE ── */
+  #skilltree {
+    gap: 0;
+    background: var(--black);
+    z-index: 15;
+    justify-content: flex-start;
+    overflow: hidden;
+  }
+  #st-header {
+    width: 100%;
+    padding: 36px 36px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-bottom: 1px solid var(--grey);
+    flex-shrink: 0;
+  }
+  #st-header h2 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 38px;
+    letter-spacing: -1px;
+  }
+  #st-header .pts-avail { text-align: right; }
+  #st-header .pts-avail .big { font-family: 'DM Serif Display', serif; font-size: 32px; }
+  #st-header .pts-avail .label { font-size: 9px; letter-spacing: 3px; text-transform: uppercase; color: var(--mid); }
+  #st-scroll { flex: 1; overflow-y: auto; padding: 24px 36px 36px; width: 100%; }
+  #st-scroll::-webkit-scrollbar { display: none; }
+
+  .skill-section-title {
+    font-size: 9px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--mid);
+    margin: 24px 0 12px;
+  }
+  .skill-section-title:first-child { margin-top: 0; }
+
+  .skill-card {
+    border: 1px solid var(--grey);
+    padding: 20px 22px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    transition: border-color 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .skill-card.unlocked { border-color: var(--white); }
+  .skill-card.locked { opacity: 0.45; }
+  .skill-card.maxed { border-color: var(--mid); }
+
+  .skill-card::before {
+    content: '';
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: transparent;
+    transition: background 0.3s;
+  }
+  .skill-card.unlocked::before { background: var(--white); }
+
+  .skill-icon {
+    font-size: 28px;
+    width: 44px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .skill-info { flex: 1; min-width: 0; }
+  .skill-name {
+    font-family: 'DM Serif Display', serif;
+    font-size: 20px;
+    letter-spacing: -0.5px;
+    line-height: 1.1;
+    margin-bottom: 3px;
+  }
+  .skill-desc {
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--mid);
+    line-height: 1.5;
+  }
+  .skill-right { text-align: right; flex-shrink: 0; }
+  .skill-level {
+    font-family: 'DM Serif Display', serif;
+    font-size: 22px;
+    letter-spacing: -1px;
+  }
+  .skill-cost {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--mid);
+  }
+  .skill-cost.can-afford { color: var(--white); }
+  .skill-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    background: none;
+    border: 1px solid var(--grey);
+    color: var(--mid);
+    padding: 8px 14px;
+    cursor: pointer;
+    margin-top: 8px;
+    display: block;
+    width: 100%;
+    transition: all 0.2s;
+    border-radius: 0;
+    -webkit-appearance: none;
+  }
+  .skill-btn.affordable {
+    border-color: var(--white);
+    color: var(--white);
+  }
+  .skill-btn.affordable:active {
+    background: var(--white);
+    color: var(--black);
+  }
+  .skill-btn:disabled { opacity: 0.3; cursor: default; }
+  #st-close {
+    position: fixed;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 16;
+  }
+
+  /* ── FLASH OVERLAY ── */
+  #flash {
+    position: fixed; inset: 0;
+    background: var(--white);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 100;
+    transition: opacity 0.08s;
+  }
+
+  /* ── COMBO BANNER ── */
+  #combo-banner {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.8);
+    font-family: 'DM Serif Display', serif;
+    font-size: 64px;
+    letter-spacing: -2px;
+    color: var(--white);
+    pointer-events: none;
+    z-index: 50;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    text-shadow: 0 0 40px rgba(245,242,236,0.6);
+    white-space: nowrap;
+  }
+  #combo-banner.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
 </style>
 </head>
 <body>
-<canvas id="c"></canvas>
-<div id="ui">
-  <div id="hud">HOOK CUBE</div>
-  <div id="hook-status">HOOK: READY</div>
-  <div id="score">SCORE: 0</div>
-  <div id="crosshair"></div>
-  <div id="joystick-area"></div>
-  <div id="look-area"></div>
-  <div id="joystick-vis"><div id="joystick-knob"></div></div>
-  <button id="fire-btn">HOOK</button>
-  <button id="retract-btn">REEL</button>
-  <button id="jump-btn">JUMP</button>
-  <div id="instructions">TAP RIGHT SIDE TO LOOK &nbsp;|&nbsp; LEFT JOYSTICK TO MOVE<br>HOOK TO LATCH &nbsp;|&nbsp; REEL TO SWING &nbsp;|&nbsp; COLLECT ORBS</div>
+
+<!-- FLASH -->
+<div id="flash"></div>
+<div id="combo-banner"></div>
+
+<!-- MENU -->
+<div class="screen" id="menu">
+  <div class="logo">TR<em>A</em>CE</div>
+  <div class="tagline">never lift your finger</div>
+  <div class="btn-group">
+    <button class="btn" id="btn-play">Begin</button>
+    <button class="btn ghost" id="btn-skills">Skill Tree</button>
+  </div>
 </div>
-<script>
-const canvas = document.getElementById('c');
-const gl = canvas.getContext('webgl');
-let W, H;
 
-function resize() {
-  W = canvas.width = window.innerWidth;
-  H = canvas.height = window.innerHeight;
-  gl.viewport(0, 0, W, H);
-}
-resize();
-window.addEventListener('resize', resize);
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div id="hud-top">
+    <div class="hud-left">
+      <div class="hud-score" id="hud-score">0</div>
+      <div class="hud-label">score</div>
+    </div>
+    <div class="hud-right">
+      <div class="hud-lives" id="hud-lives"></div>
+      <div class="hud-label">lives</div>
+    </div>
+  </div>
+</div>
 
-const vsSource = `
-attribute vec3 aPos;
-attribute vec3 aNorm;
-attribute vec3 aColor;
-uniform mat4 uMVP;
-uniform mat4 uModel;
-uniform vec3 uLightDir;
-uniform vec3 uBaseColor;
-uniform int uUseVertColor;
-varying vec3 vColor;
-varying float vLight;
-void main(){
-  vec4 worldPos = uModel * vec4(aPos, 1.0);
-  gl_Position = uMVP * vec4(aPos, 1.0);
-  vec3 norm = normalize((uModel * vec4(aNorm, 0.0)).xyz);
-  float diff = max(dot(norm, normalize(uLightDir)), 0.0);
-  vLight = 0.3 + 0.7 * diff;
-  if(uUseVertColor == 1) vColor = aColor;
-  else vColor = uBaseColor;
-}`;
+<!-- CANVAS -->
+<canvas id="gameCanvas" class="hidden"></canvas>
 
-const fsSource = `
-precision mediump float;
-varying vec3 vColor;
-varying float vLight;
-void main(){
-  gl_FragColor = vec4(vColor * vLight, 1.0);
-}`;
+<!-- GAME OVER -->
+<div class="screen hidden" id="gameover">
+  <div class="go-title">GA<em>ME</em><br>OV<em>ER</em></div>
+  <div class="score-display">
+    <div class="big" id="go-score">0</div>
+    <div class="label">final score</div>
+  </div>
+  <div class="pts-earned" id="go-pts"></div>
+  <div class="btn-group">
+    <button class="btn" id="btn-retry">Try Again</button>
+    <button class="btn ghost" id="btn-skills2">Skill Tree</button>
+    <button class="btn ghost" id="btn-menu">Menu</button>
+  </div>
+</div>
 
-function compileShader(type, src) {
-  const s = gl.createShader(type);
-  gl.shaderSource(s, src);
-  gl.compileShader(s);
-  return s;
-}
+<!-- SKILL TREE -->
+<div class="screen hidden" id="skilltree">
+  <div id="st-header">
+    <h2>Skill<br><em>Tree</em></h2>
+    <div class="pts-avail">
+      <div class="big" id="st-pts">0</div>
+      <div class="label">points available</div>
+    </div>
+  </div>
+  <div id="st-scroll" id="skill-list"></div>
+</div>
+<button class="btn ghost hidden" id="st-close" style="position:fixed;bottom:32px;left:50%;transform:translateX(-50%);z-index:16;">← Back</button>
 
-const prog = gl.createProgram();
-gl.attachShader(prog, compileShader(gl.VERTEX_SHADER, vsSource));
-gl.attachShader(prog, compileShader(gl.FRAGMENT_SHADER, fsSource));
-gl.linkProgram(prog);
-gl.useProgram(prog);
-
-const aPos = gl.getAttribLocation(prog, 'aPos');
-const aNorm = gl.getAttribLocation(prog, 'aNorm');
-const aColor = gl.getAttribLocation(prog, 'aColor');
-const uMVP = gl.getUniformLocation(prog, 'uMVP');
-const uModel = gl.getUniformLocation(prog, 'uModel');
-const uLightDir = gl.getUniformLocation(prog, 'uLightDir');
-const uBaseColor = gl.getUniformLocation(prog, 'uBaseColor');
-const uUseVertColor = gl.getUniformLocation(prog, 'uUseVertColor');
-
-function mat4() { return new Float32Array(16); }
-function identity(m) { m.fill(0); m[0]=m[5]=m[10]=m[15]=1; return m; }
-function multiply(a, b) {
-  const r = mat4();
-  for(let i=0;i<4;i++) for(let j=0;j<4;j++) for(let k=0;k<4;k++) r[j*4+i]+=a[k*4+i]*b[j*4+k];
-  return r;
-}
-function perspective(fov, asp, near, far) {
-  const m = mat4(); const f = 1/Math.tan(fov/2);
-  m[0]=f/asp; m[5]=f; m[10]=(far+near)/(near-far); m[11]=-1; m[14]=2*far*near/(near-far);
-  return m;
-}
-function lookAt(eye, center, up) {
-  const z = norm3(sub3(eye, center));
-  const x = norm3(cross3(up, z));
-  const y = cross3(z, x);
-  const m = mat4();
-  m[0]=x[0];m[1]=y[0];m[2]=z[0];
-  m[4]=x[1];m[5]=y[1];m[6]=z[1];
-  m[8]=x[2];m[9]=y[2];m[10]=z[2];
-  m[12]=-dot3(x,eye);m[13]=-dot3(y,eye);m[14]=-dot3(z,eye);m[15]=1;
-  return m;
-}
-function translationMat(x,y,z) { const m=identity(mat4()); m[12]=x;m[13]=y;m[14]=z; return m; }
-function scaleMat(x,y,z) { const m=mat4(); m[0]=x;m[5]=y;m[10]=z;m[15]=1; return m; }
-function rotY(a) { const m=identity(mat4()),c=Math.cos(a),s=Math.sin(a); m[0]=c;m[2]=s;m[8]=-s;m[10]=c; return m; }
-function add3(a,b){return[a[0]+b[0],a[1]+b[1],a[2]+b[2]];}
-function sub3(a,b){return[a[0]-b[0],a[1]-b[1],a[2]-b[2]];}
-function scale3(a,s){return[a[0]*s,a[1]*s,a[2]*s];}
-function dot3(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
-function len3(a){return Math.sqrt(dot3(a,a));}
-function norm3(a){const l=len3(a)||1;return scale3(a,1/l);}
-function cross3(a,b){return[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
-
-const cubeVerts = new Float32Array([
-  -1,-1,-1, 1,-1,-1, 1,1,-1, -1,1,-1,
-  -1,-1,1, 1,-1,1, 1,1,1, -1,1,1,
-]);
-const cubeIdx = new Uint16Array([0,1,2,2,3,0,4,5,6,6,7,4,0,1,5,5,4,0,2,3,7,7,6,2,0,3,7,7,4,0,1,2,6,6,5,1]);
-const cubeNorms = new Float32Array([
-  0,0,-1,0,0,-1,0,0,-1,0,0,-1,
-  0,0,1,0,0,1,0,0,1,0,0,1,
-  0,-1,0,0,-1,0,0,-1,0,0,-1,0,
-  0,1,0,0,1,0,0,1,0,0,1,0,
-  -1,0,0,-1,0,0,-1,0,0,-1,0,0,
-  1,0,0,1,0,0,1,0,0,1,0,0,
-]);
-
-function buildCubeMesh() {
-  const pos=[], norm=[], color=[], idx=[];
-  const faces=[
-    {n:[0,0,-1],verts:[0,1,2,3]},{n:[0,0,1],verts:[4,5,6,7]},
-    {n:[0,-1,0],verts:[0,1,5,4]},{n:[0,1,0],verts:[3,2,6,7]},
-    {n:[-1,0,0],verts:[0,3,7,4]},{n:[1,0,0],verts:[1,2,6,5]},
-  ];
-  const vp=[[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]];
-  const cols=[[0.0,0.8,1.0],[0.0,1.0,0.8],[0.0,0.6,1.0],[0.0,1.0,0.6],[0.2,0.9,1.0],[0.1,0.7,0.9]];
-  let vi=0;
-  faces.forEach((f,fi)=>{
-    f.verts.forEach(v=>{ pos.push(...vp[v]); norm.push(...f.n); color.push(...cols[fi]); });
-    idx.push(vi,vi+1,vi+2,vi+2,vi+3,vi); vi+=4;
-  });
-  return {pos:new Float32Array(pos),norm:new Float32Array(norm),color:new Float32Array(color),idx:new Uint16Array(idx)};
-}
-
-const cubeMesh = buildCubeMesh();
-const cubePosBuf = gl.createBuffer();
-gl.bindBuffer(gl.ARRAY_BUFFER, cubePosBuf);
-gl.bufferData(gl.ARRAY_BUFFER, cubeMesh.pos, gl.STATIC_DRAW);
-const cubeNormBuf = gl.createBuffer();
-gl.bindBuffer(gl.ARRAY_BUFFER, cubeNormBuf);
-gl.bufferData(gl.ARRAY_BUFFER, cubeMesh.norm, gl.STATIC_DRAW);
-const cubeColBuf = gl.createBuffer();
-gl.bindBuffer(gl.ARRAY_BUFFER, cubeColBuf);
-gl.bufferData(gl.ARRAY_BUFFER, cubeMesh.color, gl.STATIC_DRAW);
-const cubeIdxBuf = gl.createBuffer();
-gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cubeIdxBuf);
-gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, cubeMesh.idx, gl.STATIC_DRAW);
-
-function buildPlatformMesh(w, h, d) {
-  const hx=w/2,hy=h/2,hz=d/2;
-  const vp=[[-hx,-hy,-hz],[hx,-hy,-hz],[hx,hy,-hz],[-hx,hy,-hz],[-hx,-hy,hz],[hx,-hy,hz],[hx,hy,hz],[-hx,hy,hz]];
-  const pos=[],norm=[],color=[],idx=[];
-  const faces=[
-    {n:[0,0,-1],verts:[0,1,2,3]},{n:[0,0,1],verts:[4,5,6,7]},
-    {n:[0,-1,0],verts:[0,1,5,4]},{n:[0,1,0],verts:[3,2,6,7]},
-    {n:[-1,0,0],verts:[0,3,7,4]},{n:[1,0,0],verts:[1,2,6,5]},
-  ];
-  const cols=[[0.1,0.15,0.25],[0.1,0.15,0.25],[0.05,0.1,0.2],[0.15,0.2,0.3],[0.08,0.12,0.22],[0.08,0.12,0.22]];
-  let vi=0;
-  faces.forEach((f,fi)=>{
-    f.verts.forEach(v=>{ pos.push(...vp[v]); norm.push(...f.n); color.push(...cols[fi]); });
-    idx.push(vi,vi+1,vi+2,vi+2,vi+3,vi); vi+=4;
-  });
-  return {pos:new Float32Array(pos),norm:new Float32Array(norm),color:new Float32Array(color),idx:new Uint16Array(idx)};
-}
-
-function createMeshBuffers(mesh) {
-  const p=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,p); gl.bufferData(gl.ARRAY_BUFFER,mesh.pos,gl.STATIC_DRAW);
-  const n=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,n); gl.bufferData(gl.ARRAY_BUFFER,mesh.norm,gl.STATIC_DRAW);
-  const c=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,c); gl.bufferData(gl.ARRAY_BUFFER,mesh.color,gl.STATIC_DRAW);
-  const i=gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,i); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,mesh.idx,gl.STATIC_DRAW);
-  return {p,n,c,i,count:mesh.idx.length};
-}
-
-const platforms = [
-  {x:0,y:-4,z:0,w:20,h:1,d:20},
-  {x:12,y:0,z:0,w:6,h:1,d:6},
-  {x:20,y:5,z:0,w:5,h:1,d:5},
-  {x:10,y:8,z:10,w:6,h:1,d:6},
-  {x:0,y:12,z:15,w:5,h:1,d:5},
-  {x:-10,y:7,z:10,w:6,h:1,d:6},
-  {x:-15,y:3,z:0,w:5,h:1,d:5},
-  {x:-8,y:8,z:-12,w:5,h:1,d:5},
-  {x:5,y:14,z:-8,w:4,h:1,d:4},
-  {x:18,y:10,z:-10,w:5,h:1,d:5},
-  {x:25,y:15,z:5,w:4,h:1,d:4},
-  {x:0,y:18,z:0,w:4,h:1,d:4},
-];
-
-platforms.forEach(p=>{
-  const mesh=buildPlatformMesh(p.w,p.h,p.d);
-  p.buf=createMeshBuffers(mesh);
-  p.top=p.y+0.5;
-});
-
-const orbs = [];
-function spawnOrbs() {
-  for(let i=1;i<platforms.length;i++){
-    const p=platforms[i];
-    orbs.push({x:p.x,y:p.y+1.5,z:p.z,r:0.5,collected:false,angle:0});
-  }
-}
-spawnOrbs();
-
-const sphereMesh = (function(){
-  const pos=[],norm=[],color=[],idx=[];
-  const segs=8,rings=8;
-  for(let r=0;r<=rings;r++){
-    const phi=Math.PI*r/rings;
-    for(let s=0;s<=segs;s++){
-      const theta=2*Math.PI*s/segs;
-      const x=Math.sin(phi)*Math.cos(theta),y=Math.cos(phi),z=Math.sin(phi)*Math.sin(theta);
-      pos.push(x,y,z); norm.push(x,y,z); color.push(1.0,0.8,0.0);
-    }
-  }
-  for(let r=0;r<rings;r++){
-    for(let s=0;s<segs;s++){
-      const a=r*(segs+1)+s,b=a+segs+1;
-      idx.push(a,b,a+1,b,b+1,a+1);
-    }
-  }
-  return {pos:new Float32Array(pos),norm:new Float32Array(norm),color:new Float32Array(color),idx:new Uint16Array(idx)};
-})();
-
-const sphereBuf = createMeshBuffers(sphereMesh);
-
-const lineProg = gl.createProgram();
-const lineVS = `attribute vec3 aPos; uniform mat4 uMVP; void main(){ gl_Position = uMVP * vec4(aPos, 1.0); }`;
-const lineFS = `precision mediump float; uniform vec4 uColor; void main(){ gl_FragColor = uColor; }`;
-function compileShader2(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);return s;}
-gl.attachShader(lineProg, compileShader2(gl.VERTEX_SHADER, lineVS));
-gl.attachShader(lineProg, compileShader2(gl.FRAGMENT_SHADER, lineFS));
-gl.linkProgram(lineProg);
-const lineAPos = gl.getAttribLocation(lineProg,'aPos');
-const lineMVP = gl.getUniformLocation(lineProg,'uMVP');
-const lineColor = gl.getUniformLocation(lineProg,'uColor');
-const lineBuf = gl.createBuffer();
-
-const player = {
-  x:0, y:0, z:0,
-  vx:0, vy:0, vz:0,
-  yaw:0, pitch:0,
-  onGround:false,
-  size:0.5,
-};
-
-const hook = {
-  active:false,
-  attached:false,
-  x:0,y:0,z:0,
-  tx:0,ty:0,tz:0,
-  speed:30,
-  maxLen:25,
-  len:0,
-};
-
-let score=0;
-let joystick={active:false,startX:0,startY:0,dx:0,dy:0,id:-1};
-let lookTouch={active:false,startX:0,startY:0,lastX:0,lastY:0,id:-1};
-
-const joystickVis=document.getElementById('joystick-vis');
-const joystickKnob=document.getElementById('joystick-knob');
-const scoreEl=document.getElementById('score');
-const hookStatusEl=document.getElementById('hook-status');
-const fireBtn=document.getElementById('fire-btn');
-const retractBtn=document.getElementById('retract-btn');
-const jumpBtn=document.getElementById('jump-btn');
-
-fireBtn.addEventListener('touchstart',e=>{e.stopPropagation();fireHook();});
-retractBtn.addEventListener('touchstart',e=>{e.stopPropagation();retractHook();});
-jumpBtn.addEventListener('touchstart',e=>{e.stopPropagation();if(player.onGround){player.vy=10;}});
-
-document.addEventListener('touchstart', handleTouchStart, {passive:false});
-document.addEventListener('touchmove', handleTouchMove, {passive:false});
-document.addEventListener('touchend', handleTouchEnd, {passive:false});
-
-function handleTouchStart(e) {
-  e.preventDefault();
-  for(let i=0;i<e.changedTouches.length;i++){
-    const t=e.changedTouches[i];
-    if(t.clientX < W*0.5 && t.clientY > H*0.55 && joystick.id===-1){
-      joystick.active=true; joystick.startX=t.clientX; joystick.startY=t.clientY;
-      joystick.dx=0; joystick.dy=0; joystick.id=t.identifier;
-      joystickVis.style.left=(t.clientX-50)+'px'; joystickVis.style.bottom='auto'; joystickVis.style.top=(t.clientY-50)+'px';
-    } else if(t.clientX > W*0.5 && lookTouch.id===-1){
-      lookTouch.active=true; lookTouch.startX=t.clientX; lookTouch.startY=t.clientY;
-      lookTouch.lastX=t.clientX; lookTouch.lastY=t.clientY; lookTouch.id=t.identifier;
-    }
-  }
-}
-
-function handleTouchMove(e) {
-  e.preventDefault();
-  for(let i=0;i<e.changedTouches.length;i++){
-    const t=e.changedTouches[i];
-    if(t.identifier===joystick.id){
-      const dx=t.clientX-joystick.startX, dy=t.clientY-joystick.startY;
-      const l=Math.min(Math.sqrt(dx*dx+dy*dy),50);
-      const a=Math.atan2(dy,dx);
-      joystick.dx=Math.cos(a)*l/50; joystick.dy=Math.sin(a)*l/50;
-      joystickKnob.style.left=(50+Math.cos(a)*l*0.4)+'px';
-      joystickKnob.style.top=(50+Math.sin(a)*l*0.4)+'px';
-    } else if(t.identifier===lookTouch.id){
-      const dx=t.clientX-lookTouch.lastX, dy=t.clientY-lookTouch.lastY;
-      player.yaw -= dx*0.003;
-      player.pitch -= dy*0.003;
-      player.pitch = Math.max(-1.4, Math.min(1.4, player.pitch));
-      lookTouch.lastX=t.clientX; lookTouch.lastY=t.clientY;
-    }
-  }
-}
-
-function handleTouchEnd(e) {
-  for(let i=0;i<e.changedTouches.length;i++){
-    const t=e.changedTouches[i];
-    if(t.identifier===joystick.id){ joystick.active=false; joystick.dx=0; joystick.dy=0; joystick.id=-1; joystickKnob.style.left='30px'; joystickKnob.style.top='30px'; }
-    if(t.identifier===lookTouch.id){ lookTouch.active=false; lookTouch.id=-1; }
-  }
-}
-
-function fireHook() {
-  if(hook.attached) { retractHook(); return; }
-  const dir = getCameraDir();
-  hook.active=true; hook.attached=false;
-  hook.x=player.x; hook.y=player.y; hook.z=player.z;
-  hook.tx=dir[0]; hook.ty=dir[1]; hook.tz=dir[2];
-  hook.len=0;
-  hookStatusEl.textContent='HOOK: FLYING';
-}
-
-function retractHook() {
-  hook.active=false; hook.attached=false;
-  hookStatusEl.textContent='HOOK: READY';
-}
-
-function getCameraDir() {
-  const cy=Math.cos(player.yaw), sy=Math.sin(player.yaw);
-  const cp=Math.cos(player.pitch), sp=Math.sin(player.pitch);
-  return [-sy*cp, sp, -cy*cp];
-}
-
-function rayAABB(ox,oy,oz,dx,dy,dz,minx,miny,minz,maxx,maxy,maxz){
-  let tmin=-Infinity,tmax=Infinity;
-  const ds=[dx,dy,dz],os=[ox,oy,oz],mn=[minx,miny,minz],mx=[maxx,maxy,maxz];
-  for(let i=0;i<3;i++){
-    if(Math.abs(ds[i])<1e-8){if(os[i]<mn[i]||os[i]>mx[i])return null;}
-    else{let t1=(mn[i]-os[i])/ds[i],t2=(mx[i]-os[i])/ds[i];if(t1>t2){let tmp=t1;t1=t2;t2=tmp;}tmin=Math.max(tmin,t1);tmax=Math.min(tmax,t2);}
-  }
-  if(tmax<tmin||tmax<0)return null;
-  return Math.max(tmin,0);
-}
-
-function checkPlatformCollision(px,py,pz,vx,vy,vz,dt){
-  let newx=px+vx*dt, newy=py+vy*dt, newz=pz+vz*dt;
-  const s=player.size;
-  player.onGround=false;
-  for(const p of platforms){
-    const hw=p.w/2, hh=0.5, hd=p.d/2;
-    const minx=p.x-hw,miny=p.y-hh,minz=p.z-hd;
-    const maxx=p.x+hw,maxy=p.y+hh,maxz=p.z+hd;
-    const ox=newx>=minx-s&&newx<=maxx+s&&newy>=miny-s&&newy<=maxy+s&&newz>=minz-s&&newz<=maxz+s;
-    if(ox){
-      const overY1=maxy+s-py, overY2=py-(miny-s);
-      if(overY1>0&&overY1<1.2&&vy<=0){newy=maxy+s;vy=0;player.onGround=true;}
-      else if(overY2>0&&overY2<1.2&&vy>=0){newy=miny-s;vy=0;}
-      else{
-        const overX1=maxx+s-px,overX2=px-(minx-s);
-        if(overX1<overX2&&vx>0){newx=minx-s;vx=0;}
-        else if(overX2<overX1&&vx<0){newx=maxx+s;vx=0;}
-        const overZ1=maxz+s-pz,overZ2=pz-(minz-s);
-        if(overZ1<overZ2&&vz>0){newz=minz-s;vz=0;}
-        else if(overZ2<overZ1&&vz<0){newz=maxz+s;vz=0;}
-      }
-    }
-  }
-  return {x:newx,y:newy,z:newz,vx,vy,vz};
-}
-
-let lastTime=0;
-function update(ts) {
-  const dt=Math.min((ts-lastTime)/1000,0.05);
-  lastTime=ts;
-
-  const cy=Math.cos(player.yaw), sy=Math.sin(player.yaw);
-  const spd=8;
-  let mx=0,mz=0;
-  if(joystick.active){
-    mx=joystick.dx*spd;
-    mz=joystick.dy*spd;
-  }
-  const fwdX=-sy,fwdZ=-cy,rtX=cy,rtZ=-sy;
-  const dvx=(fwdX*(-mz)+rtX*mx)*0.15;
-  const dvz=(fwdZ*(-mz)+rtZ*mx)*0.15;
-  player.vx=player.vx*0.85+dvx*spd;
-  player.vz=player.vz*0.85+dvz*spd;
-  player.vy-=20*dt;
-
-  if(hook.attached){
-    const hx=hook.x,hy=hook.y,hz=hook.z;
-    const dx=hx-player.x,dy=hy-player.y,dz=hz-player.z;
-    const dist=Math.sqrt(dx*dx+dy*dy+dz*dz);
-    if(dist>hook.maxLen){
-      const pull=norm3([dx,dy,dz]);
-      player.vx+=pull[0]*15*dt;
-      player.vy+=pull[1]*15*dt;
-      player.vz+=pull[2]*15*dt;
-    }
-    const ropeDir=norm3([dx,dy,dz]);
-    const vel=[player.vx,player.vy,player.vz];
-    const perp=sub3(vel,scale3(ropeDir,dot3(vel,ropeDir)));
-    player.vx=player.vx*0.98+perp[0]*0.5*dt;
-    player.vy=player.vy*0.98+perp[1]*0.5*dt;
-    player.vz=player.vz*0.98+perp[2]*0.5*dt;
-    hookStatusEl.textContent='HOOK: ATTACHED';
-  }
-
-  if(hook.active&&!hook.attached){
-    const spd2=hook.speed*dt;
-    hook.x+=hook.tx*spd2; hook.y+=hook.ty*spd2; hook.z+=hook.tz*spd2;
-    hook.len+=spd2;
-    if(hook.len>hook.maxLen){retractHook();}
-    else{
-      for(const p of platforms){
-        const hw=p.w/2,hh=0.5,hd=p.d/2;
-        const t=rayAABB(hook.x-hook.tx*spd2,hook.y-hook.ty*spd2,hook.z-hook.tz*spd2,hook.tx,hook.ty,hook.tz,p.x-hw,p.y-hh,p.z-hd,p.x+hw,p.y+hh,p.z+hd);
-        if(t!==null&&t<=spd2){
-          hook.x=hook.x-hook.tx*spd2+hook.tx*(t||0);
-          hook.y=hook.y-hook.ty*spd2+hook.ty*(t||0);
-          hook.z=hook.z-hook.tz*spd2+hook.tz*(t||0);
-          hook.attached=true;
-          hookStatusEl.textContent='HOOK: ATTACHED';
-          break;
-        }
-      }
-    }
-  }
-
-  const res=checkPlatformCollision(player.x,player.y,player.z,player.vx,player.vy,player.vz,dt);
-  player.x=res.x; player.y=res.y; player.z=res.z;
-  player.vx=res.vx; player.vy=res.vy; player.vz=res.vz;
-
-  if(player.y < -20){ player.x=0;player.y=0;player.z=0;player.vx=0;player.vy=0;player.vz=0;retractHook();}
-
-  for(const o of orbs){
-    if(o.collected) continue;
-    o.angle+=dt*2;
-    const dx=player.x-o.x, dy=player.y-o.y, dz=player.z-o.z;
-    if(Math.sqrt(dx*dx+dy*dy+dz*dz)<1.2){
-      o.collected=true; score++; scoreEl.textContent='SCORE: '+score;
-    }
-  }
-}
-
-function drawMesh(buf, model, baseColor, useVertColor) {
-  gl.uniformMatrix4fv(uModel, false, model);
-  gl.uniform3fv(uBaseColor, baseColor);
-  gl.uniform1i(uUseVertColor, useVertColor?1:0);
-  gl.bindBuffer(gl.ARRAY_BUFFER, buf.p); gl.enableVertexAttribArray(aPos); gl.vertexAttribPointer(aPos,3,gl.FLOAT,false,0,0);
-  gl.bindBuffer(gl.ARRAY_BUFFER, buf.n); gl.enableVertexAttribArray(aNorm); gl.vertexAttribPointer(aNorm,3,gl.FLOAT,false,0,0);
-  gl.bindBuffer(gl.ARRAY_BUFFER, buf.c); gl.enableVertexAttribArray(aColor); gl.vertexAttribPointer(aColor,3,gl.FLOAT,false,0,0);
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buf.i);
-  gl.drawElements(gl.TRIANGLES, buf.count, gl.UNSIGNED_SHORT, 0);
-}
-
-function drawLine(x1,y1,z1,x2,y2,z2,mvp,r,g,b,a){
-  gl.useProgram(lineProg);
-  gl.uniformMatrix4fv(lineMVP,false,mvp);
-  gl.uniform4f(lineColor,r,g,b,a);
-  const verts=new Float32Array([x1,y1,z1,x2,y2,z2]);
-  gl.bindBuffer(gl.ARRAY_BUFFER,lineBuf);
-  gl.bufferData(gl.ARRAY_BUFFER,verts,gl.DYNAMIC_DRAW);
-  gl.enableVertexAttribArray(lineAPos);
-  gl.vertexAttribPointer(lineAPos,3,gl.FLOAT,false,0,0);
-  gl.drawArrays(gl.LINES,0,2);
-  gl.useProgram(prog);
-}
-
-function render(ts) {
-  update(ts);
-  gl.clearColor(0.04,0.04,0.08,1);
-  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-  gl.enable(gl.DEPTH_TEST);
-  gl.enable(gl.CULL_FACE);
-
-  const eye=[player.x,player.y+0.6,player.z];
-  const dir=getCameraDir();
-  const center=[eye[0]+dir[0],eye[1]+dir[1],eye[2]+dir[2]];
-  const view=lookAt(eye,center,[0,1,0]);
-  const proj=perspective(Math.PI/2.5,W/H,0.1,200);
-  const vp=multiply(proj,view);
-
-  gl.uniform3f(uLightDir,0.5,1,0.3);
-
-  for(const p of platforms){
-    const model=translationMat(p.x,p.y,p.z);
-    const mvp=multiply(vp,model);
-    gl.uniformMatrix4fv(uMVP,false,mvp);
-    drawMesh(p.buf,model,[0.1,0.15,0.25],true);
-  }
-
-  const playerModel=multiply(translationMat(player.x,player.y,player.z),scaleMat(player.size,player.size,player.size));
-  const playerMVP=multiply(vp,playerModel);
-  gl.uniformMatrix4fv(uMVP,false,playerMVP);
-  drawMesh({p:cubePosBuf,n:cubeNormBuf,c:cubeColBuf,i:cubeIdxBuf,count:36},playerModel,[0,0.9,1],true);
-
-  for(const o of orbs){
-    if(o.collected) continue;
-    const oy=o.y+Math.sin(o.angle)*0.3;
-    const sm=multiply(translationMat(o.x,oy,o.z),scaleMat(o.r,o.r,o.r));
-    const omvp=multiply(vp,sm);
-    gl.uniformMatrix4fv(uMVP,false,omvp);
-    drawMesh(sphereBuf,sm,[1,0.8,0],true);
-  }
-
-  if(hook.active||hook.attached){
-    const flatMVP=multiply(proj,view);
-    drawLine(player.x,player.y,player.z,hook.x,hook.y,hook.z,flatMVP,0,1,0.8,1);
-    const hm=multiply(translationMat(hook.x,hook.y,hook.z),scaleMat(0.15,0.15,0.15));
-    const hmvp=multiply(vp,hm);
-    gl.uniformMatrix4fv(uMVP,false,hmvp);
-    drawMesh(sphereBuf,hm,[0,1,0.6],true);
-  }
-
-  requestAnimationFrame(render);
-}
-
-requestAnimationFrame(render);
-</script>
+<script src="skill-tree.js"></script>
+<script src="game.js"></script>
 </body>
 </html>
