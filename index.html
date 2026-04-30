@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>TRACE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --black: #0a0a0a; --white: #f5f2ec; --grey: #3a3a3a; --mid: #888;
+    --accent: #f5f2ec; --danger: #c0392b;
+  }
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--black); color: var(--white);
+    font-family: 'DM Mono', monospace;
+    overflow: hidden; touch-action: none;
+    -webkit-tap-highlight-color: transparent; user-select: none;
+  }
+  .hidden { opacity: 0 !important; pointer-events: none !important; }
+  .screen {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    transition: opacity 0.5s ease;
+  }
+  #menu { gap: 48px; background: var(--black); }
+  #menu .logo {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(72px, 14vw, 120px);
+    letter-spacing: -4px; line-height: 1;
+  }
+  #menu .logo em { font-style: italic; color: var(--mid); }
+  #menu .tagline {
+    font-size: 11px; letter-spacing: 4px;
+    text-transform: uppercase; color: var(--mid);
+  }
+  .btn-group { display: flex; flex-direction: column; gap: 14px; align-items: center; }
+  .btn {
+    font-family: 'DM Mono', monospace; font-size: 13px;
+    letter-spacing: 3px; text-transform: uppercase;
+    background: none; border: 1px solid var(--white); color: var(--white);
+    padding: 14px 48px; cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    -webkit-appearance: none; border-radius: 0;
+  }
+  .btn:active { background: var(--white); color: var(--black); }
+  .btn.ghost { border-color: var(--grey); color: var(--mid); }
+  .btn.ghost:active { background: var(--grey); color: var(--white); }
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+  #hud-top {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 32px 36px 0;
+  }
+  .hud-score {
+    font-family: 'DM Serif Display', serif; font-size: 52px;
+    line-height: 1; letter-spacing: -2px;
+  }
+  .hud-label {
+    font-size: 9px; letter-spacing: 4px;
+    text-transform: uppercase; color: var(--mid); margin-top: 4px;
+  }
+  .hud-right { text-align: right; }
+  .hud-lives { display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 6px; }
+  .life-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--white); transition: background 0.3s, transform 0.3s;
+  }
+  .life-dot.dead { background: var(--grey); transform: scale(0.6); }
+  #gameCanvas {
+    position: fixed; inset: 0; width: 100%; height: 100%;
+    touch-action: none; z-index: 1;
+  }
+  #gameover {
+    gap: 36px; background: rgba(10,10,10,0.96); z-index: 20;
+  }
+  #gameover .go-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(52px, 10vw, 88px); letter-spacing: -3px; line-height: 1;
+  }
+  #gameover .go-title em { font-style: italic; color: var(--mid); }
+  .score-display { text-align: center; }
+  .score-display .big { font-family: 'DM Serif Display', serif; font-size: 64px; letter-spacing: -2px; }
+  .score-display .label { font-size: 9px; letter-spacing: 4px; text-transform: uppercase; color: var(--mid); }
+  .pts-earned { font-size: 11px; letter-spacing: 2px; color: var(--mid); text-align: center; }
+  #skilltree {
+    gap: 0; background: var(--black); z-index: 15;
+    justify-content: flex-start; overflow: hidden;
+  }
+  #st-header {
+    width: 100%; padding: 36px 36px 20px;
+    display: flex; justify-content: space-between; align-items: flex-end;
+    border-bottom: 1px solid var(--grey); flex-shrink: 0;
+  }
+  #st-header h2 { font-family: 'DM Serif Display', serif; font-size: 38px; letter-spacing: -1px; }
+  #st-header .pts-avail { text-align: right; }
+  #st-header .pts-avail .big { font-family: 'DM Serif Display', serif; font-size: 32px; }
+  #st-header .pts-avail .label { font-size: 9px; letter-spacing: 3px; text-transform: uppercase; color: var(--mid); }
+  #st-scroll { flex: 1; overflow-y: auto; padding: 24px 36px 36px; width: 100%; }
+  #st-scroll::-webkit-scrollbar { display: none; }
+  .skill-section-title {
+    font-size: 9px; letter-spacing: 4px; text-transform: uppercase;
+    color: var(--mid); margin: 24px 0 12px;
+  }
+  .skill-section-title:first-child { margin-top: 0; }
+  .skill-card {
+    border: 1px solid var(--grey); padding: 20px 22px; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 18px;
+    transition: border-color 0.2s; position: relative; overflow: hidden;
+  }
+  .skill-card.unlocked { border-color: var(--white); }
+  .skill-card.locked { opacity: 0.45; }
+  .skill-card.maxed { border-color: var(--mid); }
+  .skill-card::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px; background: transparent; transition: background 0.3s;
+  }
+  .skill-card.unlocked::before { background: var(--white); }
+  .skill-icon { font-size: 28px; width: 44px; text-align: center; flex-shrink: 0; }
+  .skill-info { flex: 1; min-width: 0; }
+  .skill-name {
+    font-family: 'DM Serif Display', serif; font-size: 20px;
+    letter-spacing: -0.5px; line-height: 1.1; margin-bottom: 3px;
+  }
+  .skill-desc { font-size: 10px; letter-spacing: 1px; color: var(--mid); line-height: 1.5; }
+  .skill-right { text-align: right; flex-shrink: 0; }
+  .skill-level { font-family: 'DM Serif Display', serif; font-size: 22px; letter-spacing: -1px; }
+  .skill-cost { font-size: 10px; letter-spacing: 2px; color: var(--mid); }
+  .skill-cost.can-afford { color: var(--white); }
+  .skill-btn {
+    font-family: 'DM Mono', monospace; font-size: 10px;
+    letter-spacing: 2px; text-transform: uppercase;
+    background: none; border: 1px solid var(--grey); color: var(--mid);
+    padding: 8px 14px; cursor: pointer; margin-top: 8px;
+    display: block; width: 100%; transition: all 0.2s;
+    border-radius: 0; -webkit-appearance: none;
+  }
+  .skill-btn.affordable { border-color: var(--white); color: var(--white); }
+  .skill-btn.affordable:active { background: var(--white); color: var(--black); }
+  .skill-btn:disabled { opacity: 0.3; cursor: default; }
+  #st-close { position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%); z-index: 16; }
+  #flash {
+    position: fixed; inset: 0; background: var(--white);
+    opacity: 0; pointer-events: none; z-index: 100; transition: opacity 0.08s;
+  }
+  #combo-banner {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%) scale(0.8);
+    font-family: 'DM Serif Display', serif; font-size: 64px;
+    letter-spacing: -2px; color: var(--white);
+    pointer-events: none; z-index: 50; opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    text-shadow: 0 0 40px rgba(245,242,236,0.6); white-space: nowrap;
+  }
+  #combo-banner.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+</style>
+</head>
+<body>
+
+<div id="flash"></div>
+<div id="combo-banner"></div>
+
+<div class="screen hidden" id="menu">
+  <div class="logo">TR<em>A</em>CE</div>
+  <div class="tagline">never lift your finger</div>
+  <div class="btn-group">
+    <button class="btn" id="btn-play">Begin</button>
+    <button class="btn ghost" id="btn-skills">Skill Tree</button>
+  </div>
+</div>
+
+<div id="hud" class="hidden">
+  <div id="hud-top">
+    <div class="hud-left">
+      <div class="hud-score" id="hud-score">0</div>
+      <div class="hud-label">score</div>
+    </div>
+    <div class="hud-right">
+      <div class="hud-lives" id="hud-lives"></div>
+      <div class="hud-label">lives</div>
+    </div>
+  </div>
+</div>
+
+<canvas id="gameCanvas" class="hidden"></canvas>
+
+<div class="screen hidden" id="gameover">
+  <div class="go-title">GA<em>ME</em><br>OV<em>ER</em></div>
+  <div class="score-display">
+    <div class="big" id="go-score">0</div>
+    <div class="label">final score</div>
+  </div>
+  <div class="pts-earned" id="go-pts"></div>
+  <div class="btn-group">
+    <button class="btn" id="btn-retry">Try Again</button>
+    <button class="btn ghost" id="btn-skills2">Skill Tree</button>
+    <button class="btn ghost" id="btn-menu">Menu</button>
+  </div>
+</div>
+
+<div class="screen hidden" id="skilltree">
+  <div id="st-header">
+    <h2>Skill<br><em>Tree</em></h2>
+    <div class="pts-avail">
+      <div class="big" id="st-pts">0</div>
+      <div class="label">points available</div>
+    </div>
+  </div>
+  <div id="st-scroll"></div>
+</div>
+<button class="btn ghost hidden" id="st-close" style="position:fixed;bottom:32px;left:50%;transform:translateX(-50%);z-index:16;">← Back</button>
+
+<script src="skill-tree.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
