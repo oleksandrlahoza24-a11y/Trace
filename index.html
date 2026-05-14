@@ -2,1782 +2,1715 @@
 <html lang="en">
 
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Received — Private Messenger</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Mono:wght@400;500&display=swap"
-    rel="stylesheet" />
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Hardware Architect // Sandbox</title>
+  <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <style>
-    *,
-    *::before,
-    *::after {
+    :root {
+      --bg-color: #0b0c10;
+      --panel-bg: #0f1117;
+      --border: #2c303a;
+      --text-main: #c5c6c7;
+      --accent-cyan: #66fcf1;
+      --accent-blue: #45a29e;
+      --accent-red: #f32013;
+      --accent-gold: #ffc107;
+      --accent-green: #4caf50;
+      /* Pixel-art button shadow colors */
+      --px-shadow-cyan: #1a6664;
+      --px-shadow-green: #1a4d1c;
+      --px-shadow-gold: #7a5c00;
+      --px-shadow-red: #6b0f08;
+      --px-highlight: #ffffff22;
+    }
+
+    * {
       box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      image-rendering: pixelated;
+    }
+
+    body {
       margin: 0;
       padding: 0;
-    }
-
-    :root {
-      --bg-base: #0d0f14;
-      --bg-surface: #13161e;
-      --bg-elevated: #1b1f2b;
-      --bg-hover: #22273a;
-      --border: #2a2f42;
-      --border-subtle: #1e2333;
-      --accent: #4f8ef7;
-      --accent-dim: #2d5dbf;
-      --accent-glow: rgba(79, 142, 247, 0.15);
-      --text-primary: #e8ecf4;
-      --text-secondary: #8b93ab;
-      --text-muted: #525870;
-      --danger: #e05c5c;
-      --success: #4ec994;
-      --msg-self-bg: #1e3a6e;
-      --msg-other-bg: #1b1f2b;
-      --radius-sm: 6px;
-      --radius-md: 12px;
-      --radius-lg: 18px;
-      --font-main: 'DM Sans', sans-serif;
-      --font-mono: 'DM Mono', monospace;
-      --transition: 0.18s ease;
-    }
-
-    html,
-    body {
-      height: 100%;
-      overflow: hidden;
-    }
-
-    body {
-      font-family: var(--font-main);
-      background: var(--bg-base);
-      color: var(--text-primary);
-      font-size: 14px;
-      line-height: 1.5;
-      -webkit-font-smoothing: antialiased;
-    }
-
-    /* ─── SCREENS ─── */
-    .screen {
-      display: none;
-      width: 100%;
-      height: 100vh;
-    }
-
-    .screen.active {
-      display: flex;
-    }
-
-    /* ─── AUTH SCREEN ─── */
-    #auth-screen {
-      align-items: center;
-      justify-content: center;
-      background: var(--bg-base);
-      position: relative;
-      overflow: hidden;
-    }
-
-    #auth-screen::before {
-      content: '';
-      position: absolute;
-      width: 600px;
-      height: 600px;
-      background: radial-gradient(circle, rgba(79, 142, 247, 0.07) 0%, transparent 70%);
-      top: -100px;
-      left: 50%;
-      transform: translateX(-50%);
-      pointer-events: none;
-    }
-
-    .auth-card {
-      background: var(--bg-surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 48px 44px;
-      width: 420px;
-      max-width: 92vw;
-      position: relative;
-      z-index: 1;
-      box-shadow: 0 32px 80px rgba(0, 0, 0, 0.5);
-    }
-
-    .auth-brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 36px;
-    }
-
-    .auth-brand-icon {
-      width: 36px;
-      height: 36px;
-      background: var(--accent);
-      border-radius: var(--radius-sm);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #fff;
-      flex-shrink: 0;
-    }
-
-    .auth-brand-name {
-      font-size: 20px;
-      font-weight: 600;
-      letter-spacing: -0.3px;
-      color: var(--text-primary);
-    }
-
-    .auth-title {
-      font-size: 26px;
-      font-weight: 600;
-      letter-spacing: -0.5px;
-      margin-bottom: 6px;
-      color: var(--text-primary);
-    }
-
-    .auth-subtitle {
-      color: var(--text-secondary);
-      font-size: 13.5px;
-      margin-bottom: 32px;
-      font-weight: 300;
-    }
-
-    .auth-tabs {
-      display: flex;
-      background: var(--bg-elevated);
-      border-radius: var(--radius-md);
-      padding: 4px;
-      margin-bottom: 28px;
-      gap: 4px;
-    }
-
-    .auth-tab {
-      flex: 1;
-      padding: 8px;
-      text-align: center;
-      cursor: pointer;
-      border-radius: 8px;
-      font-size: 13.5px;
-      font-weight: 500;
-      color: var(--text-muted);
-      transition: all var(--transition);
-      border: none;
-      background: none;
-      font-family: var(--font-main);
-    }
-
-    .auth-tab.active {
-      background: var(--bg-surface);
-      color: var(--text-primary);
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
-    }
-
-    .form-group {
-      margin-bottom: 16px;
-    }
-
-    .form-label {
-      display: block;
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--text-secondary);
-      margin-bottom: 6px;
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
-    }
-
-    .form-input {
-      width: 100%;
-      background: var(--bg-elevated);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 11px 14px;
-      color: var(--text-primary);
-      font-family: var(--font-main);
-      font-size: 14px;
-      transition: border-color var(--transition), box-shadow var(--transition);
-      outline: none;
-    }
-
-    .form-input::placeholder {
-      color: var(--text-muted);
-    }
-
-    .form-input:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-glow);
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      border: none;
-      border-radius: var(--radius-sm);
-      cursor: pointer;
-      font-family: var(--font-main);
-      font-weight: 500;
-      transition: all var(--transition);
-      outline: none;
-    }
-
-    .btn-primary {
-      background: var(--accent);
-      color: #fff;
-      padding: 12px 20px;
-      font-size: 14px;
-      width: 100%;
-      margin-top: 4px;
-    }
-
-    .btn-primary:hover {
-      background: #3d7ef4;
-      transform: translateY(-1px);
-      box-shadow: 0 4px 20px rgba(79, 142, 247, 0.3);
-    }
-
-    .btn-primary:active {
-      transform: translateY(0);
-    }
-
-    .btn-primary:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    .btn-ghost {
-      background: transparent;
-      color: var(--text-secondary);
-      padding: 8px 12px;
-      font-size: 13px;
-      border: 1px solid var(--border);
-    }
-
-    .btn-ghost:hover {
-      background: var(--bg-hover);
-      color: var(--text-primary);
-    }
-
-    .btn-icon {
-      background: transparent;
-      border: none;
-      color: var(--text-secondary);
-      padding: 8px;
-      border-radius: var(--radius-sm);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all var(--transition);
-    }
-
-    .btn-icon:hover {
-      background: var(--bg-hover);
-      color: var(--text-primary);
-    }
-
-    .auth-error {
-      background: rgba(224, 92, 92, 0.1);
-      border: 1px solid rgba(224, 92, 92, 0.3);
-      color: var(--danger);
-      border-radius: var(--radius-sm);
-      padding: 10px 14px;
-      font-size: 13px;
-      margin-bottom: 16px;
-      display: none;
-    }
-
-    .auth-error.show {
-      display: block;
-    }
-
-    /* ─── APP LAYOUT ─── */
-    #app-screen {
-      flex-direction: row;
-      height: 100vh;
-      overflow: hidden;
-    }
-
-    /* ─── SIDEBAR ─── */
-    .sidebar {
-      width: 300px;
-      min-width: 300px;
-      background: var(--bg-surface);
-      border-right: 1px solid var(--border);
+      background-color: var(--bg-color);
+      /* Subtle scanline overlay */
+      background-image: repeating-linear-gradient(0deg,
+          transparent,
+          transparent 2px,
+          rgba(0, 0, 0, 0.18) 2px,
+          rgba(0, 0, 0, 0.18) 4px);
+      color: var(--text-main);
+      font-family: 'Share Tech Mono', monospace;
       display: flex;
       flex-direction: column;
-      height: 100%;
+      height: 100vh;
       overflow: hidden;
     }
 
-    .sidebar-header {
-      padding: 20px 20px 0;
+    /* ── PIXEL BORDER MIXIN via box-shadow trick ── */
+    /* 4px chunky pixel border: top-left light, bottom-right dark = raised look */
+    .px-raised {
+      box-shadow:
+        /* top highlight */
+        inset 0 3px 0 0 var(--px-highlight),
+        /* left highlight */
+        inset 3px 0 0 0 var(--px-highlight),
+        /* bottom shadow */
+        inset 0 -3px 0 0 rgba(0, 0, 0, 0.7),
+        /* right shadow */
+        inset -3px 0 0 0 rgba(0, 0, 0, 0.7);
+    }
+
+    .px-sunken {
+      box-shadow:
+        inset 0 3px 0 0 rgba(0, 0, 0, 0.7),
+        inset 3px 0 0 0 rgba(0, 0, 0, 0.7),
+        inset 0 -3px 0 0 var(--px-highlight),
+        inset -3px 0 0 0 var(--px-highlight);
+    }
+
+    /* Typography */
+    h1,
+    h2,
+    h3,
+    .pixel-font {
+      font-family: 'VT323', monospace;
+      margin: 0;
+      font-weight: normal;
+    }
+
+    /* ── HEADER ── */
+    header {
+      background-color: #000;
+      padding: 10px 20px;
+      border-bottom: 4px solid var(--accent-cyan);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+      /* pixel-art corner notch feel */
+      box-shadow: 0 4px 0 0 var(--px-shadow-cyan);
+    }
+
+    header::after {
+      content: '';
+      position: absolute;
+      bottom: -8px;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: var(--accent-cyan);
+      opacity: 0.15;
+    }
+
+    .title {
+      font-size: 30px;
+      color: var(--accent-cyan);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      text-shadow: 0 0 12px var(--accent-cyan), 2px 2px 0 rgba(0, 0, 0, 0.8);
+    }
+
+    #money {
+      font-size: 26px;
+      color: var(--accent-green);
+      font-family: 'VT323', monospace;
+      text-shadow: 0 0 8px var(--accent-green), 2px 2px 0 rgba(0, 0, 0, 0.8);
+      background: #001200;
+      padding: 4px 12px;
+      border: 2px solid var(--accent-green);
+      box-shadow:
+        inset 0 2px 0 0 rgba(255, 255, 255, 0.1),
+        inset 0 -2px 0 0 rgba(0, 0, 0, 0.6),
+        0 0 10px rgba(76, 175, 80, 0.3);
+    }
+
+    .main-container {
+      display: flex;
+      flex: 1;
+      padding: 12px;
+      gap: 12px;
+      overflow: hidden;
+    }
+
+    /* ── PANELS ── */
+    .panel {
+      background-color: var(--panel-bg);
+      border: 3px solid var(--border);
+      /* Chunky pixel outer border */
+      outline: 1px solid #000;
+      outline-offset: 2px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow:
+        4px 4px 0 0 #000,
+        inset 1px 1px 0 0 rgba(255, 255, 255, 0.05);
+    }
+
+    .panel-header {
+      background: linear-gradient(180deg, #1a1d26 0%, #0d0f15 100%);
+      padding: 10px 14px;
+      border-bottom: 3px solid var(--border);
+      font-size: 18px;
+      color: var(--text-main);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      letter-spacing: 1px;
+      /* top pixel highlight line */
+      box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+    }
+
+    .panel-header::before {
+      content: '▶ ';
+      color: var(--accent-cyan);
+      opacity: 0.6;
+      font-size: 14px;
+    }
+
+    .panel-content {
+      padding: 12px;
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* Pixel-art scrollbar */
+    .panel-content::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .panel-content::-webkit-scrollbar-track {
+      background: #000;
+    }
+
+    .panel-content::-webkit-scrollbar-thumb {
+      background: var(--accent-blue);
+      box-shadow: inset 0 0 0 1px #000;
+    }
+
+    .col-engineer {
+      flex: 1;
+    }
+
+    .col-inventory {
+      flex: 1.5;
+    }
+
+    .col-assembly {
+      flex: 1.5;
+      border-color: var(--accent-blue);
+      box-shadow: 4px 4px 0 0 #000, 0 0 0 1px rgba(69, 162, 158, 0.3);
+    }
+
+    /* ── FABRICATION BUTTONS (pixel-art raised style) ── */
+    .btn {
+      background: linear-gradient(180deg, #1c2030 0%, #131720 100%);
+      color: var(--accent-cyan);
+      border: 2px solid var(--accent-cyan);
+      padding: 0;
+      font-family: 'VT323', monospace;
+      font-size: 20px;
+      cursor: pointer;
+      border-radius: 0;
+      text-align: left;
+      display: flex;
+      justify-content: space-between;
+      align-items: stretch;
+      position: relative;
+      /* Chunky pixel shadow = depth */
+      box-shadow:
+        3px 3px 0 0 var(--px-shadow-cyan),
+        inset 0 1px 0 0 rgba(102, 252, 241, 0.2),
+        inset 0 -1px 0 0 rgba(0, 0, 0, 0.5);
+      transition: box-shadow 0.06s, transform 0.06s, background 0.06s;
+      overflow: hidden;
+    }
+
+    /* Dithered left accent bar */
+    .btn::before {
+      content: '';
+      display: block;
+      width: 6px;
+      min-height: 100%;
+      background: repeating-linear-gradient(180deg,
+          var(--accent-cyan) 0px, var(--accent-cyan) 2px,
+          var(--px-shadow-cyan) 2px, var(--px-shadow-cyan) 4px);
       flex-shrink: 0;
     }
 
-    .sidebar-top {
+    .btn-inner {
       display: flex;
-      align-items: center;
       justify-content: space-between;
-      margin-bottom: 20px;
-    }
-
-    .sidebar-brand {
-      display: flex;
       align-items: center;
+      flex: 1;
+      padding: 13px 12px;
       gap: 8px;
     }
 
-    .sidebar-brand-icon {
-      width: 28px;
-      height: 28px;
-      background: var(--accent);
-      border-radius: 6px;
+    .btn-label {
+      letter-spacing: 0.5px;
+    }
+
+    .btn-price {
+      background: rgba(102, 252, 241, 0.12);
+      border: 1px solid rgba(102, 252, 241, 0.3);
+      padding: 2px 8px;
+      font-size: 17px;
+      color: var(--accent-green);
+    }
+
+    .btn:active {
+      background: linear-gradient(180deg, #66fcf1 0%, #2abdb8 100%);
+      color: #000;
+      transform: translate(3px, 3px);
+      box-shadow: 0 0 0 0 var(--px-shadow-cyan), inset 0 2px 0 0 rgba(255, 255, 255, 0.4);
+    }
+
+    .btn:active .btn-price {
+      color: #000;
+      border-color: #000;
+      background: rgba(0, 0, 0, 0.15);
+    }
+
+    .btn:active::before {
+      background: repeating-linear-gradient(180deg, #000 0px, #000 2px, #1a6664 2px, #1a6664 4px);
+    }
+
+    /* ── INVENTORY ITEMS ── */
+    .item {
+      background: linear-gradient(135deg, #181b24 0%, #10131a 100%);
+      border: 2px solid var(--border);
+      border-left: 5px solid var(--text-main);
+      padding: 10px 12px;
       display: flex;
       align-items: center;
-      justify-content: center;
-      color: #fff;
-    }
-
-    .sidebar-brand-name {
-      font-size: 15px;
-      font-weight: 600;
-      letter-spacing: -0.3px;
-    }
-
-    .sidebar-actions {
-      display: flex;
-      gap: 4px;
-    }
-
-    .search-bar {
+      gap: 12px;
       position: relative;
-      margin-bottom: 16px;
+      box-shadow: 2px 2px 0 0 #000, inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+      cursor: pointer;
     }
 
-    .search-bar input {
-      width: 100%;
-      background: var(--bg-elevated);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-sm);
-      padding: 9px 14px 9px 36px;
-      color: var(--text-primary);
-      font-family: var(--font-main);
-      font-size: 13.5px;
-      outline: none;
-      transition: border-color var(--transition);
-    }
-
-    .search-bar input::placeholder {
-      color: var(--text-muted);
-    }
-
-    .search-bar input:focus {
-      border-color: var(--border);
-    }
-
-    .search-icon {
+    .item::after {
+      content: '▶';
       position: absolute;
-      left: 10px;
+      right: 10px;
       top: 50%;
       transform: translateY(-50%);
-      color: var(--text-muted);
+      font-size: 12px;
+      color: #555;
+      font-family: 'VT323', monospace;
+    }
+
+    .item:active {
+      background: linear-gradient(135deg, #1e2230 0%, #161922 100%);
+      transform: translate(2px, 2px);
+      box-shadow: 0 0 0 0 #000;
+    }
+
+    .item-details {
+      flex: 1;
+      padding-right: 16px;
+    }
+
+    .item-name {
+      font-family: 'VT323', monospace;
+      font-size: 17px;
+      margin-bottom: 3px;
+      letter-spacing: 0.5px;
+    }
+
+    .item-stats {
+      font-size: 11px;
+      color: #6a7388;
+      line-height: 1.5;
+      font-family: 'Share Tech Mono', monospace;
+    }
+
+    .pixel-art {
+      width: 48px;
+      height: 48px;
+      image-rendering: pixelated;
+      border: 2px solid #1a1d26;
+      box-shadow: 1px 1px 0 0 #000;
+      flex-shrink: 0;
+    }
+
+    /* ── QUALITY COLORS ── */
+    .q-scrap {
+      border-left-color: var(--accent-red);
+    }
+
+    .q-scrap .item-name {
+      color: var(--accent-red);
+    }
+
+    .q-basic {
+      border-left-color: var(--text-main);
+    }
+
+    .q-basic .item-name {
+      color: var(--text-main);
+    }
+
+    .q-pro {
+      border-left-color: var(--accent-cyan);
+    }
+
+    .q-pro .item-name {
+      color: var(--accent-cyan);
+    }
+
+    .q-master {
+      border-left-color: var(--accent-gold);
+    }
+
+    .q-master .item-name {
+      color: var(--accent-gold);
+      text-shadow: 0 0 8px var(--accent-gold);
+    }
+
+    /* ── ASSEMBLY SLOTS ── */
+    .slot {
+      border: 2px dashed #2a2e3a;
+      background: #080a0e;
+      background-image: repeating-linear-gradient(45deg, transparent, transparent 4px,
+          rgba(255, 255, 255, 0.01) 4px, rgba(255, 255, 255, 0.01) 8px);
+      height: 68px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      color: #333;
+      font-family: 'VT323', monospace;
+      letter-spacing: 2px;
+      position: relative;
+      transition: all 0.3s;
+    }
+
+    .slot::before {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      right: 3px;
+      bottom: 3px;
+      border: 1px dashed #1a1d26;
       pointer-events: none;
     }
 
-    .section-label {
-      font-size: 10.5px;
-      font-weight: 600;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      padding: 0 20px 8px;
-      flex-shrink: 0;
+    .slot.filled {
+      border: 2px solid var(--accent-blue);
+      border-left: 5px solid var(--accent-blue);
+      background: linear-gradient(135deg, #0d1a1a 0%, #080a0e 100%);
+      justify-content: flex-start;
+      padding-left: 12px;
+      color: var(--text-main);
+      box-shadow: inset 0 0 20px rgba(69, 162, 158, 0.08), 2px 2px 0 0 #000;
     }
 
-    .conversation-list {
-      flex: 1;
-      overflow-y: auto;
-      padding: 4px 8px;
+    .slot.filled::before {
+      display: none;
     }
 
-    .conversation-list::-webkit-scrollbar {
-      width: 4px;
-    }
-
-    .conversation-list::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    .conversation-list::-webkit-scrollbar-thumb {
-      background: var(--border);
-      border-radius: 2px;
-    }
-
-    .conv-item {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 12px;
-      border-radius: var(--radius-md);
+    /* ── ACTION BUTTONS (big pixel-art style) ── */
+    .action-btn {
+      background: linear-gradient(180deg, #4bbab5 0%, #357a77 50%, #2a6360 100%);
+      color: #fff;
+      border: 2px solid var(--accent-cyan);
+      padding: 16px 20px;
+      font-family: 'VT323', monospace;
+      font-size: 24px;
+      letter-spacing: 2px;
+      border-radius: 0;
+      width: 100%;
+      margin-top: 10px;
       cursor: pointer;
-      transition: background var(--transition);
       position: relative;
+      box-shadow:
+        0 5px 0 0 var(--px-shadow-cyan),
+        inset 0 1px 0 0 rgba(255, 255, 255, 0.35),
+        inset 0 -1px 0 0 rgba(0, 0, 0, 0.3);
+      text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+      transition: box-shadow 0.06s, transform 0.06s;
     }
 
-    .conv-item:hover {
-      background: var(--bg-hover);
-    }
-
-    .conv-item.active {
-      background: var(--accent-glow);
-    }
-
-    .conv-item.active .conv-name {
-      color: var(--accent);
-    }
-
-    .conv-avatar {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background: var(--bg-elevated);
-      border: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 16px;
-      font-weight: 600;
-      flex-shrink: 0;
-      color: var(--text-secondary);
-      text-transform: uppercase;
-      position: relative;
-    }
-
-    .conv-avatar.online::after {
+    .action-btn::after {
       content: '';
       position: absolute;
-      width: 10px;
-      height: 10px;
-      background: var(--success);
-      border: 2px solid var(--bg-surface);
-      border-radius: 50%;
-      bottom: 1px;
-      right: 1px;
+      top: 2px;
+      left: 2px;
+      right: 2px;
+      height: 40%;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, transparent 100%);
+      pointer-events: none;
     }
 
-    .conv-info {
-      flex: 1;
-      min-width: 0;
+    .action-btn:active {
+      transform: translateY(5px);
+      box-shadow: 0 0 0 0 var(--px-shadow-cyan), inset 0 2px 0 0 rgba(0, 0, 0, 0.3);
     }
 
-    .conv-name {
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--text-primary);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+    /* Gold sell button */
+    .action-btn[style*="gold"],
+    .action-btn[style*="ffc107"] {
+      background: linear-gradient(180deg, #ffe066 0%, #d4a000 50%, #a07800 100%);
+      border-color: var(--accent-gold);
+      color: #000;
+      box-shadow:
+        0 5px 0 0 var(--px-shadow-gold),
+        inset 0 1px 0 0 rgba(255, 255, 255, 0.5),
+        inset 0 -1px 0 0 rgba(0, 0, 0, 0.2);
+      text-shadow: none;
     }
 
-    .conv-preview {
-      font-size: 12.5px;
-      color: var(--text-muted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      margin-top: 1px;
+    .action-btn[style*="gold"]:active,
+    .action-btn[style*="ffc107"]:active {
+      transform: translateY(5px);
+      box-shadow: 0 0 0 0 var(--px-shadow-gold), inset 0 2px 0 0 rgba(0, 0, 0, 0.2);
     }
 
-    .conv-meta {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: 4px;
-      flex-shrink: 0;
-    }
-
-    .conv-time {
-      font-size: 11px;
-      color: var(--text-muted);
-      font-family: var(--font-mono);
-    }
-
-    .conv-badge {
-      background: var(--accent);
-      color: #fff;
-      font-size: 10px;
-      font-weight: 600;
-      border-radius: 99px;
-      padding: 1px 6px;
-      min-width: 18px;
-      text-align: center;
-    }
-
-    .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 40px 20px;
-      gap: 10px;
-      color: var(--text-muted);
-      text-align: center;
-    }
-
-    .empty-state-icon {
-      color: var(--text-muted);
-      opacity: 0.4;
-      margin-bottom: 4px;
-    }
-
-    .empty-state-title {
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--text-secondary);
-    }
-
-    .empty-state-desc {
-      font-size: 12.5px;
-      line-height: 1.6;
-    }
-
-    /* ─── SIDEBAR FOOTER ─── */
-    .sidebar-footer {
-      padding: 12px 12px;
-      border-top: 1px solid var(--border-subtle);
-      flex-shrink: 0;
-    }
-
-    .user-badge {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 10px;
-      border-radius: var(--radius-md);
-      cursor: default;
-    }
-
-    .user-badge-avatar {
-      width: 34px;
-      height: 34px;
-      background: var(--accent-dim);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--accent);
-      flex-shrink: 0;
-      text-transform: uppercase;
-    }
-
-    .user-badge-info {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .user-badge-name {
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--text-primary);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .user-badge-status {
-      font-size: 11.5px;
-      color: var(--success);
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .user-badge-status::before {
-      content: '';
-      width: 6px;
-      height: 6px;
-      background: var(--success);
-      border-radius: 50%;
-      display: inline-block;
-    }
-
-    /* ─── CHAT AREA ─── */
-    .chat-area {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      overflow: hidden;
-      background: var(--bg-base);
-    }
-
-    /* ─── WELCOME PANEL ─── */
-    .welcome-panel {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 14px;
-      color: var(--text-muted);
-      text-align: center;
-      padding: 40px;
-    }
-
-    .welcome-panel-icon {
-      width: 64px;
-      height: 64px;
-      background: var(--bg-elevated);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--text-muted);
-      margin-bottom: 8px;
-    }
-
-    .welcome-panel h2 {
-      font-size: 20px;
-      font-weight: 600;
-      color: var(--text-secondary);
-      letter-spacing: -0.3px;
-    }
-
-    .welcome-panel p {
-      font-size: 14px;
-      color: var(--text-muted);
-      max-width: 300px;
-      line-height: 1.6;
-    }
-
-    /* ─── CHAT VIEW ─── */
-    .chat-view {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      overflow: hidden;
-    }
-
-    .chat-header {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      padding: 16px 24px;
-      border-bottom: 1px solid var(--border-subtle);
-      background: var(--bg-surface);
-      flex-shrink: 0;
-    }
-
-    .chat-header-avatar {
-      width: 38px;
-      height: 38px;
-      background: var(--bg-elevated);
-      border: 1px solid var(--border);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--text-secondary);
-      text-transform: uppercase;
-      flex-shrink: 0;
-    }
-
-    .chat-header-info {
-      flex: 1;
-    }
-
-    .chat-header-name {
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--text-primary);
-      letter-spacing: -0.2px;
-    }
-
-    .chat-header-sub {
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-
-    .chat-header-actions {
-      display: flex;
-      gap: 4px;
-    }
-
-    /* ─── MESSAGES ─── */
-    .messages-container {
-      flex: 1;
-      overflow-y: auto;
-      padding: 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    .messages-container::-webkit-scrollbar {
-      width: 4px;
-    }
-
-    .messages-container::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    .messages-container::-webkit-scrollbar-thumb {
-      background: var(--border);
-      border-radius: 2px;
-    }
-
-    .msg-group {
-      display: flex;
-      flex-direction: column;
-      margin-bottom: 12px;
-    }
-
-    .msg-group.self {
-      align-items: flex-end;
-    }
-
-    .msg-group.other {
-      align-items: flex-start;
-    }
-
-    .msg-sender-name {
-      font-size: 11.5px;
-      color: var(--text-muted);
-      margin-bottom: 4px;
-      padding: 0 4px;
-      font-weight: 500;
-    }
-
-    .msg-bubble {
-      max-width: 480px;
-      padding: 10px 14px;
-      border-radius: var(--radius-md);
-      font-size: 14px;
-      line-height: 1.55;
-      position: relative;
-      word-break: break-word;
-    }
-
-    .msg-group.self .msg-bubble {
-      background: var(--msg-self-bg);
-      color: #dbe8ff;
-      border-bottom-right-radius: 4px;
-    }
-
-    .msg-group.other .msg-bubble {
-      background: var(--msg-other-bg);
-      color: var(--text-primary);
-      border: 1px solid var(--border-subtle);
-      border-bottom-left-radius: 4px;
-    }
-
-    .msg-time {
-      font-size: 10.5px;
-      color: var(--text-muted);
-      font-family: var(--font-mono);
-      margin-top: 4px;
-      padding: 0 4px;
-    }
-
-    .date-divider {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin: 16px 0;
-      color: var(--text-muted);
-      font-size: 11px;
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
-      font-weight: 500;
-    }
-
-    .date-divider::before,
-    .date-divider::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: var(--border-subtle);
-    }
-
-    /* ─── INPUT BAR ─── */
-    .input-bar {
-      padding: 16px 24px;
-      border-top: 1px solid var(--border-subtle);
-      background: var(--bg-surface);
-      flex-shrink: 0;
-    }
-
-    .input-wrap {
-      display: flex;
-      align-items: flex-end;
-      gap: 10px;
-      background: var(--bg-elevated);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 10px 14px;
-      transition: border-color var(--transition), box-shadow var(--transition);
-    }
-
-    .input-wrap:focus-within {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-glow);
-    }
-
-    #msg-input {
-      flex: 1;
-      background: none;
-      border: none;
-      outline: none;
-      color: var(--text-primary);
-      font-family: var(--font-main);
-      font-size: 14px;
-      line-height: 1.5;
-      resize: none;
-      max-height: 120px;
-      overflow-y: auto;
-    }
-
-    #msg-input::placeholder {
-      color: var(--text-muted);
-    }
-
-    .send-btn {
-      width: 34px;
-      height: 34px;
-      background: var(--accent);
-      border: none;
-      border-radius: var(--radius-sm);
-      color: #fff;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all var(--transition);
-      flex-shrink: 0;
-      align-self: flex-end;
-    }
-
-    .send-btn:hover {
-      background: #3d7ef4;
-      transform: scale(1.05);
-    }
-
-    .send-btn:active {
-      transform: scale(0.97);
-    }
-
-    .send-btn:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    /* ─── NEW CHAT MODAL ─── */
-    .modal-overlay {
+    /* ── MINIGAME MODAL ── */
+    #modal-overlay {
       position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.7);
-      backdrop-filter: blur(4px);
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.88);
+      display: flex;
+      align-items: center;
+      justify-content: center;
       z-index: 100;
-      display: none;
-      align-items: center;
-      justify-content: center;
     }
 
-    .modal-overlay.show {
-      display: flex;
+    .modal-box {
+      background: #0d0f15;
+      border: 3px solid var(--accent-cyan);
+      padding: 28px;
+      width: 80%;
+      max-width: 480px;
+      text-align: center;
+      box-shadow:
+        6px 6px 0 0 var(--px-shadow-cyan),
+        inset 0 0 40px rgba(102, 252, 241, 0.05),
+        0 0 40px rgba(102, 252, 241, 0.15);
+      position: relative;
     }
 
-    .modal {
-      background: var(--bg-surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 32px;
-      width: 440px;
-      max-width: 92vw;
-      box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
-      animation: modal-in 0.2s ease;
+    /* Pixel corner notches */
+    .modal-box::before {
+      content: '';
+      position: absolute;
+      top: -3px;
+      left: -3px;
+      right: -3px;
+      bottom: -3px;
+      border: 1px solid rgba(102, 252, 241, 0.15);
+      pointer-events: none;
     }
 
-    @keyframes modal-in {
-      from {
-        opacity: 0;
-        transform: translateY(-12px) scale(0.97);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-      }
+    /* ── OSCILLOSCOPE ── */
+    .osc-container {
+      width: 100%;
+      height: 44px;
+      background: #000;
+      border: 2px solid #222;
+      border-top-color: #111;
+      border-left-color: #111;
+      margin: 24px 0;
+      position: relative;
+      overflow: hidden;
+      box-shadow: inset 0 2px 0 0 rgba(0, 0, 0, 0.8), 3px 3px 0 0 #000;
     }
 
-    .modal-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 24px;
-    }
-
-    .modal-title {
-      font-size: 17px;
-      font-weight: 600;
-      letter-spacing: -0.3px;
-    }
-
-    .modal-body {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .modal-footer {
-      display: flex;
-      gap: 10px;
-      justify-content: flex-end;
-      margin-top: 24px;
-    }
-
-    /* ─── TOAST ─── */
-    .toast-container {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      z-index: 200;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .toast {
-      background: var(--bg-elevated);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 12px 16px;
-      font-size: 13.5px;
-      color: var(--text-primary);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      animation: toast-in 0.25s ease;
-      max-width: 340px;
-    }
-
-    .toast.error {
-      border-color: rgba(224, 92, 92, 0.4);
-      color: var(--danger);
-    }
-
-    .toast.success {
-      border-color: rgba(78, 201, 148, 0.4);
-      color: var(--success);
-    }
-
-    @keyframes toast-in {
-      from {
-        opacity: 0;
-        transform: translateY(10px);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    /* ─── LOADING ─── */
-    .loading-screen {
-      position: fixed;
+    /* Scanlines inside oscilloscope */
+    .osc-container::after {
+      content: '';
+      position: absolute;
       inset: 0;
-      background: var(--bg-base);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 300;
-      flex-direction: column;
-      gap: 16px;
+      background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0, 0, 0, 0.3) 3px, rgba(0, 0, 0, 0.3) 4px);
+      pointer-events: none;
+      z-index: 2;
     }
 
-    .spinner {
-      width: 32px;
-      height: 32px;
-      border: 3px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+    .osc-zone {
+      position: absolute;
+      height: 100%;
+      top: 0;
     }
 
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
+    .zone-red {
+      width: 100%;
+      left: 0;
+      background: #2a0503;
+    }
+
+    .zone-green {
+      width: 40%;
+      left: 30%;
+      background: #082a08;
+    }
+
+    .zone-gold {
+      width: 6%;
+      left: 47%;
+      background: var(--accent-gold);
+      box-shadow: 0 0 14px var(--accent-gold), 0 0 4px #fff;
+    }
+
+    #osc-cursor {
+      position: absolute;
+      width: 3px;
+      height: 100%;
+      background: #fff;
+      top: 0;
+      left: 0;
+      box-shadow: 0 0 8px #fff, 0 0 16px rgba(255, 255, 255, 0.5);
+      z-index: 3;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* ── ANIMATIONS ── */
+    @keyframes fabSuck {
+      0% {
+        transform: scale(1) translate(0, 0);
+        opacity: 1;
+      }
+
+      50% {
+        transform: scale(0.5) translate(100px, 0);
+        opacity: 0.8;
+        filter: brightness(2);
+      }
+
+      100% {
+        transform: scale(0) translate(200px, 0);
+        opacity: 0;
       }
     }
 
-    .loading-label {
-      font-size: 13px;
-      color: var(--text-muted);
-      letter-spacing: 0.5px;
+    @keyframes fabEmerge {
+      0% {
+        transform: scale(0.2) translateY(50px);
+        filter: brightness(3);
+        opacity: 0;
+      }
+
+      100% {
+        transform: scale(1) translateY(0);
+        filter: brightness(1);
+        opacity: 1;
+      }
     }
 
-    /* ─── TYPING INDICATOR ─── */
-    .typing-indicator {
-      display: none;
-      align-items: center;
-      gap: 8px;
-      padding: 0 0 8px 4px;
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-
-    .typing-dots {
-      display: flex;
-      gap: 3px;
-    }
-
-    .typing-dots span {
-      width: 5px;
-      height: 5px;
-      background: var(--text-muted);
-      border-radius: 50%;
-      animation: typing 1.2s infinite;
-    }
-
-    .typing-dots span:nth-child(2) {
-      animation-delay: 0.2s;
-    }
-
-    .typing-dots span:nth-child(3) {
-      animation-delay: 0.4s;
-    }
-
-    @keyframes typing {
+    @keyframes blink {
 
       0%,
-      60%,
       100% {
-        opacity: 0.3;
-        transform: translateY(0);
-      }
-
-      30% {
         opacity: 1;
-        transform: translateY(-3px);
+      }
+
+      50% {
+        opacity: 0.3;
       }
     }
 
-    /* ─── SCROLLBAR (global) ─── */
-    * {
-      scrollbar-width: thin;
-      scrollbar-color: var(--border) transparent;
+    .anim-suck {
+      animation: fabSuck 0.8s cubic-bezier(0.5, 0, 0.2, 1) forwards;
+      border-color: var(--accent-cyan) !important;
     }
 
-    /* ─── RESPONSIVE ─── */
-    @media (max-width: 640px) {
-      .sidebar {
-        width: 100%;
-        min-width: 0;
-        position: absolute;
-        z-index: 10;
-      }
+    .anim-emerge {
+      animation: fabEmerge 1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+    }
 
-      .sidebar.hidden {
-        display: none;
-      }
+    #final-pc-view {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 15px;
+    }
 
-      .chat-view {
-        width: 100%;
-      }
+    #final-pc-view img {
+      width: 128px;
+      height: 128px;
+      border: 3px solid var(--accent-cyan);
+      box-shadow: 0 0 20px rgba(102, 252, 241, 0.3), 4px 4px 0 0 var(--px-shadow-cyan);
+    }
+
+    /* Cursor blink on empty slots */
+    .slot:not(.filled)::after {
+      content: '_';
+      animation: blink 1s step-end infinite;
+      color: #333;
+      font-family: 'VT323', monospace;
     }
   </style>
 </head>
 
 <body>
 
-  <!-- Loading -->
-  <div class="loading-screen" id="loading">
-    <div class="spinner"></div>
-    <div class="loading-label">Connecting…</div>
-  </div>
+  <header>
+    <div class="pixel-font title">Hardware Architect</div>
+    <div class="pixel-font" id="money">$1,000</div>
+  </header>
 
-  <!-- Auth Screen -->
-  <div class="screen" id="auth-screen">
-    <div class="auth-card">
-      <div class="auth-brand">
-        <div class="auth-brand-icon"><i data-lucide="message-circle" style="width:18px;height:18px;"></i></div>
-        <span class="auth-brand-name">Received</span>
+  <div class="main-container">
+    <!-- Panel 1: Fabricate -->
+    <div class="panel col-engineer">
+      <div class="panel-header pixel-font">FABRICATION_UNIT</div>
+      <div class="panel-content">
+        <button class="btn" onclick="initiateMinigame('CPU', 100)"><div class="btn-inner"><span class="btn-label">[CPU] Processors</span><span class="btn-price">$100</span></div></button>
+        <button class="btn" onclick="initiateMinigame('GPU', 250)"><div class="btn-inner"><span class="btn-label">[GPU] Graphics</span><span class="btn-price">$250</span></div></button>
+        <button class="btn" onclick="initiateMinigame('RAM', 80)"><div class="btn-inner"><span class="btn-label">[RAM] Memory</span><span class="btn-price">$80</span></div></button>
+        <button class="btn" onclick="initiateMinigame('MOBO', 120)"><div class="btn-inner"><span class="btn-label">[MB] Motherboards</span><span class="btn-price">$120</span></div></button>
+        <button class="btn" onclick="initiateMinigame('PSU', 60)"><div class="btn-inner"><span class="btn-label">[PSU] Power</span><span class="btn-price">$60</span></div></button>
+        <button class="btn" onclick="initiateMinigame('COOL', 90)"><div class="btn-inner"><span class="btn-label">[COOL] Cooling</span><span class="btn-price">$90</span></div></button>
+        <button class="btn" onclick="initiateMinigame('SSD', 70)"><div class="btn-inner"><span class="btn-label">[SSD] Storage</span><span class="btn-price">$70</span></div></button>
       </div>
-      <h1 class="auth-title">Welcome back</h1>
-      <p class="auth-subtitle">Private messaging without your phone number.</p>
-
-      <div class="auth-tabs">
-        <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">Sign in</button>
-        <button class="auth-tab" id="tab-register" onclick="switchTab('register')">Create account</button>
-      </div>
-
-      <div class="auth-error" id="auth-error"></div>
-
-      <!-- Login Form -->
-      <div id="form-login">
-        <div class="form-group">
-          <label class="form-label">Email address</label>
-          <input type="email" class="form-input" id="login-email" placeholder="you@example.com" autocomplete="email" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Password</label>
-          <input type="password" class="form-input" id="login-password" placeholder="••••••••" autocomplete="current-password" />
-        </div>
-        <button class="btn btn-primary" id="login-btn" onclick="doLogin()">
-        <i data-lucide="log-in" style="width:15px;height:15px;"></i>
-        Sign in
-      </button>
-      </div>
-
-      <div style="display:flex;align-items:center;gap:10px;margin:20px 0 16px;">
-      <div style="flex:1;height:1px;background:var(--border);"></div>
-      <span style="font-size:12px;color:var(--text-muted);white-space:nowrap;">or continue with</span>
-      <div style="flex:1;height:1px;background:var(--border);"></div>
     </div>
-    <button class="btn" onclick="doGoogleSignIn()" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border);color:var(--text-primary);padding:11px 20px;font-size:14px;margin-bottom:16px;border-radius:var(--radius-sm);gap:10px;cursor:pointer;">
-      <svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-      Continue with Google
-    </button>
 
-    <!-- Register Form -->
-      <div id="form-register" style="display:none;">
-        <div class="form-group">
-          <label class="form-label">Display name</label>
-          <input type="text" class="form-input" id="reg-name" placeholder="Your name" autocomplete="name" />
+    <!-- Panel 2: Inventory -->
+    <div class="panel col-inventory">
+      <div class="panel-header pixel-font">
+        <span>LOCAL_STORAGE</span>
+        <span id="inv-count" style="color:var(--accent-blue)">0 / ∞</span>
+      </div>
+      <div class="panel-content" id="inventory-list">
+        <div style="text-align:center;color:#555;margin-top:50px;font-style:italic;">Storage array empty.<br>Fabricate components to begin.
         </div>
-        <div class="form-group">
-          <label class="form-label">Email address</label>
-          <input type="email" class="form-input" id="reg-email" placeholder="you@example.com" autocomplete="email" />
+      </div>
+    </div>
+
+    <!-- Panel 3: Assembly -->
+    <div class="panel col-assembly">
+      <div class="panel-header pixel-font" style="background-color:var(--accent-blue);color:#fff;">SYSTEM_ASSEMBLY</div>
+      <div class="panel-content" id="assembly-area">
+        <div id="slots-container" style="display:flex;flex-direction:column;gap:10px;">
+          <div class="slot" id="slot-CPU">[ AWAITING CPU ]</div>
+          <div class="slot" id="slot-GPU">[ AWAITING GPU ]</div>
+          <div class="slot" id="slot-RAM">[ AWAITING RAM ]</div>
+          <div class="slot" id="slot-MOBO">[ AWAITING MOBO ]</div>
+          <div class="slot" id="slot-PSU">[ AWAITING PSU ]</div>
+          <div class="slot" id="slot-COOL">[ AWAITING COOL ]</div>
+          <div class="slot" id="slot-SSD">[ AWAITING SSD ]</div>
+          <button class="action-btn hidden" id="btn-assemble" onclick="openAssemblyGame()">&#9881; ASSEMBLE SYSTEM</button>
         </div>
-        <div class="form-group">
-          <label class="form-label">Password</label>
-          <input type="password" class="form-input" id="reg-password" placeholder="Min. 6 characters" autocomplete="new-password" />
+        <div id="final-pc-view" class="hidden">
+          <img id="final-pc-img" class="pixel-art anim-emerge" src="" style="width:128px;height:128px;border:3px solid var(--accent-cyan);box-shadow:0 0 20px rgba(102,252,241,0.3),4px 4px 0 0 var(--px-shadow-cyan);">
+          <h2 class="pixel-font" style="color:var(--accent-cyan);font-size:32px;">SYSTEM_READY</h2>
+          <div id="final-stats" class="item-stats" style="text-align:center;font-size:14px;margin-bottom:20px;"></div>
+          <button class="action-btn" style="background:linear-gradient(180deg,#ffe066,#d4a000,#a07800);border-color:var(--accent-gold);color:#000;" id="btn-sell" onclick="sellPC()">LIQUIDATE ASSET</button>
         </div>
-        <button class="btn btn-primary" id="register-btn" onclick="doRegister()">
-        <i data-lucide="user-plus" style="width:15px;height:15px;"></i>
-        Create account
-      </button>
       </div>
     </div>
   </div>
 
-  <!-- App Screen -->
-  <div class="screen" id="app-screen">
-
-    <!-- Sidebar -->
-    <div class="sidebar" id="sidebar">
-      <div class="sidebar-header">
-        <div class="sidebar-top">
-          <div class="sidebar-brand">
-            <div class="sidebar-brand-icon"><i data-lucide="message-circle" style="width:14px;height:14px;"></i></div>
-            <span class="sidebar-brand-name">Received</span>
-          </div>
-          <div class="sidebar-actions">
-            <button class="btn-icon" title="New conversation" onclick="openNewChat()">
-            <i data-lucide="edit-3" style="width:16px;height:16px;"></i>
-          </button>
-            <button class="btn-icon" title="Sign out" onclick="doSignOut()">
-            <i data-lucide="log-out" style="width:16px;height:16px;"></i>
-          </button>
-          </div>
-        </div>
-        <div class="search-bar">
-          <span class="search-icon"><i data-lucide="search" style="width:14px;height:14px;"></i></span>
-          <input type="text" id="search-input" placeholder="Search conversations…" oninput="filterConvs(this.value)" />
-        </div>
+  <!-- Fabrication Minigame Modal -->
+  <div id="modal-overlay" class="hidden"
+    style="position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.88);display:flex;align-items:center;justify-content:center;z-index:100;">
+    <div class="modal-box" style="max-width:600px;width:92%;padding:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <h2 class="pixel-font" id="mg-title" style="color:var(--accent-cyan);font-size:26px;">CIRCUIT FABRICATION</h2>
+        <div class="pixel-font" id="mg-timer" style="color:var(--accent-gold);font-size:22px;">15</div>
       </div>
-
-      <div class="section-label">Messages</div>
-
-      <div class="conversation-list" id="conv-list">
-        <div class="empty-state">
-          <div class="empty-state-icon"><i data-lucide="inbox" style="width:32px;height:32px;"></i></div>
-          <div class="empty-state-title">No conversations yet</div>
-          <div class="empty-state-desc">Start one by clicking the edit icon above.</div>
-        </div>
-      </div>
-
-      <div class="sidebar-footer">
-        <div class="user-badge">
-          <div class="user-badge-avatar" id="user-avatar-sidebar">–</div>
-          <div class="user-badge-info">
-            <div class="user-badge-name" id="user-name-sidebar">–</div>
-            <div class="user-badge-status">Online</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Chat Area -->
-    <div class="chat-area" id="chat-area">
-
-      <!-- Welcome -->
-      <div class="welcome-panel" id="welcome-panel">
-        <div class="welcome-panel-icon"><i data-lucide="message-square" style="width:28px;height:28px;"></i></div>
-        <h2>Select a conversation</h2>
-        <p>Choose an existing conversation or start a new one to begin messaging.</p>
-      </div>
-
-      <!-- Active Chat -->
-      <div class="chat-view" id="chat-view" style="display:none;">
-        <div class="chat-header">
-          <div class="chat-header-avatar" id="chat-header-avatar">–</div>
-          <div class="chat-header-info">
-            <div class="chat-header-name" id="chat-header-name">–</div>
-            <div class="chat-header-sub" id="chat-header-sub">–</div>
-          </div>
-          <div class="chat-header-actions">
-            <button class="btn-icon" title="Delete conversation" onclick="deleteConversation()">
-            <i data-lucide="trash-2" style="width:16px;height:16px;"></i>
-          </button>
-          </div>
-        </div>
-
-        <div class="messages-container" id="messages-container">
-        </div>
-
-        <div class="input-bar">
-          <div class="typing-indicator" id="typing-indicator">
-            <div class="typing-dots"><span></span><span></span><span></span></div>
-            <span id="typing-label">typing…</span>
-          </div>
-          <div class="input-wrap">
-            <textarea id="msg-input" rows="1" placeholder="Type a message…"
-            onkeydown="handleMsgKey(event)" oninput="autoResize(this)"></textarea>
-            <button class="send-btn" id="send-btn" onclick="sendMessage()">
-            <i data-lucide="send" style="width:15px;height:15px;"></i>
-          </button>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- New Chat Modal -->
-  <div class="modal-overlay" id="new-chat-modal">
-    <div class="modal">
-      <div class="modal-header">
-        <span class="modal-title">New conversation</span>
-        <button class="btn-icon" onclick="closeNewChat()">
-        <i data-lucide="x" style="width:18px;height:18px;"></i>
-      </button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label class="form-label">Recipient email</label>
-          <input type="email" class="form-input" id="new-chat-email" placeholder="friend@example.com" />
-        </div>
-        <div id="modal-error" class="auth-error"></div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="closeNewChat()">Cancel</button>
-        <button class="btn btn-primary" style="width:auto;" onclick="startConversation()">
-        <i data-lucide="arrow-right" style="width:14px;height:14px;"></i>
-        Start chat
-      </button>
+      <div class="pixel-font" id="mg-instruction" style="color:#6a7388;font-size:14px;margin-bottom:10px;">Connect all
+        matching nodes before time runs out!</div>
+      <canvas id="mg-canvas" width="540" height="260"
+        style="width:100%;border:3px solid var(--border);background:#050708;box-shadow:inset 0 0 20px #000,3px 3px 0 #000;display:block;cursor:crosshair;touch-action:none;"></canvas>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+        <div class="pixel-font" id="mg-status" style="color:#555;font-size:16px;">AWAITING INPUT...</div>
+        <button class="action-btn" onclick="skipMinigame()" style="width:auto;margin:0;padding:8px 18px;font-size:18px;">SKIP (-50%)</button>
       </div>
     </div>
   </div>
 
-  <!-- Toast Container -->
-  <div class="toast-container" id="toast-container"></div>
-
-  <!-- Firebase -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-         signOut, onAuthStateChanged, updateProfile }
-  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs,
-         addDoc, query, orderBy, onSnapshot, serverTimestamp, where,
-         deleteDoc, writeBatch }
-  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyB8zTXn1mqVF-xj9O6tCb3YWwzk4gL_6E0",
-  authDomain: "received-28136.firebaseapp.com",
-  projectId: "received-28136",
-  storageBucket: "received-28136.firebasestorage.app",
-  messagingSenderId: "615423362605",
-  appId: "1:615423362605:web:e3b8ea4516c07b720b1aa4",
-  measurementId: "G-QH36E32YTT"
-};
-
-const app     = initializeApp(firebaseConfig);
-const auth    = getAuth(app);
-const db      = getFirestore(app);
-
-// ── STATE ──
-let currentUser      = null;
-let activeConvId     = null;
-let convListeners    = {};
-let msgUnsubscribe   = null;
-let allConversations = [];
-
-// ── EXPOSE GLOBALS ──
-window._auth    = auth;
-window._db      = db;
-window._getDoc  = getDoc;
-window._doc     = doc;
-window._setDoc  = setDoc;
-window._addDoc  = addDoc;
-window._getDocs = getDocs;
-window._query   = query;
-window._collection = collection;
-window._orderBy    = orderBy;
-window._onSnapshot = onSnapshot;
-window._serverTimestamp = serverTimestamp;
-window._where   = where;
-window._deleteDoc = deleteDoc;
-window._writeBatch = writeBatch;
-window._signOut = signOut;
-
-// ── AUTH LISTENER ──
-onAuthStateChanged(auth, async user => {
-  hideLoading();
-  if (user) {
-    currentUser = user;
-    window._currentUser = user;
-    showApp();
-    setUserBadge(user);
-    listenConversations();
-  } else {
-    currentUser = null;
-    window._currentUser = null;
-    showAuth();
-  }
-});
-
-// ── LISTEN CONVERSATIONS ──
-function listenConversations() {
-  const q = query(
-    collection(db, 'conversations'),
-    where('members', 'array-contains', currentUser.uid),
-    orderBy('updatedAt', 'desc')
-  );
-  onSnapshot(q, async snap => {
-    const convs = [];
-    for (const d of snap.docs) {
-      const data = d.data();
-      convs.push({ id: d.id, ...data });
-    }
-    allConversations = convs;
-    window._allConversations = convs;
-    renderConvList(convs);
-  });
-}
-
-window._listenMessages = function(convId) {
-  if (msgUnsubscribe) msgUnsubscribe();
-  const q = query(collection(db, 'conversations', convId, 'messages'), orderBy('createdAt', 'asc'));
-  msgUnsubscribe = onSnapshot(q, snap => {
-    renderMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-  });
-};
-
-window._getCurrentUser = () => currentUser;
-window._getConvs = () => allConversations;
-
-// ── AUTH ACTIONS ──
-window.doLogin = async function() {
-  const email = document.getElementById('login-email').value.trim();
-  const pass  = document.getElementById('login-password').value;
-  if (!email || !pass) { showAuthError('Please fill in all fields.'); return; }
-  setLoading(true, 'login-btn');
-  try {
-    await signInWithEmailAndPassword(auth, email, pass);
-  } catch(e) {
-    showAuthError(friendlyAuthError(e.code));
-  }
-  setLoading(false, 'login-btn', '<i data-lucide="log-in" style="width:15px;height:15px;"></i> Sign in');
-  lucide.createIcons();
-};
-
-window.doRegister = async function() {
-  const name  = document.getElementById('reg-name').value.trim();
-  const email = document.getElementById('reg-email').value.trim();
-  const pass  = document.getElementById('reg-password').value;
-  if (!name || !email || !pass) { showAuthError('Please fill in all fields.'); return; }
-  setLoading(true, 'register-btn');
-  try {
-    const cred = await createUserWithEmailAndPassword(auth, email, pass);
-    await updateProfile(cred.user, { displayName: name });
-    await setDoc(doc(db, 'users', cred.user.uid), {
-      uid: cred.user.uid,
-      displayName: name,
-      email: email,
-      createdAt: serverTimestamp()
-    });
-    toast('Account created!', 'success');
-  } catch(e) {
-    showAuthError(friendlyAuthError(e.code));
-  }
-  setLoading(false, 'register-btn', '<i data-lucide="user-plus" style="width:15px;height:15px;"></i> Create account');
-  lucide.createIcons();
-};
-
-window.doSignOut = async function() {
-  await signOut(auth);
-};
-
-window.doGoogleSignIn = async function() {
-  const provider = new GoogleAuthProvider();
-  try {
-    const cred = await signInWithPopup(auth, provider);
-    const user = cred.user;
-    await setDoc(doc(db, 'users', user.uid), {
-      uid: user.uid,
-      displayName: user.displayName || user.email,
-      email: user.email,
-      createdAt: serverTimestamp()
-    }, { merge: true });
-  } catch(e) {
-    if (e.code !== 'auth/popup-closed-by-user') {
-      showAuthError(friendlyAuthError(e.code));
-    }
-  }
-};
-
-
-
-
-// ── NEW CONVERSATION ──
-window.startConversation = async function() {
-  const email = document.getElementById('new-chat-email').value.trim().toLowerCase();
-  if (!email) { showModalError('Please enter an email.'); return; }
-  if (email === currentUser.email.toLowerCase()) { showModalError("That's your own email!"); return; }
-
-  // Find user by email
-  const q = query(collection(db, 'users'), where('email', '==', email));
-  const snap = await getDocs(q);
-  if (snap.empty) { showModalError('No user found with that email.'); return; }
-
-  const otherUser = snap.docs[0].data();
-  const otherUid  = otherUser.uid;
-
-  // Check if conv already exists
-  const existing = allConversations.find(c =>
-    c.members.includes(currentUser.uid) && c.members.includes(otherUid)
-  );
-
-  if (existing) {
-    closeNewChat();
-    openConversation(existing.id, existing);
-    return;
-  }
-
-  // Create new
-  const convRef = await addDoc(collection(db, 'conversations'), {
-    members: [currentUser.uid, otherUid],
-    memberNames: {
-      [currentUser.uid]: currentUser.displayName || currentUser.email,
-      [otherUid]: otherUser.displayName || otherUser.email
-    },
-    memberEmails: {
-      [currentUser.uid]: currentUser.email,
-      [otherUid]: otherUser.email
-    },
-    updatedAt: serverTimestamp(),
-    lastMessage: ''
-  });
-
-  closeNewChat();
-  toast('Conversation started!', 'success');
-};
-
-// ── SEND MESSAGE ──
-window.sendMessage = async function() {
-  const input = document.getElementById('msg-input');
-  const text  = input.value.trim();
-  if (!text || !activeConvId) return;
-  input.value = '';
-  input.style.height = 'auto';
-
-  const convRef = doc(db, 'conversations', activeConvId);
-  const msgRef  = collection(db, 'conversations', activeConvId, 'messages');
-
-  await addDoc(msgRef, {
-    text,
-    senderId: currentUser.uid,
-    senderName: currentUser.displayName || currentUser.email,
-    createdAt: serverTimestamp()
-  });
-
-  await setDoc(convRef, {
-    updatedAt: serverTimestamp(),
-    lastMessage: text,
-    lastSender: currentUser.uid
-  }, { merge: true });
-};
-
-// ── DELETE CONVERSATION ──
-window.deleteConversation = async function() {
-  if (!activeConvId) return;
-  if (!confirm('Delete this conversation? All messages will be lost.')) return;
-
-  const msgSnap = await getDocs(collection(db, 'conversations', activeConvId, 'messages'));
-  const batch = writeBatch(db);
-  msgSnap.forEach(d => batch.delete(d.ref));
-  batch.delete(doc(db, 'conversations', activeConvId));
-  await batch.commit();
-
-  activeConvId = null;
-  window._activeConvId = null;
-  if (msgUnsubscribe) { msgUnsubscribe(); msgUnsubscribe = null; }
-
-  document.getElementById('chat-view').style.display    = 'none';
-  document.getElementById('welcome-panel').style.display = '';
-
-  toast('Conversation deleted.', 'success');
-};
-
-// ── RENDER ──
-function renderConvList(convs) {
-  const list = document.getElementById('conv-list');
-  if (!convs.length) {
-    list.innerHTML = `<div class="empty-state">
-      <div class="empty-state-icon"><i data-lucide="inbox" style="width:32px;height:32px;"></i></div>
-      <div class="empty-state-title">No conversations yet</div>
-      <div class="empty-state-desc">Start one by clicking the edit icon above.</div>
-    </div>`;
-    lucide.createIcons();
-    return;
-  }
-
-  list.innerHTML = convs.map(conv => {
-    const otherName = getOtherName(conv);
-    const preview   = conv.lastMessage ? conv.lastMessage : 'No messages yet';
-    const time      = conv.updatedAt ? formatTime(conv.updatedAt.toDate?.() || new Date()) : '';
-    const initials  = otherName.charAt(0).toUpperCase();
-    const isActive  = conv.id === activeConvId;
-
-    return `<div class="conv-item${isActive ? ' active' : ''}" onclick="openConversation('${conv.id}', ${JSON.stringify(conv).replace(/"/g, '&quot;')})">
-      <div class="conv-avatar">${initials}</div>
-      <div class="conv-info">
-        <div class="conv-name">${escHtml(otherName)}</div>
-        <div class="conv-preview">${escHtml(preview.slice(0, 48))}${preview.length > 48 ? '…' : ''}</div>
+  <!-- Assembly Drag+Wire Modal -->
+  <div id="assembly-overlay" class="hidden"
+    style="position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.92);display:flex;align-items:center;justify-content:center;z-index:100;">
+    <div class="modal-box" style="max-width:720px;width:96%;padding:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <h2 class="pixel-font" style="color:var(--accent-cyan);font-size:26px;">SYSTEM ASSEMBLY</h2>
+        <div class="pixel-font" id="asm-status" style="color:#6a7388;font-size:15px;">DRAG PARTS TO SLOTS</div>
       </div>
-      <div class="conv-meta">
-        <div class="conv-time">${time}</div>
+      <canvas id="asm-canvas" width="660" height="370"
+        style="width:100%;border:3px solid var(--accent-blue);background:#040608;box-shadow:inset 0 0 30px #000,4px 4px 0 #000;display:block;touch-action:none;cursor:default;"></canvas>
+      <div style="display:flex;gap:10px;margin-top:10px;">
+        <button class="action-btn hidden" id="btn-asm-sell" onclick="finalizeSell()" style="flex:1;margin:0;background:linear-gradient(180deg,#ffe066,#d4a000,#a07800);border-color:var(--accent-gold);color:#000;">LIQUIDATE ASSET</button>
+        <button class="action-btn" onclick="cancelAssembly()" style="width:auto;margin:0;padding:8px 18px;font-size:18px;background:linear-gradient(180deg,#3a0804,#1a0402);border-color:var(--accent-red);">&#10005; CANCEL</button>
       </div>
-    </div>`;
-  }).join('');
-  lucide.createIcons();
-}
+    </div>
+  </div>
 
-window.renderMessages = function(msgs) {
-  const container = document.getElementById('messages-container');
-  if (!msgs.length) {
-    container.innerHTML = `<div class="empty-state">
-      <div class="empty-state-icon"><i data-lucide="message-circle" style="width:28px;height:28px;"></i></div>
-      <div class="empty-state-title">No messages yet</div>
-      <div class="empty-state-desc">Send the first message!</div>
-    </div>`;
-    lucide.createIcons();
-    return;
-  }
+  <script>
+    /* PIXEL ART ENGINE */
+    const palette = {
+      '_':'transparent','0':'#000000','1':'#2c303a','2':'#8a93a6','3':'#ffffff',
+      '4':'#4caf50','5':'#0c3810','6':'#ffc107','7':'#66fcf1','8':'#f32013',
+      '9':'#3a0804','A':'#b87333','B':'#45a29e'
+    };
 
-  let html = '';
-  let lastDate = '';
+        const artData = {
+            // ── CPU ──────────────────────────────────────
+            'CPU_scrap': [
+                "________________",
+                "__8___8___8___8_",
+                "_AAAAA____AAAAA_",
+                "_A___A____A___A_",
+                "_A___AAAAAA___A_",
+                "AAAAAAAAAAAAAAAA",
+                "A11811181118111A",
+                "A10081818181001A",
+                "A10081118111011A",
+                "A10081818181011A",
+                "A10081818181001A",
+                "A11811181118111A",
+                "AAAAAAAAAAAAAAAA",
+                "_A___AAAAAA___A_",
+                "_A___A____A___A_",
+                "_AAAAA____AAAAA_"
+            ],
+            'CPU_basic': [
+                "_AAAAA____AAAAA_",
+                "_A___A____A___A_",
+                "_A___AAAAAA___A_",
+                "AAAAAAAAAAAAAAAA",
+                "A1171A171A17111A",
+                "A10022222222001A",
+                "A10021BBBBB2011A",
+                "A10021B7B7B2011A",
+                "A10021BBBBB2011A",
+                "A10022222222001A",
+                "A1171A171A17111A",
+                "AAAAAAAAAAAAAAAA",
+                "_A___AAAAAA___A_",
+                "_A___A____A___A_",
+                "_AAAAA____AAAAA_",
+                "________________"
+            ],
+            'CPU_pro': [
+                "_BBBBB____BBBBB_",
+                "_B___B____B___B_",
+                "_B___BBBBBB___B_",
+                "BBBBBBBBBBBBBBBB",
+                "B1171B171B17111B",
+                "B10077777777001B",
+                "B10077B7B7B7011B",
+                "B10077BBBBBBB011B",
+                "B10077B7B7B7011B",
+                "B10077777777001B",
+                "B1171B171B17111B",
+                "BBBBBBBBBBBBBBBB",
+                "_B___BBBBBB___B_",
+                "_B___B____B___B_",
+                "_BBBBB____BBBBB_",
+                "________________"
+            ],
+            'CPU_master': [
+                "_66666____66666_",
+                "_6___6____6___6_",
+                "_6___666666___6_",
+                "6666666666666666",
+                "611711171117116 ",
+                "610077777777006 ",
+                "610076666667016 ",
+                "610076636667016 ",
+                "610076666667016 ",
+                "610077777777006 ",
+                "611711171117116 ",
+                "6666666666666666",
+                "_6___666666___6_",
+                "_6___6____6___6_",
+                "_66666____66666_",
+                "________________"
+            ],
+            // ── GPU ──────────────────────────────────────
+            'GPU_scrap': [
+                "0000000000000000",
+                "0111111111111110",
+                "0188888888888110",
+                "0180000000801110",
+                "0180818180801110",
+                "0180818880801110",
+                "0180818180801110",
+                "0180000000801110",
+                "0188888888888110",
+                "0111111111111110",
+                "0000000000000000",
+                "________________",
+                "__AAAA____AAAA__",
+                "__A____________A",
+                "________________",
+                "________________"
+            ],
+            'GPU_basic': [
+                "0000000000000000",
+                "0222222222222220",
+                "0211111111111120",
+                "0210AAAAAAA01120",
+                "0210A22222A01120",
+                "0210A27772A01120",
+                "0210A27872A01120",
+                "0210A27772A01120",
+                "0210A22222A01120",
+                "0210AAAAAAA01120",
+                "0211111111111120",
+                "0222222222222220",
+                "0000000000000000",
+                "__AAAA____AAAA__",
+                "__A____________A",
+                "________________"
+            ],
+            'GPU_pro': [
+                "0000000000000000",
+                "0BBBBBBBBBBBBBB0",
+                "0B11111111111B B0",
+                "0B1077777770B120",
+                "0B1077BBBBB70120",
+                "0B1077B7B7B70120",
+                "0B1077BBBBB70120",
+                "0B1077777770B120",
+                "0B11111111111B20",
+                "0BBBBBBBBBBBBBB0",
+                "0000000000000000",
+                "________________",
+                "__BBBB____BBBB__",
+                "__B____________B",
+                "________________",
+                "________________"
+            ],
+            'GPU_master': [
+                "0000000000000000",
+                "0666666666666660",
+                "0611111111111160",
+                "0610777777701160",
+                "0610766666601160",
+                "0610766766601160",
+                "0610766666601160",
+                "0610777777701160",
+                "0611111111111160",
+                "0666666666666660",
+                "0000000000000000",
+                "________________",
+                "__6666____6666__",
+                "__6____________6",
+                "________________",
+                "________________"
+            ],
+            // ── RAM ──────────────────────────────────────
+            'RAM_scrap': [
+                "_0__0__0__0__0__",
+                "_0__0__0__0__0__",
+                "0000000000000000",
+                "0888888888888880",
+                "0811111111111180",
+                "0810000000000180",
+                "0810181818180180",
+                "0810818181810180",
+                "0810181818180180",
+                "0810000000000180",
+                "0811111111111180",
+                "0888888888888880",
+                "0000000000000000",
+                "_0__0__0__0__0__",
+                "_0__0__0__0__0__",
+                "________________"
+            ],
+            'RAM_basic': [
+                "_0__0__0__0__0__",
+                "_0__0__0__0__0__",
+                "0000000000000000",
+                "0666666666666660",
+                "0611111111111160",
+                "0610000000000160",
+                "0610222222220160",
+                "0610277777720160",
+                "0610222222220160",
+                "0610000000000160",
+                "0611111111111160",
+                "0666666666666660",
+                "0000000000000000",
+                "_0__0__0__0__0__",
+                "_0__0__0__0__0__",
+                "________________"
+            ],
+            'RAM_pro': [
+                "_0__0__0__0__0__",
+                "_0__0__0__0__0__",
+                "0000000000000000",
+                "0BBBBBBBBBBBBBB0",
+                "0B11111111111B B0",
+                "0B10000000001B20",
+                "0B10B2B2B2B01B20",
+                "0B1027777720 1B20",
+                "0B10B2B2B2B01B20",
+                "0B10000000001B20",
+                "0B11111111111B20",
+                "0BBBBBBBBBBBBBB0",
+                "0000000000000000",
+                "_0__0__0__0__0__",
+                "_0__0__0__0__0__",
+                "________________"
+            ],
+            'RAM_master': [
+                "_0__0__0__0__0__",
+                "_0__0__0__0__0__",
+                "0000000000000000",
+                "0666666666666660",
+                "0633333333333360",
+                "0630000000000360",
+                "0630677676760360",
+                "0630766767670360",
+                "0630677676760360",
+                "0630000000000360",
+                "0633333333333360",
+                "0666666666666660",
+                "0000000000000000",
+                "_0__0__0__0__0__",
+                "_0__0__0__0__0__",
+                "________________"
+            ],
+            // ── MOBO ─────────────────────────────────────
+            'MOBO_scrap': [
+                "0000000000000000",
+                "0888888888888880",
+                "08118888818888880",
+                "081818888828888880",
+                "08118888888118880",
+                "081818888881188880",
+                "0888888888888880",
+                "0811118888118880",
+                "0888888888118880",
+                "0811118888888880",
+                "0888888888888880",
+                "0888888888888880",
+                "0888881188888880",
+                "0888881188888880",
+                "0000000000000000",
+                "________________"
+            ],
+            'MOBO_basic': [
+                "0000000000000000",
+                "0555555555555550",
+                "05AA55555A255550",
+                "05A0A5555A255550",
+                "05AA5555555BB550",
+                "05A0A555555BB550",
+                "0555555555555550",
+                "0511115555AA5550",
+                "0555555555AA5550",
+                "0511115555665550",
+                "0577775555555550",
+                "0555555555555550",
+                "0555556655555550",
+                "0555556655555550",
+                "0000000000000000",
+                "________________"
+            ],
+            'MOBO_pro': [
+                "0000000000000000",
+                "0BBBBBBBBBBBBB B0",
+                "0BAABB B B BA2BBBBB0",
+                "0BA0ABBBBA2BBBBB0",
+                "0BAAB BBBBBBBBB B0",
+                "0BA0ABBBBBBBBBB B0",
+                "0BBBBBBBBBBBBB B0",
+                "0B1111BBBBAA BBB0",
+                "0BBBBBBBBBAA BBB0",
+                "0B1111BBBB77BBBBB0",
+                "0B7777BBBBBBBBBB0",
+                "0BBBBBBBBBBBBBBB0",
+                "0BBBBB77BBBBBBBB0",
+                "0BBBBB77BBBBBBBB0",
+                "0000000000000000",
+                "________________"
+            ],
+            'MOBO_master': [
+                "0000000000000000",
+                "0666666666666660",
+                "06AA66666A266660",
+                "06A0A6666A266660",
+                "06AA6666666BB660",
+                "06A0A66666 6BB660",
+                "0666666666666660",
+                "0633336666AA6660",
+                "0666666666AA6660",
+                "0633336666776660",
+                "0677776666666660",
+                "0666666666666660",
+                "0666667766666660",
+                "0666667766666660",
+                "0000000000000000",
+                "________________"
+            ],
+            // ── PSU ──────────────────────────────────────
+            'PSU_scrap': [
+                "_00000000000000_",
+                "_01111111111110_",
+                "_01100000001110_",
+                "_01101111101110_",
+                "_01101811101110_",
+                "_01101881101110_",
+                "_01101881101110_",
+                "_01101811101110_",
+                "_01101111101110_",
+                "_01100000001110_",
+                "_01188881111110_",
+                "_01188881111110_",
+                "_01111111111110_",
+                "_00000000000000_",
+                "________________",
+                "________________"
+            ],
+            'PSU_basic': [
+                "_00000000000000_",
+                "_01111111111110_",
+                "_01100000001110_",
+                "_01102222221110_",
+                "_01102811221110_",
+                "_01102882221110_",
+                "_01102882221110_",
+                "_01102811221110_",
+                "_01102222221110_",
+                "_01100000001110_",
+                "_01166661111110_",
+                "_01166661111110_",
+                "_01111111111110_",
+                "_00000000000000_",
+                "________________",
+                "________________"
+            ],
+            'PSU_pro': [
+                "_00000000000000_",
+                "_0BBBBBBBBBBB B0_",
+                "_0BB00000000BB B0_",
+                "_0BB0BBBBBBB0BB0_",
+                "_0BB0B7BB7BB0BB0_",
+                "_0BB0BB77BBB0BB0_",
+                "_0BB0BB77BBB0BB0_",
+                "_0BB0B7BB7BB0BB0_",
+                "_0BB0BBBBBBB0BB0_",
+                "_0BB00000000BBB0_",
+                "_0BB7777BBBBBBB0_",
+                "_0BB7777BBBBBBB0_",
+                "_0BBBBBBBBBBBBB0_",
+                "_00000000000000_",
+                "________________",
+                "________________"
+            ],
+            'PSU_master': [
+                "_00000000000000_",
+                "_06666666666660_",
+                "_06600000006660_",
+                "_06602222226660_",
+                "_06602622226660_",
+                "_06602662226660_",
+                "_06602662226660_",
+                "_06602622226660_",
+                "_06602222226660_",
+                "_06600000006660_",
+                "_06677776666660_",
+                "_06677776666660_",
+                "_06666666666660_",
+                "_00000000000000_",
+                "________________",
+                "________________"
+            ],
+            'COOL_scrap': [
+                "________________",
+                "__88888888888___",
+                "__8_________8___",
+                "__8_88888888___",
+                "__8_8______8___",
+                "__8_8_8888_8___",
+                "__8_8_8008_8___",
+                "__8_8_8888_8___",
+                "__8_8______8___",
+                "__8_88888888___",
+                "__8_________8___",
+                "__88888888888___",
+                "________________",
+                "________________",
+                "________________",
+                "________________"
+            ],
+            'COOL_basic': [
+                "________________",
+                "__22222222222___",
+                "__2111111112___",
+                "__21AAAAAAA1___",
+                "__21A222222A1___",
+                "__21A277772A1___",
+                "__21A277772A1___",
+                "__21A277772A1___",
+                "__21A222222A1___",
+                "__21AAAAAAA1___",
+                "__2111111112___",
+                "__22222222222___",
+                "___0000000000___",
+                "________________",
+                "________________",
+                "________________"
+            ],
+            'COOL_pro': [
+                "________________",
+                "__BBBBBBBBBBB___",
+                "__B1111111111B___",
+                "__B1B777777B1B___",
+                "__B1B7BBBBB71B___",
+                "__B1B7B77B7B1B___",
+                "__B1B7BBBBB71B___",
+                "__B1B7BBBBB71B___",
+                "__B1B777777B1B___",
+                "__B1111111111B___",
+                "__BBBBBBBBBBB___",
+                "___00000000000___",
+                "___0BBBBBBBBB0___",
+                "________________",
+                "________________",
+                "________________"
+            ],
+            'COOL_master': [
+                "________________",
+                "__66666666666___",
+                "__6333333333 6___",
+                "__63677777736___",
+                "__636762276 36___",
+                "__63677677736___",
+                "__636762276 36___",
+                "__63677677736___",
+                "__636762276 36___",
+                "__6333333333 6___",
+                "__66666666666___",
+                "___00000000000___",
+                "___066666666 60___",
+                "________________",
+                "________________",
+                "________________"
+            ],
+            'SSD_scrap': [
+                "________________",
+                "_8888888888888__",
+                "_8111111111118__",
+                "_8181818181818__",
+                "_8181818181818__",
+                "_8100000000018__",
+                "_8108888880018__",
+                "_8108888880018__",
+                "_8100000000018__",
+                "_8181818181818__",
+                "_8181818181818__",
+                "_8111111111118__",
+                "_8888888888888__",
+                "________________",
+                "________________",
+                "________________"
+            ],
+            'SSD_basic': [
+                "________________",
+                "_2222222222222__",
+                "_2111111111112__",
+                "_2121212121212__",
+                "_2100000000012__",
+                "_2106666660012__",
+                "_2106644660012__",
+                "_2106666660012__",
+                "_2100000000012__",
+                "_2121212121212__",
+                "_2111111111112__",
+                "_2222222222222__",
+                "________________",
+                "________________",
+                "________________",
+                "________________"
+            ],
+            'SSD_pro': [
+                "________________",
+                "_BBBBBBBBBBBBB__",
+                "_B11111111111B__",
+                "_B12121212121B__",
+                "_B10000000001B__",
+                "_B10BBBBBBB01B__",
+                "_B10B777B7B01B__",
+                "_B10BBBBBBB01B__",
+                "_B10000000001B__",
+                "_B12121212121B__",
+                "_B11111111111B__",
+                "_BBBBBBBBBBBBB__",
+                "________________",
+                "________________",
+                "________________",
+                "________________"
+            ],
+            'SSD_master': [
+                "________________",
+                "_6666666666666__",
+                "_6333333333336__",
+                "_6323232323236__",
+                "_6300000000036__",
+                "_6306666666036__",
+                "_6306637366036__",
+                "_6306666666036__",
+                "_6300000000036__",
+                "_6323232323236__",
+                "_6333333333336__",
+                "_6666666666666__",
+                "________________",
+                "________________",
+                "________________",
+                "________________"
+            ],
+            'PC': [
+                "__0000000000000_",
+                "_01111111111110_",
+                "_01777777777710_",
+                "_01700007777710_",
+                "_01706666077710_",
+                "_01706060677710_",
+                "_01706666077710_",
+                "_01700007777710_",
+                "_01788888877710_",
+                "_01777777777710_",
+                "_01166116611110_",
+                "_01111111111110_",
+                "_00000000000000_",
+                "___02________20_",
+                "________________",
+                "________________"
+            ]
+        };
 
-  msgs.forEach(msg => {
-    const isSelf = msg.senderId === currentUser.uid;
-    const ts     = msg.createdAt?.toDate?.() || new Date();
-    const dateStr = ts.toLocaleDateString('en-IE', { month: 'long', day: 'numeric', year: 'numeric' });
-    const timeStr = ts.toLocaleTimeString('en-IE', { hour: '2-digit', minute: '2-digit' });
+        const artURLs = {};
+        function generatePixelArtImages() {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            for (const [key, layout] of Object.entries(artData)) {
+                const sz = layout[0].length;
+                canvas.width = sz; canvas.height = layout.length;
+                ctx.clearRect(0, 0, sz, layout.length);
+                for (let y = 0; y < layout.length; y++) {
+                    for (let x = 0; x < sz; x++) {
+                        const ch = layout[y][x];
+                        if (ch && ch !== '_' && ch !== ' ') { ctx.fillStyle = palette[ch]; ctx.fillRect(x, y, 1, 1); }
+                    }
+                }
+                artURLs[key] = canvas.toDataURL();
+            }
+        }
+        generatePixelArtImages();
+        function getArtURL(type, qClass) {
+            const q = (qClass||'').replace('q-','') || 'basic';
+            return artURLs[type+'_'+q] || artURLs[type+'_basic'] || artURLs[type] || '';
+        }
 
-    if (dateStr !== lastDate) {
-      html += `<div class="date-divider">${dateStr}</div>`;
-      lastDate = dateStr;
-    }
+        /* =========================================
+           GAME STATE
+        ========================================= */
+        let money = 1000;
+        let inventory = [];
+        let currentBuild = { CPU: null, GPU: null, RAM: null, MOBO: null, PSU: null, COOL: null, SSD: null };
+        let activeJob = null;
 
-    html += `<div class="msg-group ${isSelf ? 'self' : 'other'}">
-      ${!isSelf ? `<div class="msg-sender-name">${escHtml(msg.senderName || 'Unknown')}</div>` : ''}
-      <div class="msg-bubble">${escHtml(msg.text)}</div>
-      <div class="msg-time">${timeStr}</div>
-    </div>`;
-  });
+        const moneyEl = document.getElementById('money');
+        const invEl   = document.getElementById('inventory-list');
+        const btnAssemble = document.getElementById('btn-assemble');
 
-  container.innerHTML = html;
-  container.scrollTop = container.scrollHeight;
-};
+        function updateUI() {
+            moneyEl.innerText = '$' + money.toLocaleString();
+            document.getElementById('inv-count').innerText = inventory.length + ' / ∞';
+        }
 
-// ── HELPERS ──
-function getOtherName(conv) {
-  if (!conv.memberNames) return 'Unknown';
-  const uid = currentUser?.uid;
-  const entry = Object.entries(conv.memberNames).find(([k]) => k !== uid);
-  return entry ? entry[1] : 'Unknown';
-}
+        /* =========================================
+           FABRICATION MINIGAME — Circuit Connect
+        ========================================= */
+        const MG = {
+            canvas: null, ctx: null,
+            timerID: null, timeLeft: 15,
+            nodes: [], wires: [], drawing: null,
+            complete: false, yieldPct: 0,
+            COLORS: ['#66fcf1','#ffc107','#f32013','#4caf50','#b87333'],
 
-function setUserBadge(user) {
-  const name = user.displayName || user.email;
-  document.getElementById('user-name-sidebar').textContent  = name;
-  document.getElementById('user-avatar-sidebar').textContent = name.charAt(0).toUpperCase();
-}
+            init(type) {
+                this.canvas = document.getElementById('mg-canvas');
+                this.ctx    = this.canvas.getContext('2d');
+                this.nodes=[]; this.wires=[]; this.drawing=null; this.complete=false; this.yieldPct=0; this.timeLeft=15;
+                document.getElementById('mg-title').innerText = 'FABRICATING: ' + type;
+                document.getElementById('mg-status').innerText = 'DRAW WIRES BETWEEN MATCHING NODES';
+                document.getElementById('mg-status').style.color = '#6a7388';
+                document.getElementById('mg-timer').style.color = 'var(--accent-gold)';
+                const pairCount = {CPU:4,GPU:3,RAM:2,MOBO:5,PSU:2,COOL:3,SSD:3}[type] || 3;
+                this._generateNodes(pairCount);
+                this._bindEvents();
+                this._draw();
+                this._startTimer();
+            },
 
-function showApp() {
-  document.getElementById('auth-screen').classList.remove('active');
-  document.getElementById('app-screen').classList.add('active');
-}
+            _generateNodes(pairs) {
+                const W=this.canvas.width, H=this.canvas.height, margin=44, used=[];
+                const rand=(lo,hi)=>Math.floor(Math.random()*(hi-lo)+lo);
+                const far=(x,y)=>used.every(p=>Math.hypot(p.x-x,p.y-y)>62);
+                for (let i=0;i<pairs;i++) {
+                    const color=this.COLORS[i]; let ax,ay,bx,by,t=0;
+                    do{ax=rand(margin,W/2-margin);ay=rand(margin,H-margin);t++;}while(!far(ax,ay)&&t<300);
+                    used.push({x:ax,y:ay});
+                    do{bx=rand(W/2+margin,W-margin);by=rand(margin,H-margin);t++;}while(!far(bx,by)&&t<300);
+                    used.push({x:bx,y:by});
+                    this.nodes.push({id:i+'a',x:ax,y:ay,color,pair:i,connected:false});
+                    this.nodes.push({id:i+'b',x:bx,y:by,color,pair:i,connected:false});
+                }
+            },
 
-function showAuth() {
-  document.getElementById('app-screen').classList.remove('active');
-  document.getElementById('auth-screen').classList.add('active');
-}
+            _draw() {
+                const {ctx,canvas,nodes,wires,drawing}=this;
+                const W=canvas.width,H=canvas.height;
+                ctx.clearRect(0,0,W,H);
+                // PCB bg
+                ctx.fillStyle='#050708'; ctx.fillRect(0,0,W,H);
+                ctx.strokeStyle='#0d1a0d'; ctx.lineWidth=1;
+                for(let x=0;x<W;x+=20){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+                for(let y=0;y<H;y+=20){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+                // Static decor traces
+                ctx.strokeStyle='#0a1a0a'; ctx.lineWidth=2;
+                [[W/2,0,W/2,H],[0,H/2,W,H/2]].forEach(([x1,y1,x2,y2])=>{ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();});
+                // Completed wires
+                wires.forEach(w=>{
+                    ctx.strokeStyle=w.color; ctx.lineWidth=4;
+                    ctx.shadowColor=w.color; ctx.shadowBlur=10;
+                    ctx.lineJoin='round'; ctx.lineCap='round';
+                    ctx.beginPath(); ctx.moveTo(w.pts[0].x,w.pts[0].y);
+                    w.pts.forEach(p=>ctx.lineTo(p.x,p.y)); ctx.stroke(); ctx.shadowBlur=0;
+                });
+                // Active wire
+                if(drawing&&drawing.pts.length>1){
+                    ctx.strokeStyle=drawing.color; ctx.lineWidth=3; ctx.setLineDash([6,4]);
+                    ctx.shadowColor=drawing.color; ctx.shadowBlur=6; ctx.lineCap='round';
+                    ctx.beginPath(); ctx.moveTo(drawing.pts[0].x,drawing.pts[0].y);
+                    drawing.pts.forEach(p=>ctx.lineTo(p.x,p.y)); ctx.stroke();
+                    ctx.setLineDash([]); ctx.shadowBlur=0;
+                }
+                // Nodes
+                nodes.forEach(n=>{
+                    ctx.fillStyle=n.connected?n.color:'#1a1d26';
+                    ctx.strokeStyle=n.color; ctx.lineWidth=3;
+                    ctx.shadowColor=n.color; ctx.shadowBlur=n.connected?14:4;
+                    ctx.beginPath(); ctx.arc(n.x,n.y,10,0,Math.PI*2); ctx.fill(); ctx.stroke();
+                    ctx.shadowBlur=0;
+                    ctx.fillStyle=n.connected?'#fff':n.color;
+                    ctx.beginPath(); ctx.arc(n.x,n.y,4,0,Math.PI*2); ctx.fill();
+                    ctx.fillStyle=n.color; ctx.font='bold 10px "Share Tech Mono"'; ctx.textAlign='center';
+                    ctx.fillText(String.fromCharCode(65+n.pair),n.x,n.y-15);
+                });
+            },
 
-function hideLoading() {
-  document.getElementById('loading').style.display = 'none';
-}
+            _nodeAt(x,y){return this.nodes.find(n=>Math.hypot(n.x-x,n.y-y)<14);},
 
-window.openConversation = function(id, conv) {
-  activeConvId = id;
-  window._activeConvId = id;
+            _bindEvents() {
+                const c=this.canvas;
+                const nc=c.cloneNode(true); c.parentNode.replaceChild(nc,c);
+                this.canvas=nc; this.ctx=nc.getContext('2d');
+                const pos=e=>{const r=nc.getBoundingClientRect(),sx=nc.width/r.width,sy=nc.height/r.height,s=e.touches?e.touches[0]:e;return{x:(s.clientX-r.left)*sx,y:(s.clientY-r.top)*sy};};
+                const posEnd=e=>{const r=nc.getBoundingClientRect(),sx=nc.width/r.width,sy=nc.height/r.height,s=e.changedTouches?e.changedTouches[0]:e;return{x:(s.clientX-r.left)*sx,y:(s.clientY-r.top)*sy};};
+                const start=e=>{e.preventDefault();if(this.complete)return;const p=pos(e),n=this._nodeAt(p.x,p.y);if(!n||n.connected)return;this.drawing={fromNode:n,color:n.color,pair:n.pair,pts:[{x:p.x,y:p.y}]};this._draw();};
+                const move=e=>{e.preventDefault();if(!this.drawing)return;const p=pos(e);this.drawing.pts.push({x:p.x,y:p.y});this._draw();};
+                const end=e=>{e.preventDefault();if(!this.drawing)return;const p=posEnd(e),t=this._nodeAt(p.x,p.y);if(t&&t.pair===this.drawing.pair&&t.id!==this.drawing.fromNode.id&&!t.connected){this.drawing.fromNode.connected=true;t.connected=true;this.wires.push({color:this.drawing.color,pts:[...this.drawing.pts,{x:t.x,y:t.y}]});this._checkComplete();}this.drawing=null;this._draw();};
+                nc.addEventListener('mousedown',start); nc.addEventListener('mousemove',move); nc.addEventListener('mouseup',end);
+                nc.addEventListener('touchstart',start,{passive:false}); nc.addEventListener('touchmove',move,{passive:false}); nc.addEventListener('touchend',end,{passive:false});
+            },
 
-  const otherName  = getOtherName(conv);
-  const otherEmail = Object.entries(conv.memberEmails || {}).find(([k]) => k !== currentUser.uid)?.[1] || '';
+            _checkComplete() {
+                if(!this.nodes.every(n=>n.connected))return;
+                this.complete=true; clearInterval(this.timerID);
+                const bonus=Math.round((this.timeLeft/15)*40);
+                this.yieldPct=Math.min(100,60+bonus);
+                document.getElementById('mg-status').innerText='ALL CONNECTED! YIELD: '+this.yieldPct+'%';
+                document.getElementById('mg-status').style.color='#66fcf1';
+                this._draw(); setTimeout(()=>this._finish(),900);
+            },
 
-  document.getElementById('chat-header-name').textContent = otherName;
-  document.getElementById('chat-header-sub').textContent  = otherEmail;
-  document.getElementById('chat-header-avatar').textContent = otherName.charAt(0).toUpperCase();
+            _startTimer() {
+                document.getElementById('mg-timer').innerText=this.timeLeft;
+                this.timerID=setInterval(()=>{
+                    this.timeLeft--;
+                    document.getElementById('mg-timer').innerText=this.timeLeft;
+                    if(this.timeLeft<=5)document.getElementById('mg-timer').style.color='var(--accent-red)';
+                    if(this.timeLeft<=0){
+                        clearInterval(this.timerID);
+                        this.yieldPct=Math.max(5,Math.round(this.nodes.filter(n=>n.connected).length/this.nodes.length*55));
+                        document.getElementById('mg-status').innerText='TIME OUT. YIELD: '+this.yieldPct+'%';
+                        document.getElementById('mg-status').style.color='var(--accent-red)';
+                        this._finish();
+                    }
+                },1000);
+            },
 
-  document.getElementById('welcome-panel').style.display = 'none';
-  document.getElementById('chat-view').style.display     = 'flex';
+            _finish() {
+                setTimeout(()=>{
+                    document.getElementById('modal-overlay').classList.add('hidden');
+                    processCrafting(activeJob.type,activeJob.cost,Math.round(this.yieldPct));
+                },600);
+            }
+        };
 
-  window._listenMessages(id);
-  renderConvList(allConversations);
-};
+        function skipMinigame(){clearInterval(MG.timerID);MG.yieldPct=25;document.getElementById('mg-status').innerText='SKIPPED. YIELD: 25%';MG._finish();}
 
-window.filterConvs = function(val) {
-  const filtered = allConversations.filter(c => {
-    const name = getOtherName(c).toLowerCase();
-    return name.includes(val.toLowerCase());
-  });
-  renderConvList(filtered);
-};
+        function initiateMinigame(type, cost) {
+            if(money<cost){alert('ERR: INSUFFICIENT FUNDS.');return;}
+            money-=cost; updateUI();
+            activeJob={type,cost};
+            document.getElementById('modal-overlay').classList.remove('hidden');
+            MG.init(type);
+        }
 
-function showAuthError(msg) {
-  const el = document.getElementById('auth-error');
-  el.textContent = msg;
-  el.classList.add('show');
-}
+        /* =========================================
+           CRAFTING & STAT GENERATION
+        ========================================= */
+        function processCrafting(type, cost, yieldPct) {
+            let quality='Scrap',qClass='q-scrap',multiplier=0.5;
+            if(yieldPct>=96){quality='Masterpiece';qClass='q-master';multiplier=5.0;}
+            else if(yieldPct>=75){quality='Pro';qClass='q-pro';multiplier=2.5;}
+            else if(yieldPct>=40){quality='Basic';qClass='q-basic';multiplier=1.2;}
+            let statsHTML='Yield: '+yieldPct.toFixed(1)+'%<br>';
+            if(type==='CPU'){let clk=(2.0+(yieldPct*0.03)).toFixed(1);statsHTML+='Clock: '+clk+' GHz<br>Cores: '+(yieldPct>80?8:(yieldPct>40?4:2));}
+            else if(type==='GPU'){let vram=yieldPct>90?16:(yieldPct>60?8:(yieldPct>30?4:2));statsHTML+='VRAM: '+vram+' GB<br>Temp: '+(90-(yieldPct*0.3)).toFixed(0)+'°C';}
+            else if(type==='RAM'){let speed=Math.floor(2133+(yieldPct*20));statsHTML+='Cap: '+(yieldPct>50?16:8)+' GB<br>Spd: '+speed+' MT/s';}
+            else if(type==='MOBO'){statsHTML+='VRMs: '+(yieldPct>70?'Gold':'Alum')+'<br>Bus: PCIe '+(yieldPct>80?'4.0':'3.0');}
+            else if(type==='PSU'){let watts=Math.floor(300+(yieldPct*7));let rating=yieldPct>80?'80+ Gold':(yieldPct>50?'80+ Bronze':'Unrated');statsHTML+='Pwr: '+watts+'W<br>Rtg: '+rating;}
+            else if(type==='COOL'){let rpm=Math.floor(800+(yieldPct*22));let tdp=Math.floor(65+(yieldPct*1.5));statsHTML+='RPM: '+rpm+'<br>TDP: '+tdp+'W';}
+            else if(type==='SSD'){let cap=yieldPct>80?2048:(yieldPct>50?1024:512);let spd=Math.floor(1500+(yieldPct*30));statsHTML+='Cap: '+cap+' GB<br>Spd: '+spd+' MB/s';}
+            inventory.push({id:Math.random().toString(36).substr(2,9),type,quality,qClass,baseValue:cost,multiplier,statsHTML});
+            renderInventory(); updateUI();
+        }
 
-function showModalError(msg) {
-  const el = document.getElementById('modal-error');
-  el.textContent = msg;
-  el.classList.add('show');
-}
+        /* =========================================
+           INVENTORY & BUILD SLOTS
+        ========================================= */
+        function renderInventory() {
+            invEl.innerHTML='';
+            if(!inventory.length){invEl.innerHTML='<div style="text-align:center;color:#555;margin-top:50px;font-style:italic;">Storage array empty.<br>Fabricate components to begin.</div>';return;}
+            for(let i=inventory.length-1;i>=0;i--){
+                const p=inventory[i],d=document.createElement('div');
+                d.className='item '+p.qClass;
+                d.innerHTML='<img src="'+getArtURL(p.type,p.qClass)+'" class="pixel-art"><div class="item-details"><div class="item-name">'+p.quality+' '+p.type+'</div><div class="item-stats">'+p.statsHTML+'</div></div><div style="font-family:\'VT323\',monospace;color:var(--accent-green);font-size:18px;">$'+Math.floor(p.baseValue*p.multiplier)+'</div>';
+                d.onclick=()=>addToBuild(i); invEl.appendChild(d);
+            }
+        }
 
-function setLoading(on, btnId, offHtml) {
-  const btn = document.getElementById(btnId);
-  btn.disabled = on;
-  if (on) btn.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px;margin:0 auto;"></div>';
-  else btn.innerHTML = offHtml;
-}
+        function addToBuild(i) {
+            const p=inventory[i];
+            if(!currentBuild[p.type]){currentBuild[p.type]=p;inventory.splice(i,1);renderInventory();renderBuild();}
+            updateUI();
+        }
 
-function friendlyAuthError(code) {
-  const map = {
-    'auth/invalid-email':       'Invalid email address.',
-    'auth/user-not-found':      'No account found with that email.',
-    'auth/wrong-password':      'Incorrect password.',
-    'auth/email-already-in-use':'An account with this email already exists.',
-    'auth/weak-password':       'Password must be at least 6 characters.',
-    'auth/invalid-credential':  'Invalid email or password.',
-    'auth/too-many-requests':   'Too many attempts. Try again later.',
-  };
-  return map[code] || 'Something went wrong. Please try again.';
-}
+        function renderBuild() {
+            let complete=true;
+            for(let type in currentBuild){
+                const el=document.getElementById('slot-'+type),p=currentBuild[type];
+                if(p){el.className='slot filled '+p.qClass;el.innerHTML='<img src="'+getArtURL(p.type,p.qClass)+'" class="pixel-art"><div style="margin-left:12px;"><div class="item-name">'+p.quality+' '+p.type+'</div></div>';}
+                else{el.className='slot';el.innerHTML='[ AWAITING '+type+' ]';complete=false;}
+            }
+            complete?btnAssemble.classList.remove('hidden'):btnAssemble.classList.add('hidden');
+        }
 
-function formatTime(date) {
-  const now  = new Date();
-  const diff = now - date;
-  if (diff < 60000)          return 'now';
-  if (diff < 3600000)        return Math.floor(diff/60000) + 'm';
-  if (diff < 86400000)       return date.toLocaleTimeString('en-IE', { hour:'2-digit', minute:'2-digit' });
-  if (diff < 604800000)      return date.toLocaleDateString('en-IE', { weekday:'short' });
-  return date.toLocaleDateString('en-IE', { month:'short', day:'numeric' });
-}
+        /* =========================================
+           ASSEMBLY DRAG + WIRE GAME
+        ========================================= */
+        const ASM = {
+            canvas:null,ctx:null,parts:[],wires:[],dragging:null,wiringFrom:null,
+            mx:0,my:0,complete:false,finalPrice:0,synergyPct:0,multSum:0,animFrame:null,
 
-function escHtml(str) {
-  return String(str)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
+            SLOTS:{
+                CPU: {sx:200,sy:105,color:'#66fcf1'},
+                GPU: {sx:200,sy:225,color:'#f32013'},
+                RAM: {sx:320,sy:105,color:'#ffc107'},
+                MOBO:{sx:260,sy:165,color:'#45a29e'},
+                PSU: {sx:320,sy:255,color:'#4caf50'},
+                COOL:{sx:375,sy:130,color:'#b87333'},
+                SSD: {sx:375,sy:220,color:'#8a93a6'}
 
-window.toast = function(msg, type='info') {
-  const tc = document.getElementById('toast-container');
-  const el = document.createElement('div');
-  el.className = `toast ${type}`;
-  const icon = type === 'success' ? 'check-circle' : type === 'error' ? 'alert-circle' : 'info';
-  el.innerHTML = `<i data-lucide="${icon}" style="width:15px;height:15px;flex-shrink:0;"></i><span>${msg}</span>`;
-  tc.appendChild(el);
-  lucide.createIcons();
-  setTimeout(() => { el.style.opacity='0'; el.style.transform='translateY(8px)'; el.style.transition='0.3s'; setTimeout(()=>el.remove(),300); }, 3000);
-};
+            },
 
-// ── MODAL ──
-window.openNewChat = function() {
-  document.getElementById('new-chat-email').value = '';
-  document.getElementById('modal-error').classList.remove('show');
-  document.getElementById('new-chat-modal').classList.add('show');
-  setTimeout(() => document.getElementById('new-chat-email').focus(), 50);
-};
+            init(build){
+                this.canvas=document.getElementById('asm-canvas');
+                this.ctx=this.canvas.getContext('2d');
+                this.parts=[]; this.wires=[]; this.dragging=null; this.wiringFrom=null; this.complete=false;
+                let li=0,ri=0;
+                Object.keys(build).forEach(t=>{
+                    const def=this.SLOTS[t], onLeft=['CPU','RAM','MOBO'].includes(t);
+                    const sx=onLeft?28+(li%2)*70:592-(ri%2)*70;
+                    const sy=onLeft?30+li*92:30+ri*112;
+                    if(onLeft)li++;else ri++;
+                    this.parts.push({type:t,part:build[t],x:sx,y:sy,w:56,h:56,slotX:def.sx,slotY:def.sy,color:def.color,placed:false,wired:false,dragging:false});
+                });
+                let total=0,multSum=0;
+                Object.values(build).forEach(p=>{total+=p.baseValue*p.multiplier;multSum+=p.multiplier;});
+                const syn=1+(multSum*0.02);
+                this.finalPrice=Math.floor(total*syn); this.synergyPct=Math.round(syn*100); this.multSum=multSum;
+                this._bindEvents();
+                this._loop();
+            },
 
-window.closeNewChat = function() {
-  document.getElementById('new-chat-modal').classList.remove('show');
-};
+            _loop(){this.animFrame=requestAnimationFrame(()=>this._loop());this._draw();},
 
-// ── INPUT ──
-window.handleMsgKey = function(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
-  }
-};
+            _draw(){
+                const {ctx,canvas,parts,wires,wiringFrom}=this;
+                const W=canvas.width,H=canvas.height;
+                ctx.clearRect(0,0,W,H);
+                // BG + grid
+                ctx.fillStyle='#040608';ctx.fillRect(0,0,W,H);
+                ctx.strokeStyle='#090f09';ctx.lineWidth=1;
+                for(let x=0;x<W;x+=20){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+                for(let y=0;y<H;y+=20){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+                // Chassis box
+                ctx.strokeStyle='#2c303a';ctx.lineWidth=2;
+                ctx.strokeRect(155,65,250,200);
+                ctx.fillStyle='rgba(5,12,5,0.6)';ctx.fillRect(156,66,248,198);
+                ctx.fillStyle='#2c3c38';ctx.font='11px "Share Tech Mono"';ctx.textAlign='center';
+                ctx.fillText('MOTHERBOARD CHASSIS',W/2,62);
+                // Secondary bay
+                ctx.strokeStyle='#2c2c3a';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+                ctx.strokeRect(345,100,70,165);ctx.setLineDash([]);
+                ctx.fillStyle='#2a2c3a55';ctx.fillRect(346,101,68,163);
+                ctx.fillStyle='#45456a';ctx.font='9px "Share Tech Mono"';ctx.textAlign='center';
+                ctx.fillText('EXP BAY',380,116);
+                // Slot targets
+                parts.forEach(p=>{
+                    if(!p.placed){
+                        ctx.strokeStyle=p.color;ctx.lineWidth=2;ctx.setLineDash([5,4]);
+                        ctx.strokeRect(p.slotX-28,p.slotY-28,56,56);ctx.setLineDash([]);
+                        ctx.fillStyle=p.color+'18';ctx.fillRect(p.slotX-28,p.slotY-28,56,56);
+                        ctx.fillStyle=p.color+'99';ctx.font='10px "Share Tech Mono"';ctx.textAlign='center';
+                        ctx.fillText(p.type,p.slotX,p.slotY+4);
+                    }
+                });
+                // PSU power ports
+                const psu=parts.find(p=>p.type==='PSU'&&p.placed);
+                if(psu){
+                    ['#66fcf1','#ffc107','#f32013','#4caf50'].forEach((c,i)=>{
+                        ctx.fillStyle=c;ctx.fillRect(psu.slotX-22+i*13,psu.slotY+30,9,13);
+                        ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(psu.slotX-22+i*13,psu.slotY+30,9,13);
+                    });
+                    ctx.fillStyle='#6a7388';ctx.font='9px "Share Tech Mono"';ctx.textAlign='center';
+                    ctx.fillText('PWR PORTS',psu.slotX,psu.slotY+54);
+                }
+                // Completed wires
+                wires.forEach(w=>{
+                    ctx.strokeStyle=w.color;ctx.lineWidth=3;ctx.shadowColor=w.color;ctx.shadowBlur=8;
+                    ctx.lineCap='round';ctx.beginPath();ctx.moveTo(w.fx,w.fy);ctx.lineTo(w.fx,w.ty);ctx.lineTo(w.tx,w.ty);ctx.stroke();ctx.shadowBlur=0;
+                    ctx.fillStyle=w.color;[{x:w.fx,y:w.fy},{x:w.tx,y:w.ty}].forEach(p=>{ctx.beginPath();ctx.arc(p.x,p.y,4,0,Math.PI*2);ctx.fill();});
+                });
+                // Active wire
+                if(wiringFrom){
+                    ctx.strokeStyle=wiringFrom.color;ctx.lineWidth=2;ctx.setLineDash([6,4]);ctx.shadowColor=wiringFrom.color;ctx.shadowBlur=5;
+                    ctx.beginPath();ctx.moveTo(wiringFrom.x,wiringFrom.y);ctx.lineTo(this.mx,wiringFrom.y);ctx.lineTo(this.mx,this.my);ctx.stroke();
+                    ctx.setLineDash([]);ctx.shadowBlur=0;
+                }
+                // Parts (non-dragging first, dragging on top)
+                [...parts].sort((a,b)=>a.dragging?1:-1).forEach(p=>{
+                    const px=p.dragging?this.mx-p.w/2:(p.placed?p.slotX-p.w/2:p.x);
+                    const py=p.dragging?this.my-p.h/2:(p.placed?p.slotY-p.h/2:p.y);
+                    const tilt=p.dragging?(Math.atan2(this.my-p._ly||0,this.mx-p._lx||0)*0.18):0;
+                    if(p.dragging){p._lx=this.mx;p._ly=this.my;}
+                    if(p.dragging){
+                        // layered shadow for depth
+                        ctx.save();ctx.globalAlpha=0.18;ctx.fillStyle='#000';
+                        for(let s=1;s<=5;s++){ctx.fillRect(px+s*2,py+s*2,p.w,p.h);}
+                        ctx.restore();
+                        // tilt transform
+                        ctx.save();ctx.translate(px+p.w/2,py+p.h/2);ctx.rotate(tilt);ctx.translate(-p.w/2,-p.h/2);
+                    }
+                    const img=new Image();img.src=getArtURL(p.type,p.part&&p.part.qClass);
+                    ctx.imageSmoothingEnabled=false;ctx.drawImage(img,px,py,p.w,p.h);
+                    ctx.strokeStyle=p.wired?'#4caf50':(p.placed?p.color:'#2c303a');ctx.lineWidth=p.placed?3:2;
+                    if(p.placed){ctx.shadowColor=p.color;ctx.shadowBlur=10;}
+                    if(p.dragging){ctx.strokeRect(0,0,p.w,p.h);ctx.shadowBlur=0;ctx.restore();}else{ctx.strokeRect(px,py,p.w,p.h);ctx.shadowBlur=0;}
+                    // Wire node dot on placed+unwired parts
+                    if(p.placed&&!p.wired&&p.type!=='MOBO'){
+                        const pulse=0.6+0.4*Math.sin(Date.now()/300);
+                        ctx.fillStyle=p.color;ctx.globalAlpha=pulse;
+                        ctx.beginPath();ctx.arc(px+p.w/2,py+p.h+9,6,0,Math.PI*2);ctx.fill();
+                        ctx.globalAlpha=1;ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.stroke();
+                        ctx.fillStyle=p.color;ctx.font='9px "Share Tech Mono"';ctx.textAlign='center';
+                        ctx.fillText('PWR',px+p.w/2,py+p.h+24);
+                    }
+                });
+                // Status bar
+                const placed=parts.filter(p=>p.placed).length;
+                const powered=parts.filter(p=>p.wired||p.type==='MOBO').length;
+                ctx.fillStyle='#0d1117';ctx.fillRect(0,H-26,W,26);
+                ctx.strokeStyle='#2c303a';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,H-26);ctx.lineTo(W,H-26);ctx.stroke();
+                ctx.fillStyle='#4a5368';ctx.font='11px "Share Tech Mono"';ctx.textAlign='left';
+                ctx.fillText('INSTALLED: '+placed+'/'+parts.length+'   POWERED: '+powered+'/'+parts.length,10,H-9);
+                // Win overlay
+                if(this.complete){
+                    ctx.fillStyle='rgba(0,0,0,0.75)';ctx.fillRect(0,0,W,H);
+                    ctx.fillStyle='#66fcf1';ctx.font='36px "VT323"';ctx.textAlign='center';ctx.shadowColor='#66fcf1';ctx.shadowBlur=24;
+                    ctx.fillText('SYSTEM ONLINE',W/2,H/2-22);ctx.shadowBlur=0;
+                    ctx.fillStyle='#4caf50';ctx.font='22px "VT323"';ctx.fillText('MARKET VALUE: $'+this.finalPrice,W/2,H/2+14);
+                    ctx.fillStyle='#ffc107';ctx.font='14px "Share Tech Mono"';
+                    ctx.fillText('SYNERGY '+this.synergyPct+'%  |  HASHRATE '+Math.floor(this.multSum*12)+' TH/s',W/2,H/2+44);
+                }
+            },
 
-window.autoResize = function(el) {
-  el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
-};
+            _bindEvents(){
+                const c=this.canvas,nc=c.cloneNode(true);c.parentNode.replaceChild(nc,c);this.canvas=nc;this.ctx=nc.getContext('2d');
+                const pos=e=>{const r=nc.getBoundingClientRect(),sx=nc.width/r.width,sy=nc.height/r.height,s=e.touches?e.touches[0]:e;return{x:(s.clientX-r.left)*sx,y:(s.clientY-r.top)*sy};};
+                const posEnd=e=>{const r=nc.getBoundingClientRect(),sx=nc.width/r.width,sy=nc.height/r.height,s=e.changedTouches?e.changedTouches[0]:e;return{x:(s.clientX-r.left)*sx,y:(s.clientY-r.top)*sy};};
+                const hitPart=({x,y})=>this.parts.find(p=>{const px=p.placed?p.slotX-p.w/2:p.x,py=p.placed?p.slotY-p.h/2:p.y;return x>=px&&x<=px+p.w&&y>=py&&y<=py+p.h;});
+                const hitWireNode=({x,y})=>this.parts.find(p=>{if(!p.placed||p.wired||p.type==='MOBO')return false;const nx=p.slotX,ny=p.slotY+p.h/2+9;return Math.hypot(x-nx,y-ny)<14;});
+                const hitPSUPort=({x,y})=>{const psu=this.parts.find(p=>p.type==='PSU'&&p.placed);if(!psu)return false;return x>=psu.slotX-26&&x<=psu.slotX+28&&y>=psu.slotY+28&&y<=psu.slotY+48;};
+                let lastMx=0,lastMy=0,velX=0,velY=0,lastTime=0;
+                const onDown=e=>{e.preventDefault();const p=pos(e);const wn=hitWireNode(p);if(wn){this.wiringFrom={part:wn,x:wn.slotX,y:wn.slotY+wn.h/2+9,color:wn.color};return;}const pt=hitPart(p);if(pt&&!pt.placed){pt.dragging=true;this.dragging=pt;velX=0;velY=0;lastMx=p.x;lastMy=p.y;lastTime=Date.now();}};
+                const onMove=e=>{e.preventDefault();const p=pos(e);const now=Date.now(),dt=Math.max(1,now-lastTime);velX=velX*0.4+(p.x-lastMx)/dt*16;velY=velY*0.4+(p.y-lastMy)/dt*16;lastMx=p.x;lastMy=p.y;lastTime=now;this.mx=p.x;this.my=p.y;};
+                const onUp=e=>{e.preventDefault();const p=posEnd(e);if(this.wiringFrom){if(hitPSUPort(p)){const psu=this.parts.find(pt=>pt.type==='PSU'&&pt.placed);this.wires.push({fx:this.wiringFrom.x,fy:this.wiringFrom.y,tx:psu.slotX,ty:psu.slotY+36,color:this.wiringFrom.color});this.wiringFrom.part.wired=true;document.getElementById('asm-status').innerText='✓ '+this.wiringFrom.part.type+' POWERED';this._checkDone();}this.wiringFrom=null;return;}if(this.dragging){const pt=this.dragging;pt.dragging=false;if(Math.hypot(p.x-pt.slotX,p.y-pt.slotY)<52){pt.placed=true;pt.snapVX=velX*0.5;pt.snapVY=velY*0.5;document.getElementById('asm-status').innerText='✓ '+pt.type+' INSTALLED';if(pt.type==='MOBO'){pt.wired=true;this._checkDone();}}else{pt.x=p.x-pt.w/2;pt.y=p.y-pt.h/2;pt.vx=velX;pt.vy=velY;pt.floating=true;}this.dragging=null;}};
+                // Physics settle loop for floating parts
+                const settleLoop=()=>{this.parts.forEach(pt=>{if(pt.floating&&!pt.dragging){pt.x+=pt.vx;pt.y+=pt.vy;pt.vx*=0.82;pt.vy*=0.82;const W=this.canvas.width,H=this.canvas.height;if(pt.x<0){pt.x=0;pt.vx*=-0.4;}if(pt.x+pt.w>W){pt.x=W-pt.w;pt.vx*=-0.4;}if(pt.y<0){pt.y=0;pt.vy*=-0.4;}if(pt.y+pt.h>H-30){pt.y=H-30-pt.h;pt.vy*=-0.4;}if(Math.abs(pt.vx)<0.1&&Math.abs(pt.vy)<0.1)pt.floating=false;}});requestAnimationFrame(settleLoop);};
+                settleLoop();
+                nc.addEventListener('mousedown',onDown);nc.addEventListener('mousemove',onMove);nc.addEventListener('mouseup',onUp);
+                nc.addEventListener('touchstart',onDown,{passive:false});nc.addEventListener('touchmove',onMove,{passive:false});nc.addEventListener('touchend',onUp,{passive:false});
+            },
 
-window.switchTab = function(tab) {
-  document.getElementById('form-login').style.display    = tab==='login'    ? '' : 'none';
-  document.getElementById('form-register').style.display = tab==='register' ? '' : 'none';
-  document.getElementById('tab-login').classList.toggle('active',    tab==='login');
-  document.getElementById('tab-register').classList.toggle('active', tab==='register');
-  document.getElementById('auth-error').classList.remove('show');
-};
+            _checkDone(){
+                if(!this.parts.every(p=>p.placed&&p.wired))return;
+                this.complete=true;cancelAnimationFrame(this.animFrame);this._draw();
+                document.getElementById('asm-status').innerText='✓ ALL SYSTEMS GO!';
+                const btn=document.getElementById('btn-asm-sell');btn.classList.remove('hidden');btn.style.display='block';
+            },
 
-// ── ENTER in modal ──
-document.getElementById('new-chat-email').addEventListener('keydown', e => {
-  if (e.key === 'Enter') startConversation();
-});
+            stop(){cancelAnimationFrame(this.animFrame);}
+        };
 
-// Close modal on overlay click
-document.getElementById('new-chat-modal').addEventListener('click', function(e) {
-  if (e.target === this) closeNewChat();
-});
+        function openAssemblyGame(){document.getElementById('assembly-overlay').classList.remove('hidden');ASM.init(currentBuild);}
+        function cancelAssembly(){ASM.stop();document.getElementById('assembly-overlay').classList.add('hidden');}
 
-// ── INIT ICONS ──
-lucide.createIcons();
+        function finalizeSell(){
+            money+=ASM.finalPrice; ASM.stop();
+            document.getElementById('assembly-overlay').classList.add('hidden');
+            currentBuild={CPU:null,GPU:null,RAM:null,MOBO:null,PSU:null};
+            document.getElementById('slots-container').classList.remove('hidden');
+            document.getElementById('final-pc-view').classList.add('hidden');
+            document.querySelectorAll('.slot').forEach(s=>{s.className='slot';});
+            renderBuild(); updateUI();
+        }
+
+        function sellPC(){finalizeSell();}
+
+        // Init
+        updateUI();
+
   </script>
-
 </body>
 
 </html>
