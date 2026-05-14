@@ -1546,12 +1546,19 @@
                 this.canvas=document.getElementById('asm-canvas');
                 this.ctx=this.canvas.getContext('2d');
                 this.parts=[]; this.wires=[]; this.dragging=null; this.wiringFrom=null; this.complete=false;
+                this._imgCache={};
                 let li=0,ri=0;
                 Object.keys(build).forEach(t=>{
-                    const def=this.SLOTS[t], onLeft=['CPU','RAM','MOBO'].includes(t);
+                    const def=this.SLOTS[t];
+                    if(!def)return; // skip types with no slot defined
+                    const onLeft=['CPU','RAM','MOBO'].includes(t);
                     const sx=onLeft?28+(li%2)*70:592-(ri%2)*70;
                     const sy=onLeft?30+li*92:30+ri*112;
                     if(onLeft)li++;else ri++;
+                    const qClass=build[t]&&build[t].qClass;
+                    const imgSrc=getArtURL(t,qClass);
+                    const img=new Image();img.src=imgSrc;
+                    this._imgCache[t]=img;
                     this.parts.push({type:t,part:build[t],x:sx,y:sy,w:56,h:56,slotX:def.sx,slotY:def.sy,color:def.color,placed:false,wired:false,dragging:false});
                 });
                 let total=0,multSum=0;
@@ -1631,8 +1638,8 @@
                         // tilt transform
                         ctx.save();ctx.translate(px+p.w/2,py+p.h/2);ctx.rotate(tilt);ctx.translate(-p.w/2,-p.h/2);
                     }
-                    const img=new Image();img.src=getArtURL(p.type,p.part&&p.part.qClass);
-                    ctx.imageSmoothingEnabled=false;ctx.drawImage(img,px,py,p.w,p.h);
+                    const img=this._imgCache&&this._imgCache[p.type];
+                    ctx.imageSmoothingEnabled=false;if(img&&img.complete)ctx.drawImage(img,px,py,p.w,p.h);
                     ctx.strokeStyle=p.wired?'#4caf50':(p.placed?p.color:'#2c303a');ctx.lineWidth=p.placed?3:2;
                     if(p.placed){ctx.shadowColor=p.color;ctx.shadowBlur=10;}
                     if(p.dragging){ctx.strokeRect(0,0,p.w,p.h);ctx.shadowBlur=0;ctx.restore();}else{ctx.strokeRect(px,py,p.w,p.h);ctx.shadowBlur=0;}
