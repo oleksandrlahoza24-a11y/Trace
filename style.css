@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecureChat</title>
+    <!-- FontAwesome for real icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Login / Registration Screen -->
+    <div id="auth-section" class="container">
+        <div class="auth-card">
+            <h2><i class="fa-solid fa-shield-halved"></i> SecureChat</h2>
+            <p>Authenticate to join the conversation.</p>
+            <div class="input-group">
+                <i class="fa-solid fa-envelope"></i>
+                <input type="email" id="email" placeholder="Email Address" required>
+            </div>
+            <div class="input-group">
+                <i class="fa-solid fa-lock"></i>
+                <input type="password" id="password" placeholder="Password" required>
+            </div>
+            <div class="auth-buttons">
+                <button id="login-btn" class="primary-btn"><i class="fa-solid fa-right-to-bracket"></i> Login</button>
+                <button id="register-btn" class="secondary-btn"><i class="fa-solid fa-user-plus"></i> Register</button>
+            </div>
+            <p id="auth-error" class="error-msg"></p>
+        </div>
+    </div>
+
+    <!-- Main Chat Interface -->
+    <div id="chat-section" class="hidden">
+        <header class="chat-header">
+            <h2><i class="fa-solid fa-comments"></i> Global Channel</h2>
+            <div class="user-info">
+                <i class="fa-solid fa-user"></i>
+                <span id="user-email"></span>
+                <button id="logout-btn" class="danger-btn"><i class="fa-solid fa-sign-out-alt"></i> Logout</button>
+            </div>
+        </header>
+        
+        <main id="chat-messages" class="messages-container">
+            <!-- Messages load dynamically here -->
+        </main>
+
+        <footer class="chat-input-area">
+            <form id="message-form">
+                <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off" required>
+                <button type="submit" id="send-btn"><i class="fa-solid fa-paper-plane"></i></button>
+            </form>
+        </footer>
+    </div>
+
+    <!-- Type module allows us to use ES6 imports directly in the browser -->
+    <script type="module" src="app.js"></script>
+</body>
+</html>
